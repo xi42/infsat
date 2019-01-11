@@ -18,6 +18,7 @@ let new_nty_id() =
   let x = !nty_id_ref in
    (nty_id_ref := !nty_id_ref+1; x)
 
+(** Initializes nteallref[nt_id][q_id] = []. *)
 let init_nte() =
   let maxnt = max_nt() in
   let maxq = !Type.num_of_states in
@@ -26,6 +27,8 @@ let init_nte() =
      (!nteallref).(f) <- Array.make maxq []
     done)
 
+(** Prepends (ity, new unique id) to nteallref[f][q]. Saves info that there was a typing f : ity,
+    where ity = ... -> ... -> q. *)
 let register_nte_for_cegen f ity q =
  let x = new_nty_id() in
   (!nteallref).(f).(q) <-

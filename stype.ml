@@ -75,6 +75,7 @@ let rec occur v sty =
   | STfun(sty1,sty2) -> (occur v sty1)||(occur v sty2)
   | _ -> false
 
+(* effectively graph of relations between elements is kinda like find-union but without keeping height of the tree *)
 let rec unify_sty sty1 sty2 =
   let sty1' = deref_st sty1 in
   let sty2' = deref_st sty2 in
@@ -94,7 +95,8 @@ let rec unify_sty sty1 sty2 =
       unify_sty st11 st21; unify_sty st12 st22
   | (STbase, STbase) -> ()
   | _ -> raise (UnifFailure (sty1,sty2))
-  
+
+(** Starting with pairs like tvar P ~ fun X Y or any type ~ type, it updates what vars actually point at through unification, i.e., vars' contents will be equal to appropriate type. Some vars may remain if we unify two vars. *)
 let rec unify_all c =
   match c with
      [] -> []
@@ -149,6 +151,12 @@ let lookup_stype_nt f nste = nste.(f)
 let lookup_stype_t a cste = List.assoc a cste
 let lookup_stype_var v vste = let (_,i) = v in vste.(i)
 
+(** Produce a type of a term and type variables (unnamed) to unify later.
+    fst of result will be the type (e.g., type var for app),
+    snd of result will be a list of pairs (fun tvar, STFun(arg tvar, res tvar)).
+    All type variables are anonymous, i.e., don't point at anything, however,
+    actual pointers are preserved (ocaml objects' addresses), so tvar's physical
+    address effectively becomes its id. *)
 let rec tcheck_term t vte cte nte =
   match t with
     NT(f) -> (lookup_stype_nt f nte, [])
@@ -172,7 +180,7 @@ let tcheck_rule f (arity, body) cste nste =
   let _ = for i=0 to arity-1 do
                vste.(i) <- new_tvar()
           done
-  in
+  in (* type var for each rule *)
   let (sty,c1) = tcheck_term body vste cste nste in
   let fty1 = mk_functy (Array.to_list vste) sty (* STbase*) in
   let fty2 = lookup_stype_nt f nste in
@@ -270,19 +278,19 @@ let update_arity_of_nt g nste =
     let (arity',body) = g.r.(f) in
       if arity>arity' then (* add dummy argument *)
          let vars = List.map (fun i->Var(f,i)) (fromto arity' arity) in
-         let body' = Grammar.mk_app body vars in
+         let body' = Grammar.mk_app body vars in (* add explicit arguments to rules so that the kind of the term inside is o *)
             g.r.(f) <- (arity,body')
       else ()
   done
 
 let tcheck g alpha =
-  let cste = alpha2cste alpha in
+  let cste = alpha2cste alpha in (* produce kind for each letter from arity *)
   let num_of_nts = Array.length g.nt in
   let nste = Array.make num_of_nts dummy_type in
   let _ = for i=0 to num_of_nts-1 do
              nste.(i) <- new_tvar()
           done 
-  in
+  in (* create a new type var for each nonterminal *)
   let _ = if !debugging then print_cste cste in
   let _ = if !debugging then print_nste nste in
   let rules = g.r in
@@ -295,8 +303,8 @@ let tcheck g alpha =
   let _ = for i=0 to num_of_nts-1 do
               nste.(i) <- inst_var (nste.(i))
           done
-  in
-  let cste' = List.map (fun (a,sty) -> (a, inst_var sty)) cste in
+  in (* finished computing kinds of nonterminals *)
+  let cste' = List.map (fun (a,sty) -> (a, inst_var sty)) cste in (* finished computing kinds of terminals with unknown arities *)
   let (f,ord) = order_of_nste nste in
   begin
    ( if !Flags.debugging then 
@@ -305,6 +313,6 @@ let tcheck g alpha =
      print_order (f, ord)));
 (*     register_sort g cste' nste;*)
      flush stdout;
-     update_arity_of_nt g nste;
+   update_arity_of_nt g nste; (* may add explicit arguments to nonterminals and change rules so that terms inside are of kind o, i.e., F x = t ~> F x y = t y if not t :: o *)
      List.map (fun (a,sty) -> (a, sty2arity sty)) cste'
    end

@@ -1,8 +1,9 @@
-open Utilities;;
-open Grammar;;
-open Automaton;;
-open Flags;;
+open Utilities
+open Grammar
+open Automaton
+open Flags
 
+(** Parses a file to HORS prerules and automata definition. *)
 let parseFile filename =
   let in_strm = 
     try
@@ -26,6 +27,7 @@ let parseFile filename =
   in
     result
 
+(** Parses stdin to HORS prerules and automata transitions. *)
 let parseStdIn() =
   let _ = print_string ("reading standard input ...\n") in
   let in_strm = stdin in
@@ -39,10 +41,7 @@ let parseStdIn() =
   in
     result
 
-let factor = ref 1
-let te_updated = ref false
-
-exception Profiled;;
+exception Profiled
 
 let rec report_input g m =
   let _ = if !(Flags.debugging) then print_gram g in
@@ -60,7 +59,7 @@ let report_input_ata g m =
     "The number of rewrite rules: "^(string_of_int r)^"\n" ^
     "The size of recursion scheme: "^(string_of_int s)^"\n" ^
     "The number of states: "^(string_of_int q)^"\n" in
-  print_string str;;
+  print_string str
 
 
 let report_breakdown start_t end_t =
@@ -74,7 +73,8 @@ let report_breakdown start_t end_t =
   ts;
   print_string ("  checkpoint: "^(string_of_float (end_t -. last))^"sec\n")
    
-
+(** Prints if HORS specified by prerules is accepted by given automata transitions.
+    Takes output of parseFile. *)
 (* verifyParseResult : Syntax.prerules * Syntax.transitions -> () *)
 let verifyParseResult (prerules,tr) = 
   match tr with
@@ -102,16 +102,16 @@ let verifyParseResult (prerules,tr) =
     end
     | Syntax.Trivial tr -> begin
       Flags.dautomaton := true;
-      let (g, m) = Conversion.convert (prerules,tr) in
-       (report_input g m;
-         check_point();
+      let (g, m) = Conversion.convert (prerules,tr) in (* note that the grammar is then stored in Grammar.gram *)
+      (report_input g m; (* print info *)
+       check_point(); (* save timestamp *)
         let alpha1 = Stype.tcheck g m.alpha in
          check_point();
         let m' = {alpha=alpha1;st=m.st;delta=m.delta;init=m.init} in
-        ( Grammar.update_arity alpha1;
+        ( Grammar.update_arity alpha1; (* updates arity alone in Grammar.gram to one computed in tcheck *)
          Ai.mk_trtab m';
          check_point();
-         Type.set_num_of_states(List.length m.st);
+          Type.set_num_of_states(List.length m.st); (* write to Type.num_of_states how many states there are *)
          Saturate.automaton2cte m';
          if !Flags.debugging then Saturate.print_cte();
          Saturate.mk_linearity_tab();
@@ -124,7 +124,7 @@ let verifyParseResult (prerules,tr) =
          check_point();
          Saturate.saturate()))
 (*        verify g m  *)
-    end;;
+    end
 
 let string_of_parseresult (prerules, tr) =
   (Syntax.string_of_prerules prerules)^"\n"^(Syntax.string_of_automaton tr)
@@ -137,23 +137,17 @@ exception LogFile
 
 let web = ref false
 
-let rec create_file n =
-  if n=0 then
-     (print_string "Cannot open a log file\n"; raise LogFile)
-  else
-     try
-      let n = Random.int(15) in
-      let prefix = if !web then "/home/koba/horsat/log/log" else "log" in
-      let filename = prefix^(string_of_int n)^".hrs" in
-      let fp = open_out_gen [Open_wronly;Open_creat;Open_excl;Open_trunc] 0o666 filename in
-         (filename, fp)
-     with
-       _ -> create_file (n-1)
+let create_logfile() =
+  let n = Unix.time() in
+  let prefix = if !web then "/home/koba/horsat/log/log" else "log" in
+  let filename = prefix^(string_of_int (int_of_float n))^".hrs" in
+  let fp = open_out_gen [Open_wronly;Open_creat;Open_excl;Open_trunc] 0o666 filename in
+  (filename, fp)
         
 let write_log parseresult =
   let s = string_of_parseresult parseresult in
-  let _ = Random.init(int_of_float(Unix.time())) in
-  let (filename, fp) = create_file 3 in
+  (*let _ = Random.init(int_of_float(Unix.time())) in*)
+  let (filename, fp) = create_logfile() in
   let _ = output_string fp s in
     (close_out fp; filename)
 
@@ -227,20 +221,13 @@ let main () =
  let _ = if !web then Unix.alarm 3 else 0 in
   let logfile = if !logging then write_log parseresult else "" in
     ((* Sys.set_signal Sys.sigalrm (Sys.Signal_handle(fun sigid -> write_log (string_of_parseresult parseresult))); *)
-      (* loop();*)  (** for testing logging **)
+      (* loop();*)  (* for testing logging *)
      (try verifyParseResult parseresult with Profiled -> ());
      let end_t = Sys.time() in
        (print_string ("Elapsed Time: "^(string_of_float (end_t -. start_t))^"sec\n");
         if !debugging then report_breakdown start_t end_t;
         flush stdout;
         if !logging then Unix.unlink logfile else ())
-    );;
+    )
 
-if !Sys.interactive then
-  ()
-else
-  main();;
-
-
-
-
+let () = if !Sys.interactive then () else main()

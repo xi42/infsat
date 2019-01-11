@@ -14,6 +14,7 @@ let new_ntaux() =
   let x= !ntauxid in
    (ntauxid := x+1; x)
 
+(** Maps nonterminal names to fresh ids. *)
 let tab_ntname2id = Hashtbl.create 1000
 
 let register_nt ntname =
@@ -63,7 +64,7 @@ let rec pterm2term vmap pterm =
 
 and normalize_term term =
   match term with
-     App(_,_) ->
+    App(_,_) -> (* reduces outer applications *)
         if depth_of_term term > !(Flags.normalization_depth) then
            let vars = vars_in_term term in
            let arity = List.length vars in
@@ -81,11 +82,11 @@ let dummy_vname = "dummy_var"
 let prerule2rule rules vinfo (f, (_, ss, pterm)) =
   let ss' = indexlist ss in
   let arity = List.length ss in
-  let vmap = List.map (fun (i,v) -> (v, (f,i))) ss' in
+  let vmap = List.map (fun (i,v) -> (v, (f,i))) ss' in (* [(arg name, (nonterm ix, arg ix)) *)
   let _ = vinfo.(f) <- Array.make arity dummy_vname in
-  let _ = List.iter (fun (i,v) -> (vinfo.(f).(i) <- v)) ss' in
+  let _ = List.iter (fun (i,v) -> (vinfo.(f).(i) <- v)) ss' in (* vinfo[nonterm id][arg ix] = arg name *)
   let term = pterm2term vmap pterm in
-     rules.(f) <- (arity, term)
+  rules.(f) <- (arity, term) (* F x_1 .. x_n = t => rules[F] = (n, potentially normalized term with names changed either to var or to terminal) *)
 
 let prerules2rules rules vinfo prerules =
   let prerules_indexed = indexlist prerules in
@@ -145,6 +146,7 @@ let elim_fun_from_prerule prerule newrules =
   let (preterm', newrules')= elim_fun_from_preterm vl preterm newrules in
     ((f,vl,preterm'), newrules')
 
+(** Removes lambdas from bodies of nonterminals. *)
 let elim_fun_from_prerules prerules =
  let (prerules', newrules) =
   ( List.fold_left
@@ -157,14 +159,14 @@ let elim_fun_from_prerules prerules =
  in List.rev_append prerules' newrules
 
 let prerules2gram prerules =
-  let prerules = elim_fun_from_prerules prerules in
-  let ntnames = List.map (fun (x,_,_)->x) prerules in
-  let num_of_nts = List.length ntnames in
+  let prerules = elim_fun_from_prerules prerules in (* removes lambdas *)
+  let ntnames = List.map (fun (x,_,_)->x) prerules in (* nonterminal names *)
+  let num_of_nts = List.length ntnames in (* number of nonterminals *)
   let _ = (ntauxid := num_of_nts) in
   let _ = nttab := Array.make num_of_nts (dummy_ntname,O) in
-  let _ = List.iter register_nt ntnames in
+  let _ = List.iter register_nt ntnames in (* create mapping from nonterminal names to unique integers *)
   let rules = Array.make num_of_nts (0,dummy_term) in
-  let vinfo = Array.make  num_of_nts [| |] in
+  let vinfo = Array.make num_of_nts [| |] in
   let _ = prerules2rules rules vinfo prerules in
   let (nt', rules') = 
                if !(Flags.normalize) then
@@ -174,7 +176,7 @@ let prerules2gram prerules =
   let s = 0 in
   let terminals = List.map (fun a -> (a, -1)) (terminals_in_rules rules) in
   let g = {nt= nt'; t=terminals; vinfo = vinfo; r=rules'; s=s} in
-    Grammar.gram := g; g
+  Grammar.gram := g; g (* here the grammar is put into a global variable *)
 
 let states_in_tr ((q, a), qs) =
   let qs' = delete_duplication (List.sort compare qs) in
@@ -196,6 +198,7 @@ let rec insert_rank (a,k) alpha =
          else if x=0 then if k=k' then alpha else raise (InconsistentArity a)
          else (a',k')::(insert_rank (a,k) alpha')
 
+(** List of arities and letters, descending. Check if arities consistent for letters. *)
 let rec get_rank_from_transitions trs =
   match trs with
    [] -> []
@@ -216,9 +219,9 @@ let convert (prerules, transitions) =
   let g = prerules2gram prerules in
   let q0 = fst (fst (List.hd transitions)) in
   let states = states_in_transitions transitions in
-  let alpha1 = get_rank_from_transitions transitions in
-  let alpha1' = merge_rank alpha1 g.t in
-  let m = {alpha=alpha1'; st=states; delta=transitions; init=q0} in
+  let alpha1 = get_rank_from_transitions transitions in (* compute letter arities *)
+  let alpha1' = merge_rank alpha1 g.t in (* merge letter arities with info from grammar *)
+  let m = {alpha=alpha1'; st=states; delta=transitions; init=q0} in (* create automaton *)
      (g, m)
 
 open AlternatingAutomaton;;

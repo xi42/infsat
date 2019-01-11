@@ -85,7 +85,7 @@ let rec list_take_nth l n =
      else 
        let (x, l'') = list_take_nth l' (n-1) in
          (x, a::l'')
-
+(** Merge two asc-sorted list idempodently, resulting in asc-sorted list with unique values. *)
 let rec merge_and_unify comp l1 l2 =
   match (l1, l2) with
     (_,[]) -> l1

@@ -10,7 +10,7 @@ type kind = O | Kfun of kind * kind
 type state_id = int
 type ity_id = int
 type ity = ItyQ of state_id | ItyFun of ity_id * ty * ity
-and ty = ity list
+and ty = ity list (* /\_k (/\_i q_i -> /\_j q_j -> ... -> q_k) *)
 
 type nonterminals = (string * kind) array 
   (* store the original name of each non-terminal and its kind *)
@@ -38,6 +38,7 @@ let lookup_rule (f: nameNT) =
 
 let max_nt() = Array.length (!gram.r)
 
+(** change normal tree with app nodes to tree with (head, list-of-arg-terms) nodes *)
 let rec decompose_term t =
   match t with
    (NT(_)|T(_)|Var(_)) -> (t, [])
@@ -77,6 +78,8 @@ let rec vars_in_terms terms =
     [] -> []
   | t::terms' -> merge_and_unify compare (vars_in_term t) (vars_in_terms terms')
 
+(** Returns ascending list of variables in term that are not in an argument of a nonterminal or
+    a terminal and are applied to something. *)
 let rec headvars_in_term term =
   match term with
     NT _ -> []
@@ -85,7 +88,7 @@ let rec headvars_in_term term =
   | App(Var(x),t2) -> merge_and_unify compare [x] (headvars_in_term t2)
   | App(t1,t2) -> merge_and_unify compare (headvars_in_term t1)
                                           (headvars_in_term t2)
-      
+(** List of nonterminals used in term. *)
 let rec nt_in_term term = 
   match term with
     NT(x) -> [x]

@@ -62,7 +62,7 @@ rule:
   NONTERM names ARROW term PERIOD
   {($1, $2, $4)}
 |
-  NONTERM  ARROW term PERIOD
+  NONTERM ARROW term PERIOD
   {($1, [], $3)}
 ;
 pterm:

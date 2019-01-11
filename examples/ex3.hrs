@@ -1,0 +1,15 @@
+/* term in the form a^(2^(2^(...))) e with amount of 2 dependent on X in DX */
+%BEGING
+S -> A e.
+A x -> D3 D2 D1 D0 a x.
+D3 f x -> f (f x).
+D2 f x -> f (f x).
+D1 f x -> f (f x).
+D0 f x -> f (f x).
+%ENDG
+
+%BEGINA
+q0 a -> q1.
+q1 a -> q0.
+q0 e -> .
+%ENDA

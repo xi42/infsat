@@ -1,0 +1,15 @@
+*.cmi
+*.cmx
+*.cmo
+*.exe
+horsat2
+top
+horsat2-debug
+parser.ml
+lexer.ml
+parser.mli
+lexer.mli
+TAGS
+*~
+*.o
+doc/
