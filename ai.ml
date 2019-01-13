@@ -96,7 +96,9 @@ let rec merge_statevecs qsvecs =
     [] -> assert false
   | [qsvec] -> qsvec
   | qsvec1::qsvecs' ->
-      merge_statevec qsvec1 (merge_statevecs qsvecs')
+     let merged = Array.copy qsvec1 in
+       List.iter (fun qsvec2 -> let _=merge_statevec merged qsvec2 in ()) qsvecs';
+       merged    
 and merge_statevec qsvec1 qsvec2 =
    let len = Array.length qsvec1 in
     for i=0 to len-1 do

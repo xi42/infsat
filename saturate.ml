@@ -1064,8 +1064,8 @@ let prod_vte vtes1 vtes2 =
    | _ ->
      List.fold_left
      (fun vtes vte1 ->
-        let vtes2' = List.map (fun vte2->merge_two_vtes vte1 vte2) vtes2
-	in
+        let vtes2' = List.rev_map (fun vte2->merge_two_vtes vte1 vte2) vtes2 in
+(*        let vtes2' = List.rev_append vtes2' [] in *)
 	   List.rev_append vtes2' vtes)
      [] vtes1
 
@@ -1090,8 +1090,8 @@ let rec tcheck_w_venv venv term ity =
        List.fold_left
        (fun vtes (tys,vte1) ->
          let vtes1=tcheck_terms_w_venv venv terms tys in
-         let vtes1'= List.map (fun vte0->merge_two_vtes vte0 vte1) vtes1 in
-         vtes1'@vtes) [] tyss
+         let vtes1'= List.rev_map (fun vte0->merge_two_vtes vte0 vte1) vtes1 in
+         List.rev_append vtes1' vtes) [] tyss
 and tcheck_terms_w_venv venv terms tys =
   match (terms,tys) with
     ([], []) -> [[]]
@@ -1251,6 +1251,7 @@ let update_ty_of_nt_inc_wo_venv f g ty =
           ("updating the type of "^(name_of_nt f)^" incrementally\n") in
   let (_,term)=Grammar.lookup_rule f in
   let qs = (!Ai.array_st_of_nt).(f) in
+  let _ = 
     List.iter
      (fun q ->
        let ity=ItyQ(q) in
@@ -1259,6 +1260,7 @@ let update_ty_of_nt_inc_wo_venv f g ty =
          register_nte f
 	  (mk_funty_with_vte vte ity (Grammar.arity_of_nt f)))
        vtes) qs
+  in Utilities.debug ("done!\n")
 
 
 let update_ty_of_nt_inc_for_nt_sub g term binding qs f ty =
