@@ -197,7 +197,7 @@ let rec read_options index =
 
 
 let main () =
-  let _ = print_string "HorSat2 0.94: Saturation-based model checker for higher-order recursion schemes\n" in
+  let _ = print_string "HorSat2 0.95: Saturation-based model checker for higher-order recursion schemes\n" in
   let start_t = Sys.time() in
   let (index,flag) = 
       try
