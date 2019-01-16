@@ -4,7 +4,7 @@ F x -> a x (F (b x)).  (* Unbounded names ("a", "b" in this rule) are interprete
 End.
 
 Terminals.             (* Terminal rules. *)
-a -> 2 *.              (* Two children and is counted. *)
-(* br -> 2.               br (branch) is a reserved keyword for choice terminal. *)
+a -> 2 $.              (* Two children and is counted. *)
+(* br -> 2. *)         (* br (branch) is a reserved keyword for choice terminal. *)
 c -> 1.                (* One child and is not counted. *)
 End.

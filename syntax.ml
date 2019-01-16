@@ -37,29 +37,32 @@ and string_of_preterms pterms =
 let string_of_prerule (f, vl, pterm) =
    f^" "^(string_of_vars vl)^" -> "^(string_of_preterm pterm)
 
-let rec string_of_prerules_aux prerules =
-  match prerules with
-    [] -> ""
-  | prule::prerules' ->
-     (string_of_prerule prule)^".\n"^(string_of_prerules_aux prerules')
-
 let string_of_prerules prerules =
-  "%BEGING\n"^(string_of_prerules_aux prerules)^"%ENDG\n"
+  let rec string_of_prerules_aux prerules =
+    match prerules with
+    | [] -> ""
+    | prule::prerules' ->
+      (string_of_prerule prule)^".\n"^(string_of_prerules_aux prerules')
+  in
+  "Grammar.\n"^(string_of_prerules_aux prerules)^"End.\n"
 
 let string_of_preterminal pt =
   match pt with
   | PTerminal(name, arity, counted) ->
-    let string_of_counted =
+    let string_of_counted counted =
       match counted with
-      | true -> " counted"
+      | true -> " $"
       | false -> ""
     in
-    name^" -> "^(string_of_int arity)^string_of_counted
+    name^" -> "^(string_of_int arity)^(string_of_counted counted)
 
 let rec string_of_preterminals pts =
-  match pts with
-  | [] -> ""
-  | pt::pts' -> string_of_preterminal pt^".\n"^(string_of_preterminals pts')
+  let rec string_of_preterminals_aux pts =
+    match pts with
+    | [] -> ""
+    | pt::pts' -> string_of_preterminal pt^".\n"^(string_of_preterminals_aux pts')
+  in
+  "Terminals.\n"^(string_of_preterminals_aux pts)^"End.\n"
 
 let rec string_of_states qs =
   match qs with

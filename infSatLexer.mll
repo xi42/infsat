@@ -13,54 +13,56 @@ let upper = ['A'-'Z']
 
 rule token = parse
 | space+
-    { token lexbuf }
+  { token lexbuf }
 | newline
-    { end_of_previousline := (Lexing.lexeme_end lexbuf);
-      line_no := !line_no+1;
-      token lexbuf}
+  { end_of_previousline := (Lexing.lexeme_end lexbuf);
+    line_no := !line_no+1;
+    token lexbuf}
 | "(*"
-    { comment lexbuf;
-      token lexbuf }
-| digit digit* 
-   {let s = Lexing.lexeme lexbuf in
-     INT(int_of_string s)}
-| lower (digit|lower|upper|'_')*
-    { let s = Lexing.lexeme lexbuf in
-         NAME(s)}
-| upper (digit|lower|upper|'_')*
-    { let s = Lexing.lexeme lexbuf in
-        NONTERM(s)}
+  { comment lexbuf;
+    token lexbuf }
 | "Grammar."
-    {BEGING}
+  { BEGING }
 | "End."
-    {END}
+  { END }
 | "Terminals."
-    {BEGINT}
+  { BEGINT }
 | "->"
-    {ARROW}
+  { ARROW }
 | "("
-    {LPAR}
+  { LPAR }
 | ")"
-    {RPAR}
+  { RPAR }
+| "$"
+  { COUNTED }
 | "."
-    {PERIOD}
+  { PERIOD }
+| digit digit* 
+  { let s = Lexing.lexeme lexbuf in
+    INT(int_of_string s)}
+| lower (digit|lower|upper|'_')*
+  { let s = Lexing.lexeme lexbuf in
+    NAME(s)}
+| upper (digit|lower|upper|'_')*
+  { let s = Lexing.lexeme lexbuf in
+    NONTERM(s)}
 | eof
-    { EOF }
+  { EOF }
 | _
-    { Format.eprintf "unknown token %s in line %d, column %d-%d @."
-	(Lexing.lexeme lexbuf)
-        (!line_no)
-	((Lexing.lexeme_start lexbuf)- (!end_of_previousline))
-	((Lexing.lexeme_end lexbuf)-(!end_of_previousline));
-      failwith "lex error" }
+  { Format.eprintf "unknown token %s in line %d, column %d-%d @."
+      (Lexing.lexeme lexbuf)
+      (!line_no)
+      ((Lexing.lexeme_start lexbuf)- (!end_of_previousline))
+      ((Lexing.lexeme_end lexbuf)-(!end_of_previousline));
+    failwith "lex error" }
 and comment = parse
 | "*)"
-    { () }
+  { () }
 | "(*"
-    { comment lexbuf;
-      comment lexbuf }
+  { comment lexbuf;
+    comment lexbuf }
 | eof
-    {  print_string "Lex error: unterminated comment\n";
-       failwith "unterminated comment" }
+  { print_string "Lex error: unterminated comment\n";
+    failwith "unterminated comment" }
 | _
-    { comment lexbuf }
+  { comment lexbuf }

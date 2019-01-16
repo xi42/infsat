@@ -145,7 +145,7 @@ let web = ref false
 let create_logfile() =
   let n = Unix.time() in
   let prefix = if !web then "/home/koba/horsat/log/log" else "log" in
-  let filename = prefix^(string_of_int (int_of_float n))^".hrs" in
+  let filename = prefix^(string_of_int (int_of_float n))^".log" in
   let fp = open_out_gen [Open_wronly;Open_creat;Open_excl;Open_trunc] 0o666 filename in
   (filename, fp)
 

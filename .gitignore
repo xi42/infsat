@@ -2,6 +2,7 @@
 *.cmx
 *.cmo
 *.exe
+*.log
 horsat2
 top
 horsat2-debug

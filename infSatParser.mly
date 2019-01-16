@@ -5,6 +5,7 @@ open Syntax
 %token <string> NAME
 %token <string> NONTERM
 %token <int> INT
+%token COUNTED
 %token ARROW
 %token PERIOD
 %token LPAR
@@ -62,7 +63,7 @@ term:
    | _ -> assert false};
 
 pterms:
-|  pterm
+| pterm
   {[$1]}
 | pterm pterms
   {$1::$2};
@@ -84,9 +85,7 @@ pterminals:
   {$1::$2};
 
 terminal:
-| NAME ARROW INT
+| NAME ARROW INT PERIOD
   {PTerminal($1, $3, false)}
-| NAME ARROW INT NAME
-  {match $4 with
-   | "counted" -> PTerminal($1, $3, true)
-   | _ -> assert false};
+| NAME ARROW INT COUNTED PERIOD
+  {PTerminal($1, $3, true)};
