@@ -1,0 +1,10 @@
+Grammar.               (* Rewring rules of a HORS. Nonterminal must start with a capital letter. *)
+S -> F c.              (* The non-terminal of the first rule is interpreted as the start symbol. *)
+F x -> a x (F (b x)).  (* Unbounded names ("a", "b" in this rule) are interpreted as terminals. *)
+End.
+
+Terminals.             (* Terminal rules. *)
+a -> 2 *.              (* Two children and is counted. *)
+(* br -> 2.               br (branch) is a reserved keyword for choice terminal. *)
+c -> 1.                (* One child and is not counted. *)
+End.

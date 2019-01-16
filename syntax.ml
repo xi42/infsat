@@ -1,12 +1,9 @@
-(*** syntax for parser ***)
+(** Syntax for unprocessed terms created by the parser *)
 
-type head = Name of string | NT of string | FD of int | CASE of int 
-          | PAIR | DPAIR | FUN of string list * preterm
-and preterm = PTapp of head * preterm list
+type atom = Name of string | NT of string
+and preterm = PApp of atom * preterm list
 type prerule = string * string list * preterm
 type prerules = prerule list
-type transition = (string * string) * string list
-type transitions = transition list
 
 type preformula = FConst of string 
                 | FVar of int * string 
@@ -14,36 +11,28 @@ type preformula = FConst of string
                 | FOr of preformula * preformula
 type ata_trans = (string * string) * preformula
 
-type automaton = Trivial of transitions 
-               | Alternating of ((string * int) list) * (ata_trans list)
+type preterminal = PTerminal of string * int * bool
+type preterminals = preterminal list
+
 let rec string_of_vars vl =
   match vl with
-    [] -> ""
-   | v::vl' -> v^" "^(string_of_vars vl')
+  | [] -> ""
+  | v::vl' -> v^" "^(string_of_vars vl')
 
-let rec string_of_head h =
+let rec string_of_atom h =
   match h with
-    Name(s) -> s
+  | Name(s) -> s
   | NT(s) -> s
-  | FD(n) -> (string_of_int n)
-  | CASE(n) -> "_case "^(string_of_int n)
-  | PAIR -> "_cons"
-  | FUN(vl, pterm) -> "_fun "^(string_of_vars vl)^" -> "^(string_of_preterm pterm)
-  | DPAIR -> "_dcons"
-  
 and string_of_preterm pterm =
   match pterm with
-    PTapp(h, pterms) ->
-      (string_of_head h)^" "^(string_of_preterms pterms)
+  | PApp(h, pterms) -> (string_of_atom h)^" "^(string_of_preterms pterms)
 and string_of_preterms pterms =
   match pterms with
-    [] -> ""
- | pt::pterms' ->
+  | [] -> ""
+  | pt::pterms' ->
     match pt with
-       PTapp(_,[]) -> (string_of_preterm pt)^" "^(string_of_preterms pterms')
-     | _ -> 
-            "("^(string_of_preterm pt)^") "^(string_of_preterms pterms')
-
+    | PApp(_,[]) -> (string_of_preterm pt)^" "^(string_of_preterms pterms')
+    | _ -> "("^(string_of_preterm pt)^") "^(string_of_preterms pterms')
 
 let string_of_prerule (f, vl, pterm) =
    f^" "^(string_of_vars vl)^" -> "^(string_of_preterm pterm)
@@ -57,6 +46,20 @@ let rec string_of_prerules_aux prerules =
 let string_of_prerules prerules =
   "%BEGING\n"^(string_of_prerules_aux prerules)^"%ENDG\n"
 
+let string_of_preterminal pt =
+  match pt with
+  | PTerminal(name, arity, counted) ->
+    let string_of_counted =
+      match counted with
+      | true -> " counted"
+      | false -> ""
+    in
+    name^" -> "^(string_of_int arity)^string_of_counted
+
+let rec string_of_preterminals pts =
+  match pts with
+  | [] -> ""
+  | pt::pts' -> string_of_preterminal pt^".\n"^(string_of_preterminals pts')
 
 let rec string_of_states qs =
   match qs with
@@ -71,35 +74,9 @@ let rec string_of_transitions_aux trs =
    [] -> ""
  | tr::trs' ->
      (string_of_transition tr)^".\n"^(string_of_transitions_aux trs')
+
 let string_of_transitions trs = 
   "%BEGINA\n"^(string_of_transitions_aux trs)^"%ENDA\n";;
-
-let rec string_of_ata_formula = function
-  | FConst s -> s
-  | FVar (i,q) -> "(" ^ string_of_int i ^ "," ^ q ^ ")"
-  | FAnd (f1,f2) -> "(" ^ string_of_ata_formula f1 ^ " /\\ " 
-                      ^ string_of_ata_formula f2 ^ ")"
-  | FOr (f1,f2) -> "(" ^ string_of_ata_formula f1 ^ " \\/ " 
-                      ^ string_of_ata_formula f2 ^ ")"
-
-
-let string_of_ata_rule ((q,a), fml ) =
-  q ^ " " ^ a ^ " -> " ^ (string_of_ata_formula fml)
-
-let rec string_of_ata_rules_aux trs =
-  match trs with
-    [] -> ""
- |  tr :: trs ->
-     (string_of_ata_rule tr) ^ ".\n" ^ (string_of_ata_rules_aux trs)
-
-let string_of_automaton = function
-  | Trivial trs ->
-    "%BEGINA\n"^(string_of_transitions_aux trs)^"%ENDA\n"
-  | Alternating (rs,trs) ->
-    "%BEGINR\n"^
-      String.concat "" (List.map (fun (q,i) -> q ^" -> "^string_of_int i^".\n") rs) ^
-    "%ENDR\n"^
-    "%BEGINATA\n"^(string_of_ata_rules_aux trs)^"%ENDATA\n"
 
 let ntid = ref 0
 let new_ntname() =

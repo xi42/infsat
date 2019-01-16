@@ -1,7 +1,6 @@
 let dautomaton = ref false;;
 let debugging = ref false;;
 let emptiness_check = ref true;; 
-let negate_automaton = ref true;;
 let certificate = ref false;;
 let allfun = ref false;;
 let outputfile = ref ""

@@ -18,12 +18,9 @@ rule token = parse
     { end_of_previousline := (Lexing.lexeme_end lexbuf);
       line_no := !line_no+1;
       token lexbuf}
-| "/*"
+| "(*"
     { comment lexbuf;
       token lexbuf }
-| "_case" {CASE}
-| "_fun" {FUN}
-| "_dcons" {DP}
 | digit digit* 
    {let s = Lexing.lexeme lexbuf in
      INT(int_of_string s)}
@@ -33,46 +30,20 @@ rule token = parse
 | upper (digit|lower|upper|'_')*
     { let s = Lexing.lexeme lexbuf in
         NONTERM(s)}
-| "%BEGING"
+| "Grammar."
     {BEGING}
-| "%ENDG"
-    {ENDG}
-| "%BEGINA"
-    {BEGINA}
-| "%ENDA"
-    {ENDA}
-| "%BEGINATA"
-    {BEGINATA}
-| "%ENDATA"
-    {ENDATA}
-| "%BEGINR"
-    {BEGINR}
-| "%ENDR"
-    {ENDR}
-| ","
-    {COMMA}
+| "End."
+    {END}
+| "Terminals."
+    {BEGINT}
 | "->"
-    {ARROW}
-| "="
     {ARROW}
 | "("
     {LPAR}
 | ")"
     {RPAR}
-| "<"
-    {LBRA}
-| ">"
-    {RBRA}
-| "/\\"
-    {AND}
-| "\\/"
-    {OR}
 | "."
     {PERIOD}
-| "%BEGINML" [^ '%']* "%ENDML"
-     {let s = Lexing.lexeme lexbuf in
-      let s' = String.sub s 8 (String.length s - 14) in
-        ML(s')}
 | eof
     { EOF }
 | _
@@ -83,9 +54,9 @@ rule token = parse
 	((Lexing.lexeme_end lexbuf)-(!end_of_previousline));
       failwith "lex error" }
 and comment = parse
-| "*/"
+| "*)"
     { () }
-| "/*"
+| "(*"
     { comment lexbuf;
       comment lexbuf }
 | eof

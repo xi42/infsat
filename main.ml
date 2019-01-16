@@ -1,7 +1,7 @@
-open Utilities
-open Grammar
-open Automaton
-open Flags
+(*open Utilities*)
+(*open Grammar*)
+(*open Automaton*)
+(*open Flags*)
 
 (** Parses a file to HORS prerules and automata definition. *)
 let parseFile filename =
@@ -43,6 +43,7 @@ let parseStdIn() =
 
 exception Profiled
 
+(*
 let rec report_input g m =
   let _ = if !(Flags.debugging) then print_gram g in
   let _ = print_string ("The number of rewrite rules: "^(string_of_int (Array.length g.r))^"\n") in
@@ -61,7 +62,6 @@ let report_input_ata g m =
     "The number of states: "^(string_of_int q)^"\n" in
   print_string str
 
-
 let report_breakdown start_t end_t =
   let ts = List.rev !times in
   let last = if !times=[] then start_t else List.hd !times in
@@ -72,11 +72,16 @@ let report_breakdown start_t end_t =
     start := t)
   ts;
   print_string ("  checkpoint: "^(string_of_float (end_t -. last))^"sec\n")
-   
+*)
+
+exception NotImplemented
+
 (** Prints if HORS specified by prerules is accepted by given automata transitions.
     Takes output of parseFile. *)
 (* verifyParseResult : Syntax.prerules * Syntax.transitions -> () *)
-let verifyParseResult (prerules,tr) = 
+let verifyParseResult (prerules,tr) =
+  raise NotImplemented
+  (*
   match tr with
     | Syntax.Alternating (rs,tr) -> begin
         let (g, m) = Conversion.convert_ata (prerules,rs,tr) in
@@ -125,9 +130,10 @@ let verifyParseResult (prerules,tr) =
          Saturate.saturate()))
 (*        verify g m  *)
     end
+*)
 
 let string_of_parseresult (prerules, tr) =
-  (Syntax.string_of_prerules prerules)^"\n"^(Syntax.string_of_automaton tr)
+  (Syntax.string_of_prerules prerules)^"\n"^(Syntax.string_of_preterminals tr)
 
 let suicide() =
   let pid = Unix.getpid() in
@@ -162,10 +168,10 @@ let report_usage () =
 
 let rec read_options index =
   match Sys.argv.(index) with
-   "-d" -> (debugging := true; read_options (index+1))
+   "-d" -> (Flags.debugging := true; read_options (index+1))
   | "-noce" -> (Flags.ce := false; read_options (index+1))
   | "-subt" -> (Flags.subty := true; read_options (index+1))
-  | "-o" -> (outputfile := Sys.argv.(index+1); read_options (index+2))
+  | "-o" -> (Flags.outputfile := Sys.argv.(index+1); read_options (index+2))
   | "-r" -> (Flags.redstep := int_of_string(Sys.argv.(index+1));
              Flags.flow := false;
              read_options(index+2))
@@ -184,20 +190,19 @@ let rec read_options index =
   | "-nooverwrite" -> (Flags.overwrite := false;read_options (index+1))
   | "-subty" -> (Flags.subtype_hash := true;read_options (index+1))
   | "-nosubty" -> (Flags.nosubtype := true;read_options (index+1))
-  | "-ne" -> (emptiness_check := false; read_options (index+1))
-  | "-gfp" -> (negate_automaton := false; read_options (index+1))
-  | "-bdd" -> (bdd_mode := 1; read_options (index+1))
-  | "-bdd2" -> (bdd_mode := 2; read_options (index+1))
-  | "-prof" -> (profile := true; read_options (index+1))
-  | "-flowcts" -> (add_flow_cts := true; read_options (index+1))
-  | "-notenv" -> (report_type_env := false; read_options (index+1))
-  | "-v" -> (verbose := true; read_options (index+1))
-  | "-cert" -> (certificate := true; read_options (index+1))
+  | "-ne" -> (Flags.emptiness_check := false; read_options (index+1))
+  | "-bdd" -> (Flags.bdd_mode := 1; read_options (index+1))
+  | "-bdd2" -> (Flags.bdd_mode := 2; read_options (index+1))
+  | "-prof" -> (Flags.profile := true; read_options (index+1))
+  | "-flowcts" -> (Flags.add_flow_cts := true; read_options (index+1))
+  | "-notenv" -> (Flags.report_type_env := false; read_options (index+1))
+  | "-v" -> (Flags.verbose := true; read_options (index+1))
+  | "-cert" -> (Flags.certificate := true; read_options (index+1))
   | _ -> index
 
 
 let main () =
-  let _ = print_string "HorSat2 0.95: Saturation-based model checker for higher-order recursion schemes\n" in
+  let _ = print_string "InfSat2 0.1: Saturation-based finiteness checker for higher-order recursion schemes\n" in
   let start_t = Sys.time() in
   let (index,flag) = 
       try
@@ -219,15 +224,15 @@ let main () =
 	Lexer.LexError s -> (print_string ("lex error: "^s^"\n"); exit (-1))
   in
  let _ = if !web then Unix.alarm 3 else 0 in
-  let logfile = if !logging then write_log parseresult else "" in
+  let logfile = if !Flags.logging then write_log parseresult else "" in
     ((* Sys.set_signal Sys.sigalrm (Sys.Signal_handle(fun sigid -> write_log (string_of_parseresult parseresult))); *)
       (* loop();*)  (* for testing logging *)
      (try verifyParseResult parseresult with Profiled -> ());
      let end_t = Sys.time() in
        (print_string ("Elapsed Time: "^(string_of_float (end_t -. start_t))^"sec\n");
-        if !debugging then report_breakdown start_t end_t;
+        (* if !debugging then report_breakdown start_t end_t;*)
         flush stdout;
-        if !logging then Unix.unlink logfile else ())
+        if !Flags.logging then Unix.unlink logfile else ())
     )
 
 let () = if !Sys.interactive then () else main()
