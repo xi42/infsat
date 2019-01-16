@@ -61,10 +61,9 @@ let report_input_ata g m =
   print_string str
 *)
 
-(** Prints if HORS specified by prerules is accepted by given automata transitions.
-    Takes output of parseFile. *)
-(* verifyParseResult : Syntax.prerules * Syntax.transitions -> () *)
-let verifyParseResult (prerules,tr) =
+(** Main part of InfSat. Takes parsed input, computes if the language contains
+    arbitrarily many counted letters. Prints the result. *)
+let report_finiteness (prerules,tr) =
   todo()
   (*
   match tr with
@@ -117,7 +116,7 @@ let verifyParseResult (prerules,tr) =
     end
 *)
 
-let string_of_parseresult (prerules, tr) =
+let string_of_input (prerules, tr) =
   (Syntax.string_of_prerules prerules)^"\n"^(Syntax.string_of_preterminals tr)
 
 let report_usage () =
@@ -175,7 +174,7 @@ let main () =
        report_usage();
        exit (-1))
   in
-  let parseresult = profile "parsing" (fun () ->
+  let input = profile "parsing" (fun () ->
       try
         if interactive then
           parseStdIn()
@@ -185,7 +184,11 @@ let main () =
         InfSatLexer.LexError s -> (print_string ("Lexer error: "^s^"\n"); exit (-1))
     )
   in
-  verifyParseResult parseresult;
+  if !Flags.debugging then
+    print_string ("Input:\n"^(string_of_input input))
+  else ();
+  (* the main part *)
+  report_finiteness input;
   let end_t = Sys.time() in report_timings start_t end_t;
   flush stdout
 
