@@ -1,5 +1,5 @@
 {
-open Parser
+open InfSatParser
 exception LexError of string
 let line_no = ref 1
 let end_of_previousline = ref 0

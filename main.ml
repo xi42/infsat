@@ -14,7 +14,7 @@ let parseFile filename =
   let lexbuf = Lexing.from_channel in_strm in
   let result =
     try
-      InfSatParser.main Lexer.token lexbuf
+      InfSatParser.main InfSatLexer.token lexbuf
     with 
 	Failure _ -> exit(-1) (*** exception raised by the lexical analyer ***)
       | Parsing.Parse_error -> (print_string "Parse error\n";exit(-1)) in
@@ -33,7 +33,7 @@ let parseStdIn() =
   let lexbuf = Lexing.from_channel in_strm in
   let result =
     try
-      InfSatParser.main Lexer.token lexbuf
+      InfSatParser.main InfSatLexer.token lexbuf
     with 
 	Failure _ -> exit(-1) (*** exception raised by the lexical analyer ***)
       | Parsing.Parse_error -> (print_string "Parse error\n";exit(-1)) 
@@ -220,7 +220,7 @@ let main () =
       else
          parseStdIn()
     with
-	Lexer.LexError s -> (print_string ("lex error: "^s^"\n"); exit (-1))
+	InfSatLexer.LexError s -> (print_string ("lex error: "^s^"\n"); exit (-1))
   in
  let _ = if !web then Unix.alarm 3 else 0 in
   let logfile = if !Flags.logging then write_log parseresult else "" in
