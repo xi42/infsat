@@ -3,9 +3,9 @@
 *.cmo
 *.exe
 *.log
-horsat2
+infsat
+infsat-debug
 top
-horsat2-debug
 infSatParser.ml
 infSatParser.mli
 infSatLexer.ml

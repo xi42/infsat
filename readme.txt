@@ -1,14 +1,17 @@
-HorSat2 version 0.92  (c) 2015 by Naoki Kobayashi and Taku Terao
+InfSat version 0.1 (c) 2019 by Jan Wroblewski
 
 License
 --------
-HorSat2 is released under the terms of the GPL version 3.0.
-See the file COPYING
+InfSat is released under the terms of the GPL version 3.0.
+See the file COPYING for license terms.
+InfSat is based on HorSat2 version 0.96 by Naoki Kobayashi and Taku Terao. HorSat2 is also
+licensed under the GPL version 3.0.
 
 How to install
 --------------
-  run "make horsat2"
-To install, you should have OCaml version 3.12 or later.
+Run "make infsat". This requires OCaml version 3.12 or later.
+
+TODO update readme later
 
 Usage
 ------
