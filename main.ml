@@ -1,4 +1,5 @@
-(*open Utilities*)
+open Profiling
+open Utilities
 (*open Grammar*)
 (*open Automaton*)
 
@@ -40,8 +41,6 @@ let parseStdIn() =
   in
     result
 
-exception Profiled
-
 (*
 let rec report_input g m =
   let _ = if !(Flags.debugging) then print_gram g in
@@ -60,26 +59,13 @@ let report_input_ata g m =
     "The size of recursion scheme: "^(string_of_int s)^"\n" ^
     "The number of states: "^(string_of_int q)^"\n" in
   print_string str
-
-let report_breakdown start_t end_t =
-  let ts = List.rev !times in
-  let last = if !times=[] then start_t else List.hd !times in
-  let start = ref start_t in
-  List.iter 
-  (fun t -> 
-    print_string ("  checkpoint: "^(string_of_float (t -. !start))^"sec\n");
-    start := t)
-  ts;
-  print_string ("  checkpoint: "^(string_of_float (end_t -. last))^"sec\n")
 *)
-
-exception NotImplemented
 
 (** Prints if HORS specified by prerules is accepted by given automata transitions.
     Takes output of parseFile. *)
 (* verifyParseResult : Syntax.prerules * Syntax.transitions -> () *)
 let verifyParseResult (prerules,tr) =
-  raise NotImplemented
+  todo()
   (*
   match tr with
     | Syntax.Alternating (rs,tr) -> begin
@@ -134,40 +120,16 @@ let verifyParseResult (prerules,tr) =
 let string_of_parseresult (prerules, tr) =
   (Syntax.string_of_prerules prerules)^"\n"^(Syntax.string_of_preterminals tr)
 
-let suicide() =
-  let pid = Unix.getpid() in
-    Unix.kill pid Sys.sigabrt 
-
-exception LogFile
-
-let web = ref false
-
-let create_logfile() =
-  let n = Unix.time() in
-  let prefix = if !web then "/home/koba/horsat/log/log" else "log" in
-  let filename = prefix^(string_of_int (int_of_float n))^".log" in
-  let fp = open_out_gen [Open_wronly;Open_creat;Open_excl;Open_trunc] 0o666 filename in
-  (filename, fp)
-
-let write_log parseresult =
-  let s = string_of_parseresult parseresult in
-  (*let _ = Random.init(int_of_float(Unix.time())) in*)
-  let (filename, fp) = create_logfile() in
-  let _ = output_string fp s in
-    (close_out fp; filename)
-
-let rec loop() = loop()
-
 let report_usage () =
     (print_string "Usage: \n";
-     print_string "horsat <option>* <filename> \n\n";
+     print_string "infsat <option>* <filename> \n\n";
      print_string " -d\n";
      print_string "  debug mode\n";
     )
 
 let rec read_options index =
   match Sys.argv.(index) with
-   "-d" -> (Flags.debugging := true; read_options (index+1))
+  | "-d" -> (Flags.debugging := true; read_options (index+1))
   | "-noce" -> (Flags.ce := false; read_options (index+1))
   | "-subt" -> (Flags.subty := true; read_options (index+1))
   | "-o" -> (Flags.outputfile := Sys.argv.(index+1); read_options (index+2))
@@ -199,39 +161,32 @@ let rec read_options index =
   | "-cert" -> (Flags.certificate := true; read_options (index+1))
   | _ -> index
 
-
 let main () =
   let _ = print_string "InfSat2 0.1: Saturation-based finiteness checker for higher-order recursion schemes\n" in
+  flush stdout;
   let start_t = Sys.time() in
-  let (index,flag) = 
-      try
-        (read_options 1, true)
-      with
-        Invalid_argument _ -> (0,false)
-      | _ -> 
-         (print_string "Invalid options\n\n";
-          report_usage();
-          exit (-1))
-  in
-  let parseresult =
+  let (index,interactive) = 
     try
-      if flag then
-         parseFile(Sys.argv.(index))
-      else
-         parseStdIn()
+      (read_options 1, false)
     with
-	InfSatLexer.LexError s -> (print_string ("lex error: "^s^"\n"); exit (-1))
+    | Invalid_argument _ -> (0, true)
+    | _ -> 
+      (print_string "Invalid options\n\n";
+       report_usage();
+       exit (-1))
   in
- let _ = if !web then Unix.alarm 3 else 0 in
-  let logfile = if !Flags.logging then write_log parseresult else "" in
-    ((* Sys.set_signal Sys.sigalrm (Sys.Signal_handle(fun sigid -> write_log (string_of_parseresult parseresult))); *)
-      (* loop();*)  (* for testing logging *)
-     (try verifyParseResult parseresult with Profiled -> ());
-     let end_t = Sys.time() in
-       (print_string ("Elapsed Time: "^(string_of_float (end_t -. start_t))^"sec\n");
-        (* if !debugging then report_breakdown start_t end_t;*)
-        flush stdout;
-        if !Flags.logging then Unix.unlink logfile else ())
+  let parseresult = profile "parsing" (fun () ->
+      try
+        if interactive then
+          parseStdIn()
+        else
+          parseFile(Sys.argv.(index))
+      with
+        InfSatLexer.LexError s -> (print_string ("Lexer error: "^s^"\n"); exit (-1))
     )
+  in
+  verifyParseResult parseresult;
+  let end_t = Sys.time() in report_timings start_t end_t;
+  flush stdout
 
 let () = if !Sys.interactive then () else main()

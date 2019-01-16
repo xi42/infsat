@@ -23,4 +23,3 @@ let overwrite = ref true
 let incremental = ref true
 let merge_vte = ref false
 let eager = ref true
-let logging = ref true

@@ -1,7 +1,8 @@
 open Flags
 exception Fatal of string
 
-let todo() = assert false;;
+exception NotImplemented
+let todo() = raise NotImplemented
 
 let times = ref []
 let check_point() = 
