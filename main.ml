@@ -1,7 +1,6 @@
 (*open Utilities*)
 (*open Grammar*)
 (*open Automaton*)
-(*open Flags*)
 
 (** Parses a file to HORS prerules and automata definition. *)
 let parseFile filename =
@@ -15,7 +14,7 @@ let parseFile filename =
   let lexbuf = Lexing.from_channel in_strm in
   let result =
     try
-      Parser.main Lexer.token lexbuf
+      InfSatParser.main Lexer.token lexbuf
     with 
 	Failure _ -> exit(-1) (*** exception raised by the lexical analyer ***)
       | Parsing.Parse_error -> (print_string "Parse error\n";exit(-1)) in
@@ -34,7 +33,7 @@ let parseStdIn() =
   let lexbuf = Lexing.from_channel in_strm in
   let result =
     try
-      Parser.main Lexer.token lexbuf
+      InfSatParser.main Lexer.token lexbuf
     with 
 	Failure _ -> exit(-1) (*** exception raised by the lexical analyer ***)
       | Parsing.Parse_error -> (print_string "Parse error\n";exit(-1)) 
@@ -149,7 +148,7 @@ let create_logfile() =
   let filename = prefix^(string_of_int (int_of_float n))^".hrs" in
   let fp = open_out_gen [Open_wronly;Open_creat;Open_excl;Open_trunc] 0o666 filename in
   (filename, fp)
-        
+
 let write_log parseresult =
   let s = string_of_parseresult parseresult in
   (*let _ = Random.init(int_of_float(Unix.time())) in*)
