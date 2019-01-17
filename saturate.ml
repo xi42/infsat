@@ -11,11 +11,6 @@ type delta = (tstate * tr) list
 and tr = TrNT of nameNT | TrT of nameT
        | TrApp of tstate * tstate list
 
-(* let flag_updated_nt = ref false TODO unused *)
-(* let flag_updated_termid = ref false *)
-(* let flag_overwritten = ref false *)
-
-
 let merge_ty ty1 ty2 =
   merge_and_unify compare_ity ty1 ty2
 
@@ -344,19 +339,6 @@ let rec tyseq_merge_tys tys tyseqref =
                 else (merged_vte_updated:= true;
                       tyseqref := TySeq([(ty2, tyseqref')]))
       )
-
-(*
-let rec tyseq2tyss tyseq len =
-  match tyseq with
-    TySeqNil -> [[]]
-  | TySeq(tyseqlist) ->
-      List.fold_left
-       (fun tyss (ty,tyseqref) ->
-          let tyss1 = tyseq2tyss (!tyseqref) in
-           List.fold_left (fun tyss2 tys1 ->
-              (ty::tys1)::tyss2) tyss tyss1)
-       [] tyseqlist
-*)
 
 let rec tyseq2tyss tyseq len =
   match tyseq with
@@ -1104,7 +1086,6 @@ let register_nte nt ity =
                                                                nteref *)
    else 
       (Cegen.register_nte_for_cegen nt ity q;
-       (* flag_updated_nt := true; TODO unused *)
        let _ = Utilities.debug ("updated type of nt "^(name_of_nt nt)^"\n") in 
        Setqueue.enqueue !updated_nts nt; (* enqueue nonterminal in updated_nts if it isn't
                                             already queued *)
@@ -1461,27 +1442,6 @@ let rec mk_worklist_var updated_nts =
 *)
 
 let max_termid() = !(Ai.terms_idref)
-(*
-let max_nt() = Array.length !(Ai.binding_array_nt) 
-*)
-
-(* TODO remove this unused code
-let mk_worklist_var updated_nts =
-  let queue = Setqueue.make (max_termid()) in
-  List.iter
-  (fun f -> List.iter (Setqueue.enqueue queue) (Ai.lookup_dep_nt_termid f))
-    updated_nts;
-  queue
-
-let add_int n ns =
- if List.mem n ns then ns else n::ns
-
-let addto_worklist_var_from_queue updated_nts =
-  Setqueue.iter
-  (fun f ->
-    List.iter (Setqueue.enqueue !worklist_var) (Ai.lookup_dep_nt_termid f))
-    updated_nts
-*)
 
 let report_yes() =
   (print_string "The property is satisfied.\n";
@@ -1589,7 +1549,6 @@ and saturate_vartypes() : unit =
    try (* trying nonterminals from worklist_nt_binding *)
     let (f,binding,qs)=dequeue_worklist_nt_binding() in
      let _ = Utilities.debug ("processing nt "^(Grammar.name_of_nt f)^"\n") in
-    (* flag_updated_nt := false; TODO unused *)
      update_ty_of_nt f binding qs;
   with WorklistBindingEmpty ->
   try (* trying to type nonterminals from worklist_nt and enqueue nt and nt : type if type

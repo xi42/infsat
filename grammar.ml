@@ -128,10 +128,6 @@ let rec mk_depend g =
    done;
    deptab
 
-let update_arity alpha =
-  let g = !gram in
-   gram := {nt = g.nt; t = alpha; vinfo=g.vinfo; r=g.r; s=g.s}
-
 let arity_of_t a = List.assoc a (!gram).t
 
 let arity_of_nt f =

@@ -1,10 +1,9 @@
 (** check the sorts of non-terminals, print them and the order of the recursion scheme **)
 (** Note: the implementation below is naive and slow **)
 
-open Flags;;
-open Utilities;;
-open Grammar;;
-open Automaton;;
+open Utilities
+open Grammar
+(*open Automaton;;*)
 
 type tvar = int
 type st = STvar of (st option) ref | STbase | STfun of st * st 
@@ -59,9 +58,9 @@ let rec app_subst sub st =
 let rec inst_var st =
   let st' = deref_st st in
   match st' with
-     STvar vref ->  STbase
-   | STfun(st1,st2) -> STfun(inst_var st1, inst_var st2)
-   | _ -> st'
+  | STvar vref -> STbase
+  | STfun(st1,st2) -> STfun(inst_var st1, inst_var st2)
+  | _ -> st'
 
 let comp_subst sub1 sub2 =
   let sub1' = List.map (fun (x,st) -> (x, app_subst sub2 st)) sub1 in
@@ -131,21 +130,21 @@ let print_sortbinding (f, sty) =
    print_string "\n")
 
 let print_nste nste =
-  let _ = print_string "\nSorts of non-terminals:\n" in
-  let _ = print_string "======================\n" in
+  let _ = print_string "Sorts of non-terminals:\n" in
+  let _ = print_string "=======================\n" in
   let _ = for i=0 to (Array.length nste - 1) do
-             print_sortbinding ((name_of_nt i), nste.(i))
-          done
+      print_sortbinding ((name_of_nt i), nste.(i))
+    done
   in
   let _ = print_string "\n" in
-    ()
+  ()
 
 let print_cste cste =
-  let _ = print_string "\nSorts of terminals:\n" in
-  let _ = print_string "======================\n" in
+  let _ = print_string "Sorts of terminals:\n" in
+  let _ = print_string "===================\n" in
   let _ = List.map print_sortbinding cste in
   let _ = print_string "\n" in
-    ()
+  ()
 
 let lookup_stype_nt f nste = nste.(f)
 let lookup_stype_t a cste = List.assoc a cste
@@ -178,21 +177,21 @@ let rec mk_functy stys sty =
 let tcheck_rule f (arity, body) cste nste =
   let vste = Array.make arity dummy_type in
   let _ = for i=0 to arity-1 do
-               vste.(i) <- new_tvar()
-          done
+      vste.(i) <- new_tvar()
+    done
   in (* type var for each rule *)
   let (sty,c1) = tcheck_term body vste cste nste in
   let fty1 = mk_functy (Array.to_list vste) sty (* STbase*) in
   let fty2 = lookup_stype_nt f nste in
-(*    (sty,STbase):: *) (* add this if we wish to enforce the righthand side has ground type *)
-       (fty1,fty2)::c1
+  (*    (sty,STbase):: *) (* add this if we wish to enforce the righthand side has ground type *)
+  (fty1,fty2)::c1
 
 let tcheck_rules rules cste nste =
   let cstr = ref [] in
-   for i=0 to Array.length rules - 1 do 
-     (cstr := (tcheck_rule i rules.(i) cste nste)@ !cstr)
-   done;
-   !cstr
+  for i=0 to Array.length rules - 1 do 
+    (cstr := (tcheck_rule i rules.(i) cste nste)@ !cstr)
+  done;
+  !cstr
 
 let rec order_of_sty sty =
   match sty with
@@ -219,100 +218,49 @@ let rec mk_vste i vste arity sty =
      | _ -> assert false (* arity and sty contradict *)
    )
 
-(*
-let sorttab = Hashtbl.create 1000
-let register_sort_htab term sty =
-  try
-    Hashtbl.find sorttab term
-  with Not_found ->
-    (Hashtbl.add sorttab term sty; sty)
-let lookup_sort term =
-  try
-    Hashtbl.find sorttab term
-  with Not_found -> 
-   (print_term term; assert false)
-
-let rec register_sort_term term cste nste vste =
-  match term with
-    NT(f) -> let sty = lookup_stype_nt f nste in
-              register_sort_htab term sty
-  | T(a) -> let sty = lookup_stype_t a cste in
-              register_sort_htab term sty
-  | Var(v) -> let sty = lookup_stype_var v vste in
-              register_sort_htab term sty
-  | App(t1,t2) ->
-       let sty1 = register_sort_term t1 cste nste vste in
-       let sty2 = register_sort_term t2 cste nste vste in
-        match sty1 with
-            STfun(sty3,sty4) ->
-              if sty3=sty2 then 
-                register_sort_htab term sty4
-              else assert false
-          | _ -> assert false
-
-let register_sort_rule nt (arity,term) cste nste =
-  let sty = nste.(nt) in
-  let _ = register_sort_htab (NT(nt)) sty in
-  let vste = Array.make arity dummy_type in
-    begin
-      mk_vste 0 vste arity sty;
-      for i=0 to arity -1 do
-        let _ = register_sort_htab (Var(nt,i)) vste.(i) in ()
-      done;
-      register_sort_term term cste nste vste
-    end
-
-let register_sort g cste nste =
-  for i=0 to Array.length g.r - 1 do
-    let _ = register_sort_rule i g.r.(i) cste nste in ()
-  done
-*)
-let alpha2cste alpha =
-  List.map (fun (a,k) ->
-    if k<0 then (a, new_tvar()) else (a, arity2sty k)) alpha
-
 let update_arity_of_nt g nste =
   for f=0 to Array.length g.r - 1 do
     let sty = nste.(f) in
     let arity = sty2arity sty in
     let (arity',body) = g.r.(f) in
-      if arity>arity' then (* add dummy argument *)
-         let vars = List.map (fun i->Var(f,i)) (fromto arity' arity) in
-         let body' = Grammar.mk_app body vars in (* add explicit arguments to rules so that the kind of the term inside is o *)
-            g.r.(f) <- (arity,body')
-      else ()
+    if arity>arity' then (* add dummy argument *)
+      let vars = List.map (fun i->Var(f,i)) (fromto arity' arity) in
+      let body' = Grammar.mk_app body vars in (* add explicit arguments to rules so that the kind of the term inside is o *)
+      g.r.(f) <- (arity,body')
+    else ()
   done
 
-let tcheck g alpha =
-  let cste = alpha2cste alpha in (* produce kind for each letter from arity *)
+let cste = [("_a", arity2sty 1);("_b", arity2sty 2);("_c", arity2sty 0)]
+
+let eta_expand g =
+  (* creating a new type var for each nonterminal *)
   let num_of_nts = Array.length g.nt in
   let nste = Array.make num_of_nts dummy_type in
   let _ = for i=0 to num_of_nts-1 do
-             nste.(i) <- new_tvar()
-          done 
-  in (* create a new type var for each nonterminal *)
-  let _ = if !debugging then print_cste cste in
-  let _ = if !debugging then print_nste nste in
+      nste.(i) <- new_tvar()
+    done 
+  in
+  let _ = if !Flags.debugging then print_cste cste in
+  let _ = if !Flags.debugging then print_nste nste in
+  (* creating equations for unification *)
   let rules = g.r in
   let c = tcheck_rules rules cste nste in
+  (* computing sorts by unification *)
   let _ =  try
-                unify_all c 
-             with UnifFailure _ ->
-                    raise (IllSorted "Rules are not well-sorted\n")
+      unify_all c 
+    with UnifFailure _ ->
+      failwith "HORS grammar has rules that are not well-sorted"
   in
+  (* saving nonterminal sorts in nste *)
   let _ = for i=0 to num_of_nts-1 do
-              nste.(i) <- inst_var (nste.(i))
-          done
-  in (* finished computing kinds of nonterminals *)
-  let cste' = List.map (fun (a,sty) -> (a, inst_var sty)) cste in (* finished computing kinds of terminals with unknown arities *)
+      nste.(i) <- inst_var (nste.(i))
+    done
+  in
   let (f,ord) = order_of_nste nste in
-  begin
-   ( if !Flags.debugging then 
-     (print_nste nste;
-     print_cste cste';
-     print_order (f, ord)));
-(*     register_sort g cste' nste;*)
-     flush stdout;
-   update_arity_of_nt g nste; (* may add explicit arguments to nonterminals and change rules so that terms inside are of kind o, i.e., F x = t ~> F x y = t y if not t :: o *)
-     List.map (fun (a,sty) -> (a, sty2arity sty)) cste'
-   end
+  (* eta-expanding bodies of non-terminals so that their bodies are of sort O *)
+  update_arity_of_nt g nste;
+  if !Flags.debugging then
+    begin
+      print_nste nste;
+      print_order (f, ord)
+    end

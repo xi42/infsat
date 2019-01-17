@@ -65,19 +65,20 @@ let report_input_ata g m =
     arbitrarily many counted letters. Prints the result. *)
 let report_finiteness input =
   let g = Conversion.prerules2gram input in
+  let _ = Stype.eta_expand g in 
   todo()
-  (*
+  (* TODO
   match tr with
     | Syntax.Alternating (rs,tr) -> begin
-        let (g, m) = Conversion.convert_ata (prerules,rs,tr) in
-        (report_input_ata g m;
-         let alpha1 = Stype.tcheck g m.AlternatingAutomaton.alpha in 
-         Grammar.update_arity alpha1;
-         Ai.mk_trtab_for_ata m;
-         let m' = AlternatingAutomaton.negate m in
-         Type.set_num_of_states(List.length (m.AlternatingAutomaton.st));
-         Saturate.ata2cte m';
-         if !Flags.debugging then Saturate.print_cte();
+DONE    let (g, m) = Conversion.convert_ata (prerules,rs,tr) in
+DONE     (report_input_ata g m;
+DONE     let alpha1 = Stype.tcheck g m.AlternatingAutomaton.alpha in 
+DONE     Grammar.update_arity alpha1;
+DONE     Ai.mk_trtab_for_ata m;
+DONE     let m' = AlternatingAutomaton.negate m in
+DONE     Type.set_num_of_states(List.length (m.AlternatingAutomaton.st));
+DONE     Saturate.ata2cte m';
+DONE     if !Flags.debugging then Saturate.print_cte();
          Saturate.mk_linearity_tab();
          check_point();
          Ai.init_expansion 0;
