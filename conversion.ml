@@ -1,9 +1,7 @@
-(** BEGIN: conversion from parsing results **)
-open Grammar;;
-open Utilities;;
-open Automaton;;
+open Grammar
+open Utilities
 
-let nttab = ref (Array.make 0 ("", O))
+let nt_kinds = ref (Array.make 0 ("", O))
 let ntid = ref 0
 let new_nt() =
   let x= !ntid in
@@ -22,7 +20,7 @@ let register_nt ntname =
   else 
     let nt = new_nt() in 
      (Hashtbl.add tab_ntname2id ntname nt;
-      (!nttab).(nt) <- (ntname,O) (* for the moment, ignore the kind *)
+      (!nt_kinds).(nt) <- (ntname,O) (* for the moment, ignore the kind *)
       )
 let lookup_ntid ntname =
   try Hashtbl.find tab_ntname2id ntname
@@ -44,16 +42,12 @@ let rec depth_of_term term =
 let rec pterm2term vmap pterm =
 (** distinguish between variables and terminal symbols **)
   match pterm with
-    Syntax.PTapp(h, pterms) ->
+    Syntax.PApp(h, pterms) ->
      let h' = 
        match h with
-         Syntax.Name(s) -> (try Var(List.assoc s vmap) with Not_found -> T(s))
+       | Syntax.Name(s) -> (try Var(List.assoc s vmap) with Not_found -> T(s))
        | Syntax.NT(s) -> NT(lookup_ntid s)
-       | Syntax.FUN(_,_) -> assert false
-       | Syntax.CASE(n) -> assert false
-       | Syntax.FD(n) -> assert false
-       | Syntax.PAIR -> assert false
-       | Syntax.DPAIR -> assert false
+       | Syntax.Fun(_, _) -> assert false
      in
      let terms = List.map (pterm2term vmap) pterms in
      let terms' = if !(Flags.normalize) then
@@ -90,34 +84,34 @@ let prerule2rule rules vinfo (f, (_, ss, pterm)) =
 
 let prerules2rules rules vinfo prerules =
   let prerules_indexed = indexlist prerules in
-     List.iter (prerule2rule rules vinfo) prerules_indexed
+  List.iter (prerule2rule rules vinfo) prerules_indexed
 
 
 
 let dummy_term = NT(0)
 let dummy_ntname = "DummyNT"
 
-let add_auxiliary_rules nttab rules =
+let add_auxiliary_rules nt_kinds rules =
   let num_of_nts = !ntauxid in
-  let nttab' = Array.make num_of_nts ("",O) in
+  let nt_kinds' = Array.make num_of_nts ("",O) in
   let rules' = Array.make num_of_nts (0,dummy_term) in
    for i=0 to Array.length rules -1 do
-      nttab'.(i) <- nttab.(i);
+      nt_kinds'.(i) <- nt_kinds.(i);
       rules'.(i) <- rules.(i)
    done;
    List.iter (fun (f,arity,body) ->
       rules'.(f) <- (arity, body);
-      nttab'.(f) <- ("$NT"^(string_of_int f), O)
+      nt_kinds'.(f) <- ("$NT"^(string_of_int f), O)
       ) 
       !aux_rules;
-   (nttab', rules')
+   (nt_kinds', rules')
 
 let rec elim_fun_from_preterm vl preterm newrules =
-  let Syntax.PTapp(h, pterms) = preterm in
+  let Syntax.PApp(h, pterms) = preterm in
   let (pterms',newrules') = elim_fun_from_preterms vl pterms newrules in
-  let (Syntax.PTapp(h',pterms''), newrules'') =
+  let (Syntax.PApp(h',pterms''), newrules'') =
          elim_fun_from_head vl h newrules' in
-     (Syntax.PTapp(h', pterms''@pterms'), newrules'')
+     (Syntax.PApp(h', pterms''@pterms'), newrules'')
 and elim_fun_from_preterms vl preterms newrules =
   match preterms with
     [] -> ([], newrules)
@@ -127,19 +121,14 @@ and elim_fun_from_preterms vl preterms newrules =
          (pterm'::pterms', newrules'')
 and elim_fun_from_head vl h newrules =
   match h with
-    Syntax.Name(s) -> (Syntax.PTapp(Syntax.Name(s),[]), newrules)
-  | Syntax.NT(s) -> (Syntax.PTapp(Syntax.NT(s),[]), newrules)
-  | Syntax.FUN(vl1,pterm) ->
+    Syntax.Name(s) -> (Syntax.PApp(Syntax.Name(s),[]), newrules)
+  | Syntax.NT(s) -> (Syntax.PApp(Syntax.NT(s),[]), newrules)
+  | Syntax.Fun(vl1,pterm) ->
        let vl' = vl@vl1 in (* what if names in vl and vl1 clashe? *)
        let (pterm',newrules') = elim_fun_from_preterm vl' pterm newrules in
        let f = Syntax.new_ntname() in
-       let pterms1 = List.map (fun v -> Syntax.PTapp(Syntax.Name(v), [])) vl in
-         (Syntax.PTapp(Syntax.NT(f), pterms1), (f, vl', pterm')::newrules')
-  | Syntax.CASE(n) -> assert false
-  | Syntax.FD(n) -> assert false
-  | Syntax.PAIR -> assert false
-  | Syntax.DPAIR -> assert false
-
+       let pterms1 = List.map (fun v -> Syntax.PApp(Syntax.Name(v), [])) vl in
+         (Syntax.PApp(Syntax.NT(f), pterms1), (f, vl', pterm')::newrules')
 
 let elim_fun_from_prerule prerule newrules =
   let (f, vl, preterm) = prerule in
@@ -158,26 +147,146 @@ let elim_fun_from_prerules prerules =
    prerules)
  in List.rev_append prerules' newrules
 
-let prerules2gram prerules =
-  let prerules = elim_fun_from_prerules prerules in (* removes lambdas *)
-  let ntnames = List.map (fun (x,_,_)->x) prerules in (* nonterminal names *)
-  let num_of_nts = List.length ntnames in (* number of nonterminals *)
+module SS = Set.Make(String)
+
+type abc_atom = AVar of string | ANT of string | A | B | C
+type abc_prerule = AApp of abc_atom * abc_prerule list
+
+let b_tree k =
+  assert (k >= 1);
+  let rec b_tree_aux from_arg to_arg =
+    if from_arg = to_arg then
+      Syntax.PApp(Syntax.Name("_"^(string_of_int from_arg)), [])
+    else
+      let mid_arg = (from_arg + to_arg) / 2 in
+      let args = [b_tree_aux from_arg mid_arg; b_tree_aux (mid_arg + 1) to_arg] in
+      Syntax.PApp(Syntax.Name("_b"), args)
+  in
+  let rec vars k acc =
+    if k = 0 then
+      acc
+    else
+      vars (k-1) (("_"^(string_of_int k))::acc)
+  in
+  Syntax.Fun(vars k [], b_tree_aux 1 k)
+
+(** Replaces preterminals with minimal set of standard terminals - _a, _b, _c.
+    Checks for name conflicts between variables, terminals, and br. Replacing is done by changing
+    terminals of arity k with a lambda-term with _b-tree (with branches) with all k arguments of
+    height log2(k)+1. If k=0, the terminal is replaced with _c instead. If the terminal is
+    counted, _a is added above that tree. *)
+let terminals2abc prerules preterminals =
+  (* hashmap for fast access, also checking for conflicts *)
+  let preterminals_map = Hashtbl.create 1000 in
+  List.iter (fun t -> match t with
+      | Syntax.Terminal(name, arity, counted) ->
+        if Hashtbl.mem preterminals_map name then
+          failwith ("Terminal "^name^" defined twice")
+        else if name = "br" then
+          failwith ("Terminal br is reserved for nondeterministic choice")
+        else
+          Hashtbl.add preterminals_map name (arity, counted)) preterminals;
+  let terminals2abc_prerule (nt, args_list, preterm) =
+    (* set for fast access, also checking for conflicts *)
+    let args = List.fold_left (fun acc arg ->
+        if SS.mem arg acc then
+          failwith ("Variable "^arg^" defined twice in nonterminal "^nt)
+        else if Hashtbl.mem preterminals_map arg || arg = "br" then
+          failwith ("Variable "^arg^" in nonterminal "^nt^" conflicts with a terminal with "^
+                    "the same name")
+        else
+          SS.add arg acc) SS.empty args_list
+    in
+    let rec terminals2abc_preterm args preterm =
+      match preterm with
+      | Syntax.PApp(head, a) ->
+        let arg_preterms = List.map (terminals2abc_preterm args) a in
+        match head with
+        | Syntax.Name(name) ->
+          if SS.mem name args then
+            (* leaving variables and br as they were *)
+            Syntax.PApp(head, arg_preterms)
+          else if name = "br" then
+            (* converting br *)
+            Syntax.PApp(Syntax.Name("_b"), arg_preterms)
+          else
+            (* converting terminals *)
+            (try
+               let (arity, counted) = Hashtbl.find preterminals_map name in
+               if List.length a > arity then
+                 failwith ("Terminal "^name^" applied to more arguments than its arity")
+               else
+                 (* converted terminal as _c or as a function *)
+                 let terminal_app =
+                   if List.length a = 1 && arity = 1 then
+                     (* removing identities *)
+                     List.hd arg_preterms
+                   else
+                     let terminal_fun =
+                       if arity = 0 then
+                         Syntax.Name("_c")
+                       else
+                         b_tree arity
+                     in
+                     Syntax.PApp(terminal_fun, arg_preterms)
+                 in
+                 (* adding _a above counted ones *)
+                 if counted then
+                   Syntax.PApp(Syntax.Name("_a"), [terminal_app])
+                 else
+                   terminal_app
+             with Not_found ->
+               failwith ("Unbounded name "^name^" in the body of nonterminal "^nt)
+            )
+        (* leaving nonterminals as they were *)
+        | Syntax.NT(_) -> Syntax.PApp(head, arg_preterms)
+        | Syntax.Fun(vars, preterm) ->
+          let fun_args = List.fold_left (fun acc arg ->
+              if SS.mem arg acc then
+                failwith ("Variable "^arg^" defined twice in function in nonterminal "^nt)
+              else if Hashtbl.mem preterminals_map arg || arg = "br" then
+                failwith ("Variable "^arg^" in function in nonterminal "^nt^" conflicts with a "^
+                          "terminal with the same name")
+              else
+                SS.add arg acc) SS.empty vars
+          in
+          Syntax.PApp(Syntax.Fun(vars, terminals2abc_preterm (SS.union args fun_args) preterm),
+                      arg_preterms)
+    in
+    (nt, args_list, terminals2abc_preterm args preterm)
+  in
+  List.map terminals2abc_prerule prerules
+
+(** Converts parsed rules into rules with better semantics.
+    Distinguishes between variables and terminals. Adds additional arguments so that body of a
+    rule has kind O. TODO complete docs. *)
+let prerules2gram (prerules, preterminals) =
+  let prerules = terminals2abc prerules preterminals in
+  if !Flags.debugging then
+    print_string ("Input after converting terminals:\n"^(Syntax.string_of_prerules prerules));
+  let prerules = elim_fun_from_prerules prerules in
+  let nt_names = List.map (fun (x,_,_) -> x) prerules in
+  let num_of_nts = List.length nt_names in
   let _ = (ntauxid := num_of_nts) in
-  let _ = nttab := Array.make num_of_nts (dummy_ntname,O) in
-  let _ = List.iter register_nt ntnames in (* create mapping from nonterminal names to unique integers *)
+  (* map nt id -> nt name, nt kind *)
+  let _ = nt_kinds := Array.make num_of_nts (dummy_ntname, O) in
+  (* assigning a unique number to each nonterminal *)
+  let _ = List.iter register_nt nt_names in
+  (* map nt id -> arity, term *)
   let rules = Array.make num_of_nts (0,dummy_term) in
   let vinfo = Array.make num_of_nts [| |] in
   let _ = prerules2rules rules vinfo prerules in
   let (nt', rules') = 
-               if !(Flags.normalize) then
-                   add_auxiliary_rules !nttab rules
-               else (!nttab, rules)
+    if !(Flags.normalize) then
+      add_auxiliary_rules !nt_kinds rules
+    else (!nt_kinds, rules)
   in
   let s = 0 in
   let terminals = List.map (fun a -> (a, -1)) (terminals_in_rules rules) in
   let g = {nt= nt'; t=terminals; vinfo = vinfo; r=rules'; s=s} in
   Grammar.gram := g; g (* here the grammar is put into a global variable *)
 
+(*
 let states_in_tr ((q, a), qs) =
   let qs' = delete_duplication (List.sort compare qs) in
     merge_and_unify compare [q] qs'
@@ -231,3 +340,4 @@ let convert_ata (prerules, ranks, transitions ) =
   let m = from_transitions (ranks,transitions) in
   (g, m);;
 (** END: conversion from parsing results **)
+*)

@@ -27,6 +27,8 @@ rule token = parse
   { END }
 | "Terminals."
   { BEGINT }
+| "fun"
+  { FUN }
 | "->"
   { ARROW }
 | "("

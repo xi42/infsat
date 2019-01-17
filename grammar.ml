@@ -202,61 +202,6 @@ let rec size_of_rule r =
 let rec size_of g =
    Array.fold_left (fun n -> fun r -> n+(size_of_rule r)) 0 g.r
 
-(* find and register recursive functions *)
-(* (f, [g1,...,gk]) in dmap means that f occurs in g1,...,gk *)
-
-let recfuntab = Hashtbl.create 1000
-let scclist = ref []
-
-let reset_recfuntab() =
-  Hashtbl.clear recfuntab; scclist := []
-
-let is_recfun f = 
-   if !Flags.allfun then true
-   else Hashtbl.mem recfuntab f
-let find_dep x dmap =
-  try
-    List.assoc x dmap
-  with Not_found ->
-     assert false (* raise (UndefinedNonterminal (name_of_nt x)) *)
-
-let find_sc f scc =
-  let scc' = List.filter (fun x-> List.mem f x) scc in
-    match scc' with
-       [] -> assert false
-    |  sc::_ -> sc
-
-let register_recfun dmap g =
-   let nt = fromto 0 (Array.length g.nt -1) in
-   let graph = List.flatten 
-               (List.map (fun (f,l) -> List.map (fun g->(g,f)) l) dmap)
-   in
-   let scc = Scc.compute_scc graph in
-   let singletons = List.map List.hd
-                    (List.filter list_singleton scc) in
-   let rec1 = (* find self-recursive non-terminals *)
-               List.filter 
-               (fun x -> List.mem x (find_dep x dmap)) singletons 
-   in
-   let cycles1 = List.map (fun x -> [x]) rec1 in
-   let cycles2 = List.filter (fun sc -> List.length sc >1) scc in
-   let _ = (scclist := cycles1@cycles2) in
-   let rec2 = List.filter (fun x -> not(List.mem x singletons)) nt in
-   let rec2' = List.filter
-             (fun f -> List.length (find_dep f dmap)>1)
-              rec2
-   in
-     (
-      List.iter (fun f -> Hashtbl.add recfuntab f (find_sc f scc)) rec1;
-      List.iter (fun f -> Hashtbl.add recfuntab f (find_sc f scc)) rec2';
-      if !Flags.debugging then
-        (print_string "Recursive functions\n";
-         let l = hash2list recfuntab in
-          List.iter (fun (f,_)-> print_string ((name_of_nt f)^" ")) l;
-          print_string "\n")
-      )
-
-
 let rec arity_of_kind = function
   | O -> 0
   | Kfun (k1,k2) -> 1 + arity_of_kind k2

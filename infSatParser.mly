@@ -7,6 +7,7 @@ open Syntax
 %token <int> INT
 %token COUNTED
 %token ARROW
+%token FUN
 %token PERIOD
 %token LPAR
 %token RPAR
@@ -21,8 +22,8 @@ open Syntax
 %type <Syntax.prerule> rule
 %type <string list> names
 %type <Syntax.preterm> term
-%type <Syntax.preterm> pterm
-%type <Syntax.preterm list> pterms
+%type <Syntax.preterm> subterm
+%type <Syntax.preterm list> terms_list
 %type <Syntax.preterminals> terminals
 
 %%
@@ -32,13 +33,13 @@ main:
   {($1, $2)};
 
 rules:
-  BEGING prules END
+  BEGING rules_list END
   {$2};
 
-prules:
+rules_list:
 | rule 
   {[$1]}
-| rule prules
+| rule rules_list
   {$1::$2};
 
 rule:
@@ -47,7 +48,7 @@ rule:
 | NONTERM ARROW term PERIOD
   {($1, [], $3)};
 
-pterm:
+subterm:
 | NONTERM
   {PApp(NT($1), [])}
 | NAME 
@@ -56,16 +57,18 @@ pterm:
   {$2};
 
 term:
-  pterms
+| terms_list
   {match $1 with
    | [x] -> x
    | PApp(h, [])::terms -> PApp(h, terms)
    | _ -> assert false};
+| FUN names ARROW term
+  {PApp(Fun($2, $4), [])}
 
-pterms:
-| pterm
+terms_list:
+| subterm
   {[$1]}
-| pterm pterms
+| subterm terms_list
   {$1::$2};
 
 names:
@@ -75,17 +78,17 @@ names:
   {$1::$2};
 
 terminals:
-  BEGINT pterminals END
+  BEGINT terminals_list END
   {$2};
 
-pterminals:
+terminals_list:
 | terminal
   {[$1]}
-| terminal pterminals
+| terminal terminals_list
   {$1::$2};
 
 terminal:
 | NAME ARROW INT PERIOD
-  {PTerminal($1, $3, false)}
+  {Terminal($1, $3, false)}
 | NAME ARROW INT COUNTED PERIOD
-  {PTerminal($1, $3, true)};
+  {Terminal($1, $3, true)};

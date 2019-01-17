@@ -1,7 +1,7 @@
 (** Syntax for unprocessed terms created by the parser *)
 
-type atom = Name of string | NT of string
-and preterm = PApp of atom * preterm list
+type prehead = Name of string | NT of string | Fun of string list * preterm
+and preterm = PApp of prehead * preterm list
 type prerule = string * string list * preterm
 type prerules = prerule list
 
@@ -11,7 +11,7 @@ type preformula = FConst of string
                 | FOr of preformula * preformula
 type ata_trans = (string * string) * preformula
 
-type preterminal = PTerminal of string * int * bool
+type preterminal = Terminal of string * int * bool
 type preterminals = preterminal list
 
 let rec string_of_vars vl =
@@ -23,6 +23,7 @@ let rec string_of_atom h =
   match h with
   | Name(s) -> s
   | NT(s) -> s
+  | Fun(vars, pterm) -> "(fun "^(string_of_vars vars)^" -> "^(string_of_preterm pterm)^")"
 and string_of_preterm pterm =
   match pterm with
   | PApp(h, pterms) -> (string_of_atom h)^" "^(string_of_preterms pterms)
@@ -48,7 +49,7 @@ let string_of_prerules prerules =
 
 let string_of_preterminal pt =
   match pt with
-  | PTerminal(name, arity, counted) ->
+  | Terminal(name, arity, counted) ->
     let string_of_counted counted =
       match counted with
       | true -> " $"

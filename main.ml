@@ -4,7 +4,7 @@ open Utilities
 (*open Automaton*)
 
 (** Parses a file to HORS prerules and automata definition. *)
-let parseFile filename =
+let parse_file filename =
   let in_strm = 
     try
       open_in filename 
@@ -28,7 +28,7 @@ let parseFile filename =
     result
 
 (** Parses stdin to HORS prerules and automata transitions. *)
-let parseStdIn() =
+let parse_stdin() =
   let _ = print_string ("reading standard input ...\n") in
   let in_strm = stdin in
   let lexbuf = Lexing.from_channel in_strm in
@@ -63,7 +63,8 @@ let report_input_ata g m =
 
 (** Main part of InfSat. Takes parsed input, computes if the language contains
     arbitrarily many counted letters. Prints the result. *)
-let report_finiteness (prerules,tr) =
+let report_finiteness input =
+  let converted = Conversion.prerules2gram input in
   todo()
   (*
   match tr with
@@ -177,9 +178,9 @@ let main () =
   let input = profile "parsing" (fun () ->
       try
         if interactive then
-          parseStdIn()
+          parse_stdin()
         else
-          parseFile(Sys.argv.(index))
+          parse_file(Sys.argv.(index))
       with
         InfSatLexer.LexError s -> (print_string ("Lexer error: "^s^"\n"); exit (-1))
     )
