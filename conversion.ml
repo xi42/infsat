@@ -263,7 +263,7 @@ let terminals2abc prerules preterminals =
 let prerules2gram (prerules, preterminals) =
   let prerules = terminals2abc prerules preterminals in
   if !Flags.debugging then
-    print_string ("Input after converting terminals:\n"^(Syntax.string_of_prerules prerules));
+    print_string ("Input after converting terminals:\n"^(Syntax.string_of_prerules prerules)^"\n");
   let prerules = elim_fun_from_prerules prerules in
   let nt_names = List.map (fun (x,_,_) -> x) prerules in
   let num_of_nts = List.length nt_names in
@@ -284,7 +284,13 @@ let prerules2gram (prerules, preterminals) =
   let s = 0 in
   let terminals = List.map (fun a -> (a, -1)) (terminals_in_rules rules) in
   let g = {nt= nt'; t=terminals; vinfo = vinfo; r=rules'; s=s} in
-  Grammar.gram := g; g (* here the grammar is put into a global variable *)
+  Grammar.gram := g; (* here the grammar is put into a global variable - TODO remove that *)
+  if !Flags.debugging then
+    begin
+      print_string "Grammar after conversion from prerules:\n";
+      Grammar.report_grammar g
+    end;
+  g
 
 (*
 let states_in_tr ((q, a), qs) =

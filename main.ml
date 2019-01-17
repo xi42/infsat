@@ -64,7 +64,7 @@ let report_input_ata g m =
 (** Main part of InfSat. Takes parsed input, computes if the language contains
     arbitrarily many counted letters. Prints the result. *)
 let report_finiteness input =
-  let converted = Conversion.prerules2gram input in
+  let g = Conversion.prerules2gram input in
   todo()
   (*
   match tr with
@@ -186,8 +186,7 @@ let main () =
     )
   in
   if !Flags.debugging then
-    print_string ("Input:\n"^(string_of_input input))
-  else ();
+    print_string ("Input:\n"^(string_of_input input)^"\n");
   (* the main part *)
   report_finiteness input;
   let end_t = Sys.time() in report_timings start_t end_t;

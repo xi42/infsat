@@ -65,25 +65,8 @@ let rec string_of_preterminals pts =
   in
   "Terminals.\n"^(string_of_preterminals_aux pts)^"End.\n"
 
-let rec string_of_states qs =
-  match qs with
-    [] -> ""
-  | q::qs' -> q^" "^(string_of_states qs')
-
-let string_of_transition ((q,a), qs) =
-  q^" "^a^" -> "^(string_of_states qs)
-
-let rec string_of_transitions_aux trs =
-  match trs with
-   [] -> ""
- | tr::trs' ->
-     (string_of_transition tr)^".\n"^(string_of_transitions_aux trs')
-
-let string_of_transitions trs = 
-  "%BEGINA\n"^(string_of_transitions_aux trs)^"%ENDA\n";;
-
 let ntid = ref 0
 let new_ntname() =
    let x = !ntid in
    let _ = (ntid := !ntid + 1) in
-     ("$FUN"^(string_of_int x))
+     ("_fun"^(string_of_int x))

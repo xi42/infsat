@@ -23,7 +23,7 @@ type rules = rule array
 type gram = {nt: nonterminals; t: terminals; vinfo: varinfo; r: rules; s: nameNT}
 let empty_grammar = {nt=[||];t=[];vinfo=[||]; r=[||];s=0}
 
-let gram = ref empty_grammar;; (* stored here once the grammar has been read  *)
+let gram = ref empty_grammar (* stored here once the grammar has been read  *)
 
 exception UndefinedNonterminal of string
 exception DuplicatedNonterminal of string
@@ -179,13 +179,13 @@ let print_gram g =
   let n = Array.length g.r in
   for i=0 to n-1 do 
     let (arity,body) =  g.r.(i) in
-       (print_string ((name_of_nt i)^" ");
-        for j=0 to arity-1 do
-        print_string ((name_of_var (i,j))^" ")
-        done;
-        print_string "-> ";
-        print_term body;
-        print_string "\n")
+    (print_string ((name_of_nt i)^" ");
+     for j=0 to arity-1 do
+       print_string ((name_of_var (i,j))^" ")
+     done;
+     print_string "-> ";
+     print_term body;
+     print_string "\n")
   done
 
 let rec arity2kind k =
@@ -206,3 +206,11 @@ let rec arity_of_kind = function
   | O -> 0
   | Kfun (k1,k2) -> 1 + arity_of_kind k2
 
+let report_grammar g =
+  let r = Array.length g.r in
+  let s = size_of g in
+  begin
+    print_gram g;  
+    print_string ("The number of rewrite rules: "^(string_of_int r)^"\n"^
+                  "The size of recursion scheme: "^(string_of_int s)^"\n\n")
+  end
