@@ -53,28 +53,6 @@ let emptyTE = []
 (** nteref[f][q] has all typings of nonterminal f that have codomain q. *)
 let nteref = ref [||]
 
-
-let rec register_linearity ity a i =
-  match ity with
-   ItyQ _ -> ()
-| ItyFun(_,ty,ity1) ->
-     (if List.length ty>1 then a.(i) <- false (* non-linear *));
-     register_linearity ity1 a (i+1)
-
-(** Makes Ai.tab_linearity[terminal][i] = false iff cte[terminal][q] has function types of form
-    ... -> [qa, qb, ...] -> ... -> q for some q with [...] on i-th argument (start from 0);
-    otherwise tab_linearity does not have that record *)
-let mk_linearity_tab() =
-  Hashtbl.iter (fun c tyarray -> (* for all terminals c *)
-    let arity = Grammar.arity_of_t c in
-    let a = Array.make arity true in
-    Array.iter (fun ty -> (* for all states q *)
-        List.iter (fun ity -> (* for all transition function types in cte that have codomain q *)
-      register_linearity ity a 0) ty) tyarray;
-    Hashtbl.add Ai.tab_linearity c a
-  )
-  cte
-
 (** convert a transition q->q1...qn(=qs) to a negated type, i.e., produce function types
     [q1] -> T -> ... -> T -> q, T -> [q2] -> T -> ... -> q, ..., T -> ... -> T -> qn -> q *)
 (* TODO this implementation is really overcomplicated for what it does *)

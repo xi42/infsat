@@ -509,17 +509,12 @@ let rec expand() =
   | Some(aterm) ->
     (* num := !num+1;*) process_node aterm; expand() (* recursively process each ((head, [args id]); state) *)
 
-(** tab_linearity[terminal][i] = true iff terminal has transitions to at most one state in i-th
-    argument. Initialized in Saturate.mk_linearity_tab. *)
-let tab_linearity: (string, bool array) Hashtbl.t = Hashtbl.create 100
-
 (* identifier of [t1;...;tk] --> identifiers of [s1;...;sl] 
    that depend on the value of [t1;...;tk];
    in other words, if id is mapped to [id1;...;idk] and
    the type of id has been updated, the types of id1,...,idk should
-   be recomputed 
-let tab_penv_binding = Hashtbl.create 10000
-*)
+   be recomputed
+   let tab_penv_binding = Hashtbl.create 10000 TODO remove old ver *)
 
 (** tab_penv_binding[as] contains a list of identifiers of lists of arguments (aterms) asX such
     that term tab_id_terms[asX] was applied with nonterminal containing tab_id_terms[as]
@@ -777,34 +772,31 @@ let merge_nts_lin (nts1,nts2) (nts3,nts4) =
     empty) of terminals applied to them and appear exactly once in the term, and the rest of
     nonterminals on the right. *)
 let rec nt_in_term_with_linearity term =
-   match term with
-     Var(_) -> ([], [])
-   | T(_) ->  ([], [])
-   | NT(f) -> ([f], [])
-   | App(_,_) ->
-      let (h,terms) = Grammar.decompose_term term in
-       (match h with
-          NT(f) -> let nts = nt_in_terms terms in
-	           if List.mem f nts then ([],nts) (* if head nt used twice *)
-                   else ([f],nts) (* if head nt used once *)
-	| Var(_) -> ([], nt_in_terms terms)
-	| T(a) ->
-	    let linearity_info = Hashtbl.find tab_linearity a in (* mapping if i-th arg maps to
-                                                                    at most one state *)
-	      nt_in_terms_with_linearity terms linearity_info 0 ([],[])
-	| _ -> assert false)
-	
-and nt_in_terms_with_linearity terms linearity_info i (nts1,nts2) =
+  match term with
+  | Var(_) -> ([], [])
+  | T(_) ->  ([], [])
+  | NT(f) -> ([f], [])
+  | App(_,_) ->
+    let (h,terms) = Grammar.decompose_term term in
+    match h with
+    | NT(f) -> let nts = nt_in_terms terms in
+      if List.mem f nts then ([],nts) (* if head nt used twice *)
+      else ([f],nts) (* if head nt used once *)
+    | Var(_) -> ([], nt_in_terms terms)
+    | T(a) ->
+      (* c has no children. a has a single child, so it is linear. b has two children, but only
+         one at a time is used. Even if we do b (N ..) (N ..) that yield different types, only
+         one N is used as long as there is no other N present. Therefore, b is also linear. *)
+      nt_in_terms_with_linearity terms 0 ([],[])
+    | _ -> assert false
+    
+and nt_in_terms_with_linearity terms i (nts1,nts2) =
   match terms with (* iteration over terms and linearity info simultaneously *)
    [] -> (nts1,nts2) 
  | t::terms' ->
-     let (nts1',nts2') =
-        if linearity_info.(i) then
-          nt_in_term_with_linearity t (* recursively *)
-	else ([], Grammar.nt_in_term t) (* all nt in term *)
-     in
+     let (nts1',nts2') = nt_in_term_with_linearity t (* recursively *) in
      let (nts1'',nts2'') = merge_nts_lin (nts1',nts2') (nts1,nts2) in
-       nt_in_terms_with_linearity terms' linearity_info (i+1) (nts1'',nts2'')
+       nt_in_terms_with_linearity terms' (i+1) (nts1'',nts2'')
 
 
 let mk_binding_depgraph() =

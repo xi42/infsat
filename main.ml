@@ -66,9 +66,8 @@ let report_input_ata g m =
 let report_finiteness input =
   profile "conversion" (fun () -> Conversion.prerules2gram input);
   profile "eta-expansion" (fun () -> Stype.eta_expand());
-  Cfa.init_expansion 0;
-  Cfa.expand();
-  Cfa.mk_binding_depgraph();
+  profile "0CFA" (fun () -> Cfa.init_expansion 0; Cfa.expand());
+  profile "dependency graph" (fun () -> Cfa.mk_binding_depgraph());
   ()
   (* TODO
   match tr with
@@ -76,20 +75,20 @@ let report_finiteness input =
 DONE    let (g, m) = Conversion.convert_ata (prerules,rs,tr) in
 DONE     (report_input_ata g m;
 DONE     let alpha1 = Stype.tcheck g m.AlternatingAutomaton.alpha in 
-DONE     Grammar.update_arity alpha1;
-DONE     Ai.mk_trtab_for_ata m;
-DONE     let m' = AlternatingAutomaton.negate m in
-DONE     Type.set_num_of_states(List.length (m.AlternatingAutomaton.st));
-DONE     Saturate.ata2cte m';
-DONE     if !Flags.debugging then Saturate.print_cte();
-         Saturate.mk_linearity_tab();
-         check_point();
+SKIP     Grammar.update_arity alpha1;
+SKIP     Ai.mk_trtab_for_ata m;
+SKIP     let m' = AlternatingAutomaton.negate m in
+SKIP     Type.set_num_of_states(List.length (m.AlternatingAutomaton.st));
+SKIP     Saturate.ata2cte m';
+SKIP     if !Flags.debugging then Saturate.print_cte();
+SKIP     Saturate.mk_linearity_tab();
+DONE     check_point();
 DONE     Ai.init_expansion 0;
-         check_point();
-         Ai.expand();
-         check_point();
-         Ai.mk_binding_depgraph(); (* 3 check_points *)
-         check_point();
+DONE     check_point();
+DONE     Ai.expand();
+DONE     check_point();
+DONE     Ai.mk_binding_depgraph(); (* 3 check_points *)
+DONE     check_point();
          Saturate.saturate() (* 2 check_points *)
         )
 (*        verify_ata g m *)
