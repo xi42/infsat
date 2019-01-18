@@ -439,7 +439,7 @@ let init_tab_id_terms g =
     (!normalized_body).(f) <- u (* normalized_body now contains (arity, (H, [ID])), where H is a var/nonterminal/terminal and ID points in tab_id_terms at list of terms normalized to (H, [ID]) or (H, []) if there are no args *)
   done     
 
-let init_expansion q0 =
+let init_expansion() =
   ATermHashtbl.clear nodetab;
   clear_nodequeue();
   let g = !(Grammar.gram) in

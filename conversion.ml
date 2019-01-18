@@ -152,8 +152,7 @@ module SS = Set.Make(String)
 type abc_atom = AVar of string | ANT of string | A | B | C
 type abc_prerule = AApp of abc_atom * abc_prerule list
 
-let b_tree k =
-  assert (k >= 1);
+let b_tree k counted arg_preterms =
   let rec b_tree_aux from_arg to_arg =
     if from_arg = to_arg then
       Syntax.PApp(Syntax.Name("_"^(string_of_int from_arg)), [])
@@ -168,7 +167,26 @@ let b_tree k =
     else
       vars (k-1) (("_"^(string_of_int k))::acc)
   in
-  Syntax.Fun(vars k [], b_tree_aux 1 k)
+  let (body, wrap_fun) =
+    if k = 0 then
+      (* converted terminal with no children as _c *)
+      (Syntax.PApp(Syntax.Name("_c"), []), false)
+    else if k = 1 && List.length arg_preterms = 1 then
+      (* removing identities *)
+      (List.hd arg_preterms, false)
+    else
+      (b_tree_aux 1 k, true)
+  in
+  (* adding _a above counted ones *)
+  let body' = if counted then
+      Syntax.PApp(Syntax.Name("_a"), [body])
+    else 
+      body
+  in
+  if wrap_fun then
+    Syntax.PApp(Syntax.Fun(vars k [], body'), arg_preterms)
+  else
+    body
 
 (** Replaces preterminals with minimal set of standard terminals - _a, _b, _c.
     Checks for name conflicts between variables, terminals, and br. Replacing is done by changing
@@ -216,25 +234,7 @@ let terminals2abc prerules preterminals =
                if List.length a > arity then
                  failwith ("Terminal "^name^" applied to more arguments than its arity")
                else
-                 (* converted terminal as _c or as a function *)
-                 let terminal_app =
-                   if List.length a = 1 && arity = 1 then
-                     (* removing identities *)
-                     List.hd arg_preterms
-                   else
-                     let terminal_fun =
-                       if arity = 0 then
-                         Syntax.Name("_c")
-                       else
-                         b_tree arity
-                     in
-                     Syntax.PApp(terminal_fun, arg_preterms)
-                 in
-                 (* adding _a above counted ones *)
-                 if counted then
-                   Syntax.PApp(Syntax.Name("_a"), [terminal_app])
-                 else
-                   terminal_app
+                 b_tree arity counted arg_preterms
              with Not_found ->
                failwith ("Unbounded name "^name^" in the body of nonterminal "^nt)
             )
