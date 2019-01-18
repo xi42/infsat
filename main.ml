@@ -64,9 +64,11 @@ let report_input_ata g m =
 (** Main part of InfSat. Takes parsed input, computes if the language contains
     arbitrarily many counted letters. Prints the result. *)
 let report_finiteness input =
-  Conversion.prerules2gram input;
-  Stype.eta_expand();
+  profile "conversion" (fun () -> Conversion.prerules2gram input);
+  profile "eta-expansion" (fun () -> Stype.eta_expand());
   Cfa.init_expansion 0;
+  Cfa.expand();
+  Cfa.mk_binding_depgraph();
   ()
   (* TODO
   match tr with
@@ -82,7 +84,7 @@ DONE     Saturate.ata2cte m';
 DONE     if !Flags.debugging then Saturate.print_cte();
          Saturate.mk_linearity_tab();
          check_point();
-         Ai.init_expansion 0;
+DONE     Ai.init_expansion 0;
          check_point();
          Ai.expand();
          check_point();

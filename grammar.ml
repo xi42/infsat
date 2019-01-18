@@ -80,7 +80,7 @@ let rec vars_in_terms terms =
 
 (** Returns ascending list of variables in term that are not in an argument of a nonterminal or
     a terminal and are applied to something. *)
-let rec headvars_in_term term =
+let rec headvars_in_term (term : term) : nameV list =
   match term with
     NT _ -> []
   | T _ -> []
