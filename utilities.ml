@@ -1,9 +1,6 @@
 open Flags
 exception Fatal of string
 
-exception NotImplemented
-let todo() = raise NotImplemented
-
 let times = ref []
 let check_point() = 
   let t = Sys.time() in times := t::!times

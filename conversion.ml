@@ -260,7 +260,7 @@ let terminals2abc prerules preterminals =
 (** Converts parsed rules into rules with better semantics.
     Distinguishes between variables and terminals. Adds additional arguments so that body of a
     rule has kind O. TODO complete docs. *)
-let prerules2gram (prerules, preterminals) =
+let prerules2gram (prerules, preterminals) : unit =
   let prerules = terminals2abc prerules preterminals in
   if !Flags.debugging then
     print_string ("Input after converting terminals:\n"^(Syntax.string_of_prerules prerules)^"\n");
@@ -284,13 +284,13 @@ let prerules2gram (prerules, preterminals) =
   let s = 0 in
   let terminals = List.map (fun a -> (a, -1)) (terminals_in_rules rules) in
   let g = {nt= nt'; t=terminals; vinfo = vinfo; r=rules'; s=s} in
-  Grammar.gram := g; (* here the grammar is put into a global variable - TODO remove that *)
+  (* saving grammar in a global variable *)
+  Grammar.gram := g;
   if !Flags.debugging then
     begin
       print_string "Grammar after conversion from prerules:\n";
       Grammar.report_grammar g
-    end;
-  g
+    end
 
 (*
 let states_in_tr ((q, a), qs) =

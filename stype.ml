@@ -232,8 +232,9 @@ let update_arity_of_nt g nste =
 
 let cste = [("_a", arity2sty 1);("_b", arity2sty 2);("_c", arity2sty 0)]
 
-let eta_expand g =
+let eta_expand() =
   (* creating a new type var for each nonterminal *)
+  let g = !Grammar.gram in
   let num_of_nts = Array.length g.nt in
   let nste = Array.make num_of_nts dummy_type in
   let _ = for i=0 to num_of_nts-1 do

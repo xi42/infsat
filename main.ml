@@ -64,9 +64,10 @@ let report_input_ata g m =
 (** Main part of InfSat. Takes parsed input, computes if the language contains
     arbitrarily many counted letters. Prints the result. *)
 let report_finiteness input =
-  let g = Conversion.prerules2gram input in
-  let _ = Stype.eta_expand g in 
-  todo()
+  Conversion.prerules2gram input;
+  Stype.eta_expand();
+  Cfa.init_expansion 0;
+  ()
   (* TODO
   match tr with
     | Syntax.Alternating (rs,tr) -> begin
