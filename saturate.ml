@@ -1,11 +1,12 @@
-open Flags;;
-open Utilities;;
-open Syntax;;
-open Grammar;;
-open Automaton;;
-open Stype;;
-open Type;;
+open Flags
+open Utilities
+open Syntax
+open Grammar
+open Profiling
+open Stype
+(* open Type *)
 
+(*
 type tstate = ity * Stype.st
 type delta = (tstate * tr) list
 and tr = TrNT of nameNT | TrT of nameT
@@ -58,14 +59,14 @@ let nteref = ref [||]
 (* TODO this implementation is really overcomplicated for what it does *)
 let rec tr2ty_sub q qs =
   match qs with
-    [] -> (ItyQ(Ai.state2id q), []) (* leaf (q, c) -> . where c is leaf is changed to (state id, []) *)
+    [] -> (ItyQ(Cfa.state2id q), []) (* leaf (q, c) -> . where c is leaf is changed to (state id, []) *)
   | q1::qs' ->
     let (top,ty) = tr2ty_sub q qs' in (* top is always q or T -> ... -> T -> q *)
     let ty'= List.map (fun ity -> mkItyFun([],ity)) ty in
      if q1="top" then
        (mkItyFun([],top), ty') (* if there is a top arg, it is just ignored *)
      else
-      (mkItyFun([],top), (mkItyFun([ItyQ(Ai.state2id q1)],top))::ty')
+      (mkItyFun([],top), (mkItyFun([ItyQ(Cfa.state2id q1)],top))::ty')
 and tr2ty q qs =
   let (_,ty) = tr2ty_sub q qs in 
     ty
@@ -80,18 +81,18 @@ let rec add_topty n ity =
 
 let build_ity q n vs =
   let rec go = function
-    | 0 -> ItyQ (Ai.state2id q)
+    | 0 -> ItyQ (Cfa.state2id q)
     | k -> 
         let vs = List.filter (fun (i,_) -> n - k + 1 = i) vs in
-        let vs = List.map (fun (_,q) -> ItyQ (Ai.state2id q)) vs in
+        let vs = List.map (fun (_,q) -> ItyQ (Cfa.state2id q)) vs in
         let t1 = go (k-1) in
         mkItyFun (List.sort compare_ity vs,t1) in
-  go n;;
+  go n
 
 (** Sets cte to: terminal letter -> array with empty list of types for each state *)
 let init_cte terminals st =
   let n = List.length st in
-  List.iter (fun (a,_) -> 
+  List.iter (fun (a,_) ->
     Hashtbl.add cte a (Array.make n [])) terminals
 
 
@@ -137,12 +138,12 @@ let automaton2cte m =
                   List.filter 
                   (fun q-> not(List.exists (fun ((q',a'),_)->q=q'&&a=a') delta))
                   qs
-        in register_cte_ty (a, List.map (fun q->add_topty (arity_of a m) (ItyQ(Ai.state2id q))) qs1)) (* register in cte functions [] -> ... -> [] -> q for all q in qs *)
+        in register_cte_ty (a, List.map (fun q->add_topty (arity_of a m) (ItyQ(Cfa.state2id q))) qs1)) (* register in cte functions [] -> ... -> [] -> q for all q in qs *)
      terminals
 
 let rec print_ity ity =
   match ity with
-   ItyQ x -> print_string ("~"^(Ai.id2state x))
+   ItyQ x -> print_string ("~"^(Cfa.id2state x))
  | ItyFun(_,ty,ity) ->
      print_string "(";
      print_ty ty;
@@ -340,8 +341,8 @@ let lookup_terms_te id =
 let print_terms_te() =
   print_string "Types_of_terms:\n=========\n";
   for id=0 to (Array.length !terms_te)-1 do
-   if (!Ai.termid_isarg).(id) then
-    let terms = Ai.id2terms id in
+   if (!Cfa.termid_isarg).(id) then
+    let terms = Cfa.id2terms id in
     List.iter (fun t-> print_term t; print_string ", ") terms;
     print_string "\n";
     let tyss = lookup_terms_te id in
@@ -358,39 +359,51 @@ let rec subtype_tys tys1 tys2 =
       subtype_ty ty1 ty2
      && subtype_tys tys1' tys2'
  | _ -> assert false
-
+*)
+    
 (** A two-level LIFO queue, with stack of ids in the first one, and arr[id] in the second
     representing another stack. It differs from normal queue in that it locks the fst of dequeued
     first, giving them priority until they are depleted. *)
-let worklist_var_ty = ref ([], Array.make 1 [])
+let worklist_var_ty : (int list * unit list array) ref = ref ([], Array.make 1 [])
+
+(*
 let worklist_var_ty_wo_overwrite = ref ([], Array.make 1 [])
+*)
 
 (** A LIFO queue, with stack of ids in the first one and arr[id] in the second one being a list
     with data that is returned with it and set to [] after dequeue. *)
-let updated_nt_ty = ref ([], Array.make 1 [])
+let updated_nt_ty : (int list * unit list array) ref = ref ([], Array.make 1 [])
 let init_worklist_var_ty maxid =
-  worklist_var_ty := ([], Array.make maxid []);
+  worklist_var_ty := ([], Array.make maxid [])
+  (*
   worklist_var_ty_wo_overwrite := ([], Array.make maxid [])
+  *)
 let worklist_var = ref (Setqueue.make 1)
-let worklist_var_overwritten = ref (Setqueue.make 1)
+(*let worklist_var_overwritten = ref (Setqueue.make 1)*)
 let worklist_nt = ref (Setqueue.make 1)
 let updated_nts = ref (Setqueue.make 1)
 
 let enqueue_var_ty termid tys =
+  (*
   let _ = (!terms_tyss).(termid) <- None in (* invalidate the previous type table for id *)
+  *)
   let (ids, a) = !worklist_var_ty in
   let x = a.(termid) in
     a.(termid) <- tys::x;
     if x=[] then worklist_var_ty := (termid::ids, a)
     else ()
 
+(*
 let enqueue_var_ty_wo_overwrite termid tys =
+  (*
   let _ = (!terms_tyss).(termid) <- None in (* invalidate the previous type table for id *)
+  *)
   let (ids, a) = !worklist_var_ty_wo_overwrite in
   let x = a.(termid) in
     a.(termid) <- tys::x;
     if x=[] then worklist_var_ty_wo_overwrite := (termid::ids, a)
     else ()
+*)
 
 (** Enqueue (f,ity) if f is not queued yet. Otherwise, prepend ity to ty in already enqueued
     (f,ty). *)
@@ -420,8 +433,10 @@ let rec dequeue_var_ty_gen worklist =
 let rec dequeue_var_ty() =
   dequeue_var_ty_gen worklist_var_ty
 
+(*
 let rec dequeue_var_ty_wo_overwrite() =
   dequeue_var_ty_gen worklist_var_ty_wo_overwrite
+*)
 
 (** Dequeue (f,ty) for some f : ty, where f is a nonterminal and ty its computed types. *)
 let dequeue_nt_ty() = 
@@ -432,6 +447,7 @@ let dequeue_nt_ty() =
        let ty = a.(f) in
          (updated_nt_ty := (nts',a); a.(f) <- []; (f,ty))
 
+(*
 (** Called to save that aterm with given id was computed to have an intersection type ty. *)
 let register_terms_te id ty overwrite_flag =
 (*  assert (not(ty=[]));*)
@@ -910,9 +926,9 @@ let ty_of_terms venv terms =
       | App(_,_) -> List.sort compare_ity (ty_of_term2 venv term)) terms
 
 (*
-module X = struct type t = Grammar.term * Grammar.ity;;
-                  let equal (t1,ity1) (t2,ity2) = t1==t2 && (id_of_ity ity1)=(id_of_ity ity2);; 
-                  let hash = Hashtbl.hash end;;
+module X = struct type t = Grammar.term * Grammar.ity
+                  let equal (t1,ity1) (t2,ity2) = t1==t2 && (id_of_ity ity1)=(id_of_ity ity2) 
+                  let hash = Hashtbl.hash end
 module TabCheckTy = Hashtbl.Make(X)
 let tab_checkty = TabCheckTy.create 10000
 let reset_ty_hash() = TabCheckTy.clear tab_checkty
@@ -998,7 +1014,7 @@ and check_argtypes_inc_aux venv terms tys f tyf =
 
 
 let update_ty_of_id_aux id venvs overwrite_flag = 
-  let terms = Ai.id2terms id in
+  let terms = Cfa.id2terms id in
    List.iter
    (fun venv -> 
      let ty = ty_of_terms venv terms in (* compute type of terms (iteration) in given environment
@@ -1015,7 +1031,7 @@ let update_ty_of_id_aux id venvs overwrite_flag =
 let update_ty_of_id id env overwrite_flag =
 (*  (if !Flags.debugging then
    (print_string ("updating the type for "^(string_of_int id)^"\n");
-    Ai.print_binding env));
+    Cfa.print_binding env));
 *)
   let venvs = mk_venvs_mask env in
   update_ty_of_id_aux id venvs overwrite_flag (* generally, try to get and register an
@@ -1080,7 +1096,7 @@ let register_nte nt ity =
 (** Compute and update the type of aterm termid for all environments that contain id and that have
     the type of this id updated to tys. *)
 let update_incremental_ty_of_id termid (id,tys) overwrite_flag = 
-  let envs = Ai.lookup_dep_id_envs termid in
+  let envs = Cfa.lookup_dep_id_envs termid in
    List.iter (fun env -> 
       if List.exists (fun (_,_,_,id1)->id=id1) env then (* for environments of termid which
                                                            contain id *)
@@ -1306,7 +1322,7 @@ and tcheck_term_ty_wo_venv_inc t ty g ty_g =
     a type with codomain q is computed for f. *)
 let update_ty_of_nt_wo_venv f =
   let (_,term)=Grammar.lookup_rule f in (* f's def *)
-  let qs = (!Ai.array_st_of_nt).(f) in (* overapproximation of states under which f is applied *)
+  let qs = (!Cfa.array_st_of_nt).(f) in (* overapproximation of states under which f is applied *)
     List.iter
      (fun q ->
        let ity=ItyQ(q) in (* type "q" *)
@@ -1325,7 +1341,7 @@ let update_ty_of_nt_inc_wo_venv f g ty =
   let _ = Utilities.debug
           ("updating the type of "^(name_of_nt f)^" incrementally\n") in
   let (_,term)=Grammar.lookup_rule f in
-  let qs = (!Ai.array_st_of_nt).(f) in
+  let qs = (!Cfa.array_st_of_nt).(f) in
   let _ = 
     List.iter
      (fun q ->
@@ -1342,31 +1358,33 @@ let update_ty_of_nt_inc_for_nt_sub g term binding qs f ty =
   let venvs = mk_venvs binding in
     List.iter (fun venv -> 
      update_ty_of_nt_inc_for_nt_sub_venv g term venv qs f ty) venvs
-
+*)
 let has_noheadvar f =
-  (!Ai.array_headvars).(f)=[] && !Flags.eager
-
+  (!Cfa.array_headvars).(f)=[] && !Flags.eager
+(*
 let update_ty_of_nt_incremental_for_nt g f ty =
   if has_noheadvar g then
      update_ty_of_nt_inc_wo_venv g f ty
   else
   let (_,term)=Grammar.lookup_rule g in
-  let bindings = Ai.lookup_bindings_for_nt g in
+  let bindings = Cfa.lookup_bindings_for_nt g in
     List.iter (fun (binding,qsref) ->
        update_ty_of_nt_inc_for_nt_sub
           g term binding !qsref f ty) bindings
+*)
+    
+let worklist_nt_binding : (int list * Cfa.binding list array) ref = ref ([], Array.make 1 [])
 
-let worklist_nt_binding = ref ([], Array.make 1 [])
 let init_worklist_nt_binding maxnt =
   worklist_nt_binding := ([], Array.make maxnt []);
   updated_nt_ty := ([], Array.make maxnt [])
   
-let enqueue_worklist_nt_binding (f,binding,qs) =
+let enqueue_worklist_nt_binding (f,binding) =
   let (nts, a) = !worklist_nt_binding in
   let x = a.(f) in
-  if List.mem (binding,qs) x then ()
+  if List.mem binding x then ()
   else
-    a.(f) <- (binding,qs)::x;
+    a.(f) <- binding::x;
     if x=[] then worklist_nt_binding := (f::nts, a)
     else ()
 
@@ -1380,10 +1398,10 @@ let rec dequeue_worklist_nt_binding () =
        match a.(f) with
           [] -> (worklist_nt_binding := (nts',a);
 	         dequeue_worklist_nt_binding ())
-	| (binding,qs)::l ->
+	| binding::l ->
 	    a.(f) <- l;
 	    (if l=[] then worklist_nt_binding := (nts',a));
-	    (f,binding,qs)
+	    (f,binding)
 
 let remove_worklist_nt_binding nts =
   let (_, a) = !worklist_nt_binding in
@@ -1397,29 +1415,26 @@ let print_worklist_nt_binding () =
   
 let add_worklist_nt_binding f =
   let (nts, a) = !worklist_nt_binding in
-    a.(f) <-  List.map (fun (binding,qsref) -> (binding,!qsref))
-              (Ai.lookup_bindings_for_nt f);
+    a.(f) <- Cfa.lookup_bindings_for_nt f;
     worklist_nt_binding := (f::nts, a)
     
 let rec mk_worklist_nt_binding updated_terms =
 (*  print_string "calling mk_worklist\n";*)
   try
      let id = Setqueue.dequeue updated_terms in
-     let bindings = Ai.lookup_dep_termid_nt id in
+     let bindings = Cfa.lookup_dep_termid_nt id in
         List.iter enqueue_worklist_nt_binding bindings;
         mk_worklist_nt_binding updated_terms
   with Setqueue.Empty -> ()
 
-
+(*
 (*
 let rec mk_worklist_var updated_nts = 
   match updated_nts with
     [] -> []
   | f::updated_nts' ->
-      merge_and_unify compare (Ai.lookup_dep_nt_termid f) (mk_worklist_var updated_nts')
+      merge_and_unify compare (Cfa.lookup_dep_nt_termid f) (mk_worklist_var updated_nts')
 *)
-
-let max_termid() = !(Ai.terms_idref)
 
 let report_yes() =
   (print_string "The property is satisfied.\n";
@@ -1428,41 +1443,67 @@ let report_yes() =
                   else let fp = open_out !Flags.outputfile in
                      (output_string fp ("SATISFIED\n") ; close_out fp))
 
-(** Initialization and recursive call of saturate_vartypes and saturate_vartypes_wo_overwrite.
-    Not called recursively. *)
-let rec saturate () =
+and saturate_vartypes_wo_overwrite() : unit =
+  let proceed = ref false in
+  ( try (* typed id with some type that was less or equally strict, did not save it *)
+    let id = Setqueue.dequeue !worklist_var_overwritten in
+    let _ = Utilities.debug ("processing terms "^(string_of_int id)^" without overwriting\n") in
+    let envs = Cfa.lookup_dep_id_envs id in (* what variables were applied to id, bundled per
+                                              application *)
+      List.iter (fun env-> update_ty_of_id id env false) envs 
+  with Setqueue.Empty ->
+  try (* typed id : ty in no overwrite mode and saved it *)
+    let (id,tys) = dequeue_var_ty_wo_overwrite() in (* worklist_var_ty_wo_overwrite *)
+(*   match dequeue_var_ty_wo_overwrite() with
+   Some(id,tys) -> 
+*)
+    let _ = if !Flags.debugging then
+             Utilities.debug ("propagating type of id "^(string_of_int id)^" incrementally wo overwrite\n") in
+    let ids = Cfa.lookup_dep_id id in
+      List.iter (fun id1 -> update_incremental_ty_of_id id1 (id,tys) false) ids;
+      let bindings = Cfa.lookup_dep_termid_nt id in
+      List.iter (fun binding -> update_incremental_ty_of_nt binding (id,tys)) bindings;
+      saturate_vartypes_wo_overwrite()
+  with WorklistVarTyEmpty -> proceed := true
+(*
+  | None -> proceed := true
+*)
+  );
+  if !proceed 
+  then if Setqueue.is_empty !updated_nts then ()
+       else saturate_vartypes()
+  else
+    saturate_vartypes_wo_overwrite()
+*)
+
+let init_saturation() =
   (* initialize the set of types for variables and non-terminals to empty *)
-  let maxid = max_termid() in
+  let maxid = !(Cfa.terms_idref) in
   let maxnt = max_nt() in
-  Cegen.init_nte(); (* nteallref[nt_id][q_id] = [] *)
+  (*
   terms_te := Array.make maxid (ref TySeqNil); (* terms_te[aterm_id] = ref TySeqNil *)
   terms_tyss := Array.make maxid (Some []); (* terms_tyss[aterm_id] = Some [] *)
   for id=0 to maxid-1 do (* for each aterm *)
-    if (!Ai.termid_isarg).(id) then (* that is an argument to a nonterminal *)
+    if (!Cfa.termid_isarg).(id) then (* that is an argument to a nonterminal *)
       (!terms_te).(id) <- ref (TySeq []) (* initialize it with TySeq [] instead of TySeqNil *)
   done;
-  check_point();
   nteref := Array.make maxnt [| |];
   for i=0 to maxnt-1 do
     (!nteref).(i) <- Array.make (!num_of_states) [] (* nteref[nt_id][q_id] = [], like nteallref *)
   done;
-  check_point();
+  *)
   init_worklist_nt_binding maxnt; (* inits worklist_nt_binding to [] on fst, and [] for each
                                      nt_id in array on snd, same with updated_nt_ty *)
   init_worklist_var_ty maxid; (* same with for worklist_var_ty and worklist_var_ty_wo_overwrite
                                  for each aterm_id. *)
-  check_point();
   let _ = (worklist_var := Setqueue.make maxid) in (* queue for aterms that were args to
                                                       nonterminals *)
-  check_point();
   let _ = for id=0 to maxid-1 do 
-      if (!Ai.termid_isarg).(id) then
+      if (!Cfa.termid_isarg).(id) then
         Setqueue.enqueue !worklist_var id (* enqueue all aterms that are arguments to nonterminals
                                              with ones with largest id on top (the ones created
                                              last when following the first nonterminal) *)
     done in
-  check_point();
-  let _ = (worklist_var_overwritten := Setqueue.make maxid) in (* queue for aterms *)
   let _ = (worklist_nt := (* queue for nonterminals initialized to ones with arity 0 or with no
                              variables used as functions (head variables, and only if Flags.eager
                              is false) *)
@@ -1475,20 +1516,14 @@ let rec saturate () =
                (List.filter (fun f-> arity_of_nt f=0 || has_noheadvar f)
                   (Utilities.fromto 0 maxnt))) in
   let _ = (updated_nts := Setqueue.make maxnt) in (* queue for nonterminals *)
-  check_point();
-  (try
-     saturate_vartypes()
-   with REFUTED -> ());
-  check_point();
+  (*
   if !Flags.debugging then print_nte() else ();
   if !Flags.debugging then print_terms_te() else ();
-  if (!nteref).(0).(0)=[] then report_yes()
-  else 
-    (print_string "The property is NOT satisfied.\n";
-     Cegen.report_ce()) (* cegen is generation of certificate that the property is false *)
+*)
+  ()
 
-and saturate_vartypes() : unit =
-(*  print_string "saturate_var\n";*)
+let rec saturation_loop() : bool =
+  (*
   let proceed = ref false in
   (
     try (* trying to dequeue an aterm : tys (that we have a sequence of asX : tyX) *)
@@ -1498,12 +1533,12 @@ and saturate_vartypes() : unit =
     Some(id,tys) -> 
 *)
     let _ = if !Flags.debugging then Utilities.debug ("propagating type of id "^(string_of_int id)^" incrementally\n") in
-     let ids = Ai.lookup_dep_id id in (* ids of aterms that dequeued aterm was applied to
+     let ids = Cfa.lookup_dep_id id in (* ids of aterms that dequeued aterm was applied to
                                          substituting one or more variables inside (propagating
                                          types forward) *)
      (* update type of id1 in envs where there is id, forced to id : tys *)
       List.iter (fun id1 -> update_incremental_ty_of_id id1 (id,tys) true) ids;
-      let bindings = Ai.lookup_dep_termid_nt id in (* nonterminals and their bindings that were
+      let bindings = Cfa.lookup_dep_termid_nt id in (* nonterminals and their bindings that were
                                                       applied to the aterm id *)
       List.iter (fun binding -> update_incremental_ty_of_nt binding (id,tys)) bindings
 (*  | None -> *)
@@ -1513,14 +1548,14 @@ and saturate_vartypes() : unit =
     let _ = if !Flags.debugging then 
             Utilities.debug ("propagating type of nt "^(name_of_nt f)^" incrementally\n") 
     in
-    let nts = Ai.lookup_dep_nt_nt_lin f in
+    let nts = Cfa.lookup_dep_nt_nt_lin f in
     List.iter (fun g -> update_ty_of_nt_incremental_for_nt g f ty) nts
    with WorklistVarTyEmpty ->
    try (* trying nonterminals from updated_nts *)
     let f = Setqueue.dequeue !updated_nts in
-    let ids = Ai.lookup_dep_nt_termid f in
+    let ids = Cfa.lookup_dep_nt_termid f in
      List.iter (Setqueue.enqueue !worklist_var) ids;
-     let nts = Ai.lookup_dep_nt_nt f in
+     let nts = Cfa.lookup_dep_nt_nt f in
         remove_worklist_nt_binding nts;
         List.iter (Setqueue.enqueue !worklist_nt) nts
    with Setqueue.Empty ->
@@ -1541,7 +1576,7 @@ and saturate_vartypes() : unit =
     let id = Setqueue.dequeue !worklist_var (* we take one of enqueued aterms *)
   in
   let _ = Utilities.debug ("processing terms "^(string_of_int id)^"\n") in
-  let envs = Ai.lookup_dep_id_envs id in (* aterms that were (possibly) put into given variables
+  let envs = Cfa.lookup_dep_id_envs id in (* aterms that were (possibly) put into given variables
                                             in aterms with dequeued id (propagating types
                                             backwards) *)
   (* There was an application where aterm id had put some other aterms (env) in given variables
@@ -1552,35 +1587,19 @@ and saturate_vartypes() : unit =
    );
    if !proceed then saturate_vartypes_wo_overwrite() 
    else saturate_vartypes()
+*)
+  false
 
-and saturate_vartypes_wo_overwrite() : unit =
-  let proceed = ref false in
-  ( try (* typed id with some type that was less or equally strict, did not save it *)
-    let id = Setqueue.dequeue !worklist_var_overwritten in
-    let _ = Utilities.debug ("processing terms "^(string_of_int id)^" without overwriting\n") in
-    let envs = Ai.lookup_dep_id_envs id in (* what variables were applied to id, bundled per
-                                              application *)
-      List.iter (fun env-> update_ty_of_id id env false) envs 
-  with Setqueue.Empty ->
-  try (* typed id : ty in no overwrite mode and saved it *)
-    let (id,tys) = dequeue_var_ty_wo_overwrite() in (* worklist_var_ty_wo_overwrite *)
-(*   match dequeue_var_ty_wo_overwrite() with
-   Some(id,tys) -> 
-*)
-    let _ = if !Flags.debugging then
-             Utilities.debug ("propagating type of id "^(string_of_int id)^" incrementally wo overwrite\n") in
-    let ids = Ai.lookup_dep_id id in
-      List.iter (fun id1 -> update_incremental_ty_of_id id1 (id,tys) false) ids;
-      let bindings = Ai.lookup_dep_termid_nt id in
-      List.iter (fun binding -> update_incremental_ty_of_nt binding (id,tys)) bindings;
-      saturate_vartypes_wo_overwrite()
-  with WorklistVarTyEmpty -> proceed := true
-(*
-  | None -> proceed := true
-*)
-  );
-  if !proceed 
-  then if Setqueue.is_empty !updated_nts then ()
-       else saturate_vartypes()
-  else
-    saturate_vartypes_wo_overwrite()
+let saturate() : unit =
+  if !Flags.debugging then
+    begin
+      print_string "Initializing saturation.\n";
+      flush stdout
+    end;
+  profile "initializing saturation" (fun () -> init_saturation());
+  if !Flags.debugging then
+    begin
+      print_string "Starting saturation loop.\n";
+      flush stdout
+    end;
+  profile "saturation" (fun () -> while saturation_loop() do () done)

@@ -67,7 +67,8 @@ let report_finiteness input =
   profile "conversion" (fun () -> Conversion.prerules2gram input);
   profile "eta-expansion" (fun () -> Stype.eta_expand());
   profile "0CFA" (fun () -> Cfa.init_expansion(); Cfa.expand());
-  profile "dependency graph" (fun () -> Cfa.mk_binding_depgraph());
+  profile "computing dependencies" (fun () -> Cfa.mk_binding_depgraph());
+  Saturate.saturate();
   ()
   (* TODO
   match tr with

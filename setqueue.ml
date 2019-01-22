@@ -3,14 +3,14 @@ type t = int list ref * bool array
 exception Empty
 
 (** Empty LIFO queue for values from 0 to n-1. *)
-let make n = (ref [], Array.make n false)
+let make n : t = (ref [], Array.make n false)
 
 (** LIFO queue filled with values from 0 to n-1, with 0 on the top. *)
-let makeall n = (ref (Utilities.fromto 0 n), Array.make n true)
+let makeall n : t = (ref (Utilities.fromto 0 n), Array.make n true)
 
 (** Creates LIFO queue for values from 0 to n-1 filled with l. If there are duplicates in l, they
     will be ignored during dequeue and only the topmost one will be used. *)
-let make_fromlist n l =
+let make_fromlist n l : t =
    let bitmap= Array.make n false in
      List.iter (fun i -> bitmap.(i) <- true) l;
      (ref l, bitmap)

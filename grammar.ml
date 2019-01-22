@@ -7,10 +7,6 @@ type nameT = string  (** names of terminal symbols **)
 type nameV = nameNT * int (* pair of the non-terminal and the variable index *)
 type term = NT of nameNT | T of nameT | Var of nameV | App of term * term
 type kind = O | Kfun of kind * kind
-type state_id = int
-type ity_id = int
-type ity = ItyQ of state_id | ItyFun of ity_id * ty * ity
-and ty = ity list (* /\_k (/\_i q_i -> /\_j q_j -> ... -> q_k) *)
 
 type nonterminals = (string * kind) array 
   (* store the original name of each non-terminal and its kind *)
