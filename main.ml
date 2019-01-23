@@ -195,5 +195,3 @@ let main () =
   report_finiteness input;
   let end_t = Sys.time() in report_timings start_t end_t;
   flush stdout
-
-let () = if !Sys.interactive then () else main()

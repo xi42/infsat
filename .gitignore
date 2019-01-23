@@ -6,6 +6,8 @@
 infsat
 infsat-debug
 top
+test
+oUnit-*
 infSatParser.ml
 infSatParser.mli
 infSatLexer.ml

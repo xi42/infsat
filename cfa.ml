@@ -132,6 +132,8 @@ let new_aterms_id() =
     x
   end
 
+let aterms_count() : int = !next_aterms_id
+
 (** Reverse of fst tab_id_terms, i.e., tab_id_terms[tab_terms_id[aterms]] = (aterms, _, _). *)
 let tab_terms_id = Hashtbl.create 100000
 

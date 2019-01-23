@@ -1464,7 +1464,7 @@ and saturate_vartypes_wo_overwrite() : unit =
 
 let init_saturation() =
   (* initialize the set of types for variables and non-terminals to empty *)
-  let aterms_count = !Cfa.next_aterms_id in
+  let aterms_count = Cfa.aterms_count() in
   let nt_count = Grammar.nt_count() in
   (*
   terms_te := Array.make aterms_count (ref TySeqNil); (* terms_te[aterm_id] = ref TySeqNil *)
@@ -1481,6 +1481,7 @@ let init_saturation() =
   worklist_nt_binding := TwoLayerQueue.mk_queue nt_count;
   worklist_var_ty := TwoLayerQueue.mk_queue aterms_count;
   worklist_var := SetQueue.make aterms_count;
+  updated_nts := SetQueue.make nt_count;
   let _ = for id=0 to aterms_count-1 do 
       if (!Cfa.termid_isarg).(id) then
         SetQueue.enqueue !worklist_var id (* enqueue all aterms that are arguments to nonterminals
@@ -1498,7 +1499,6 @@ let init_saturation() =
              SetQueue.make_fromlist nt_count
                (List.filter (fun f-> arity_of_nt f=0 || has_noheadvar f)
                   (Utilities.fromto 0 nt_count))) in
-  let _ = (updated_nts := SetQueue.make nt_count) in (* queue for nonterminals *)
   (*
   if !Flags.debugging then print_nte() else ();
   if !Flags.debugging then print_terms_te() else ();
