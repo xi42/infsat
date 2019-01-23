@@ -124,10 +124,13 @@ let print_binding_array() =
   done
 
 (** Increasing counter for fresh identifiers for aterms (all terms and subterms in head form). *)
-let terms_idref = ref 0
-let new_terms_id() =
-  let x = !terms_idref in
-    (terms_idref := x+1; x)
+let next_aterms_id = ref 0
+let new_aterms_id() =
+  let x = !next_aterms_id in
+  begin
+    next_aterms_id := x + 1;
+    x
+  end
 
 (** Reverse of fst tab_id_terms, i.e., tab_id_terms[tab_terms_id[aterms]] = (aterms, _, _). *)
 let tab_terms_id = Hashtbl.create 100000
@@ -154,7 +157,7 @@ let id2vars (id : aterms_id) : nameV list  =
 
 let print_tab_id_terms() =
   print_string "Id --> Terms\n";
-  for id=0 to !terms_idref-1 do
+  for id=0 to !next_aterms_id-1 do
    if (!termid_isarg).(id) then 
     let terms = id2terms id in
     if terms=[] then ()
@@ -419,7 +422,7 @@ let rec convert_term t =
        try
          Hashtbl.find tab_terms_id aterms (* find list of args in tab_terms_id to get its id *)
        with Not_found ->
-         ( let id = new_terms_id() in (* or make a fresh id *)
+         ( let id = new_aterms_id() in (* or make a fresh id *)
            Hashtbl.add tab_terms_id aterms id; (* name these args with that id *)
            (!tab_id_terms).(id) <- (aterms,terms,vars); (* save in tab_id_terms what list of terms is under that id - converted arg terms, original arg terms, list of vars used inside *)
          id)
@@ -800,9 +803,9 @@ and nt_in_terms_with_linearity terms i (nts1,nts2) =
 
 
 let mk_binding_depgraph() =
-  tab_termid_nt := Array.make !terms_idref []; (* array of lists for each head term (aterm) *)
-  tab_binding_env := Array.make !terms_idref [];
-  tab_penv_binding := Array.make !terms_idref [];
+  tab_termid_nt := Array.make !next_aterms_id []; (* array of lists for each head term (aterm) *)
+  tab_binding_env := Array.make !next_aterms_id [];
+  tab_penv_binding := Array.make !next_aterms_id [];
   let n = Array.length (!binding_array_nt) in (* number of nonterminals *)
   array_headvars := Array.make n []; (* array of lists for each nonterminal *)
   for f=0 to n-1 do
@@ -813,8 +816,8 @@ let mk_binding_depgraph() =
   (* make dependency nt --> id (which means "id depends on nt") *)
   check_point();
   init_array_dep_nt_termid();
-  for id'=0 to !terms_idref - 1 do (* for each aterm *)
-   let id = !terms_idref - 1 -id' in
+  for id'=0 to !next_aterms_id - 1 do (* for each aterm *)
+   let id = !next_aterms_id - 1 -id' in
    if (!termid_isarg).(id) then (* that had something applied to it *)
      let (_,terms,vars) = (!tab_id_terms).(id) in (* and is in applicative form list of terms,
                                                      and has variables vars *)
@@ -822,7 +825,7 @@ let mk_binding_depgraph() =
      List.iter (fun nt -> register_dep_nt_termid nt id) nts
    else ()
   done;
-  for id=0 to !terms_idref - 1 do
+  for id=0 to !next_aterms_id - 1 do
    if (!termid_isarg).(id) then
      let (_,_,vars) = (!tab_id_terms).(id) in (* for each term with given id that was an argument
                                                  to a nonterminal and had free variables vars *)

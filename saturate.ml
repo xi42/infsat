@@ -1,10 +1,10 @@
 open Flags
-open Utilities
-open Syntax
 open Grammar
 open Profiling
 open Stype
-(* open Type *)
+open Syntax
+open Type
+open Utilities
 
 (*
 type tstate = ity * Stype.st
@@ -364,7 +364,7 @@ let rec subtype_tys tys1 tys2 =
 (** A two-level LIFO queue, with stack of ids in the first one, and arr[id] in the second
     representing another stack. It differs from normal queue in that it locks the fst of dequeued
     first, giving them priority until they are depleted. *)
-let worklist_var_ty : (int list * unit list array) ref = ref ([], Array.make 1 [])
+let worklist_var_ty : ity TwoLayerQueue.t ref = ref (TwoLayerQueue.mk_queue 0)
 
 (*
 let worklist_var_ty_wo_overwrite = ref ([], Array.make 1 [])
@@ -372,17 +372,14 @@ let worklist_var_ty_wo_overwrite = ref ([], Array.make 1 [])
 
 (** A LIFO queue, with stack of ids in the first one and arr[id] in the second one being a list
     with data that is returned with it and set to [] after dequeue. *)
-let updated_nt_ty : (int list * unit list array) ref = ref ([], Array.make 1 [])
-let init_worklist_var_ty maxid =
-  worklist_var_ty := ([], Array.make maxid [])
-  (*
-  worklist_var_ty_wo_overwrite := ([], Array.make maxid [])
-  *)
-let worklist_var = ref (Setqueue.make 1)
-(*let worklist_var_overwritten = ref (Setqueue.make 1)*)
-let worklist_nt = ref (Setqueue.make 1)
-let updated_nts = ref (Setqueue.make 1)
+let updated_nt_ty : ty BatchQueue.t ref = ref (BatchQueue.mk_queue 0)
 
+let worklist_var = ref (SetQueue.make 1)
+(*let worklist_var_overwritten = ref (SetQueue.make 1)*)
+let worklist_nt = ref (SetQueue.make 1)
+let updated_nts = ref (SetQueue.make 1)
+
+(*
 let enqueue_var_ty termid tys =
   (*
   let _ = (!terms_tyss).(termid) <- None in (* invalidate the previous type table for id *)
@@ -392,18 +389,6 @@ let enqueue_var_ty termid tys =
     a.(termid) <- tys::x;
     if x=[] then worklist_var_ty := (termid::ids, a)
     else ()
-
-(*
-let enqueue_var_ty_wo_overwrite termid tys =
-  (*
-  let _ = (!terms_tyss).(termid) <- None in (* invalidate the previous type table for id *)
-  *)
-  let (ids, a) = !worklist_var_ty_wo_overwrite in
-  let x = a.(termid) in
-    a.(termid) <- tys::x;
-    if x=[] then worklist_var_ty_wo_overwrite := (termid::ids, a)
-    else ()
-*)
 
 (** Enqueue (f,ity) if f is not queued yet. Otherwise, prepend ity to ty in already enqueued
     (f,ty). *)
@@ -432,12 +417,13 @@ let rec dequeue_var_ty_gen worklist =
 
 let rec dequeue_var_ty() =
   dequeue_var_ty_gen worklist_var_ty
+*)
 
 (*
 let rec dequeue_var_ty_wo_overwrite() =
   dequeue_var_ty_gen worklist_var_ty_wo_overwrite
 *)
-
+(*
 (** Dequeue (f,ty) for some f : ty, where f is a nonterminal and ty its computed types. *)
 let dequeue_nt_ty() = 
   let (nts, a) = !updated_nt_ty in
@@ -446,7 +432,7 @@ let dequeue_nt_ty() =
    | f::nts' ->
        let ty = a.(f) in
          (updated_nt_ty := (nts',a); a.(f) <- []; (f,ty))
-
+*)
 (*
 (** Called to save that aterm with given id was computed to have an intersection type ty. *)
 let register_terms_te id ty overwrite_flag =
@@ -467,7 +453,7 @@ let register_terms_te id ty overwrite_flag =
     else if tyseq_subsumed ty tyseqref (* if terms_te[id] has has a type not less restrictive than
                                           ty, on each argument, we delegate it *)
     then ((*flag_overwritten := true; *)
-          Setqueue.enqueue !worklist_var_overwritten id) (* enqueue for replacing *)
+          SetQueue.enqueue !worklist_var_overwritten id) (* enqueue for replacing *)
     else  (* we can't compare ty with terms_te[id] *)
      (let overwritten = tyseq_add_with_subtyping ty tyseqref in (* more or less remove subtyped
                                                                    stuff from tyseqref and add ty
@@ -479,7 +465,7 @@ let register_terms_te id ty overwrite_flag =
                                    restrictive ty *)
          if overwritten then
            (* enqueue that one of id typings was less restrictive and it was replaced *)
-           ((* flag_overwritten := true ; *) Setqueue.enqueue !worklist_var_overwritten id)
+           ((* flag_overwritten := true ; *) SetQueue.enqueue !worklist_var_overwritten id)
          else ()
        )
   else
@@ -1081,7 +1067,7 @@ let register_nte nt ity =
    else 
       (Cegen.register_nte_for_cegen nt ity q;
        let _ = Utilities.debug ("updated type of nt "^(name_of_nt nt)^"\n") in 
-       Setqueue.enqueue !updated_nts nt; (* enqueue nonterminal in updated_nts if it isn't
+       SetQueue.enqueue !updated_nts nt; (* enqueue nonterminal in updated_nts if it isn't
                                             already queued *)
        enqueue_nt_ty nt ity; (* enqueue f : ity in updated_nt_ty or just add ity to enqueued types
                                 if it is already enqueued *)
@@ -1373,8 +1359,9 @@ let update_ty_of_nt_incremental_for_nt g f ty =
           g term binding !qsref f ty) bindings
 *)
     
-let worklist_nt_binding : (int list * Cfa.binding list array) ref = ref ([], Array.make 1 [])
+let worklist_nt_binding : Cfa.binding TwoLayerQueue.t ref = ref (TwoLayerQueue.mk_queue 0)
 
+(*
 let init_worklist_nt_binding maxnt =
   worklist_nt_binding := ([], Array.make maxnt []);
   updated_nt_ty := ([], Array.make maxnt [])
@@ -1387,9 +1374,9 @@ let enqueue_worklist_nt_binding (f,binding) =
     a.(f) <- binding::x;
     if x=[] then worklist_nt_binding := (f::nts, a)
     else ()
-
+*)
 exception WorklistBindingEmpty
-
+(*
 let rec dequeue_worklist_nt_binding () =
   let (nts, a) = !worklist_nt_binding in
    match nts with
@@ -1412,7 +1399,7 @@ let print_worklist_nt_binding () =
   List.iter (fun f->
     if not(a.(f)=[]) then print_string ((string_of_int f)^",")) nts;
   print_string "\n"
-  
+
 let add_worklist_nt_binding f =
   let (nts, a) = !worklist_nt_binding in
     a.(f) <- Cfa.lookup_bindings_for_nt f;
@@ -1421,13 +1408,12 @@ let add_worklist_nt_binding f =
 let rec mk_worklist_nt_binding updated_terms =
 (*  print_string "calling mk_worklist\n";*)
   try
-     let id = Setqueue.dequeue updated_terms in
+     let id = SetQueue.dequeue updated_terms in
      let bindings = Cfa.lookup_dep_termid_nt id in
         List.iter enqueue_worklist_nt_binding bindings;
         mk_worklist_nt_binding updated_terms
-  with Setqueue.Empty -> ()
+  with SetQueue.Empty -> ()
 
-(*
 (*
 let rec mk_worklist_var updated_nts = 
   match updated_nts with
@@ -1446,12 +1432,12 @@ let report_yes() =
 and saturate_vartypes_wo_overwrite() : unit =
   let proceed = ref false in
   ( try (* typed id with some type that was less or equally strict, did not save it *)
-    let id = Setqueue.dequeue !worklist_var_overwritten in
+    let id = SetQueue.dequeue !worklist_var_overwritten in
     let _ = Utilities.debug ("processing terms "^(string_of_int id)^" without overwriting\n") in
     let envs = Cfa.lookup_dep_id_envs id in (* what variables were applied to id, bundled per
                                               application *)
       List.iter (fun env-> update_ty_of_id id env false) envs 
-  with Setqueue.Empty ->
+  with SetQueue.Empty ->
   try (* typed id : ty in no overwrite mode and saved it *)
     let (id,tys) = dequeue_var_ty_wo_overwrite() in (* worklist_var_ty_wo_overwrite *)
 (*   match dequeue_var_ty_wo_overwrite() with
@@ -1470,7 +1456,7 @@ and saturate_vartypes_wo_overwrite() : unit =
 *)
   );
   if !proceed 
-  then if Setqueue.is_empty !updated_nts then ()
+  then if SetQueue.is_empty !updated_nts then ()
        else saturate_vartypes()
   else
     saturate_vartypes_wo_overwrite()
@@ -1478,12 +1464,12 @@ and saturate_vartypes_wo_overwrite() : unit =
 
 let init_saturation() =
   (* initialize the set of types for variables and non-terminals to empty *)
-  let maxid = !(Cfa.terms_idref) in
-  let maxnt = max_nt() in
+  let aterms_count = !Cfa.next_aterms_id in
+  let nt_count = Grammar.nt_count() in
   (*
-  terms_te := Array.make maxid (ref TySeqNil); (* terms_te[aterm_id] = ref TySeqNil *)
-  terms_tyss := Array.make maxid (Some []); (* terms_tyss[aterm_id] = Some [] *)
-  for id=0 to maxid-1 do (* for each aterm *)
+  terms_te := Array.make aterms_count (ref TySeqNil); (* terms_te[aterm_id] = ref TySeqNil *)
+  terms_tyss := Array.make aterms_count (Some []); (* terms_tyss[aterm_id] = Some [] *)
+  for id=0 to aterms_count-1 do (* for each aterm *)
     if (!Cfa.termid_isarg).(id) then (* that is an argument to a nonterminal *)
       (!terms_te).(id) <- ref (TySeq []) (* initialize it with TySeq [] instead of TySeqNil *)
   done;
@@ -1492,15 +1478,12 @@ let init_saturation() =
     (!nteref).(i) <- Array.make (!num_of_states) [] (* nteref[nt_id][q_id] = [], like nteallref *)
   done;
   *)
-  init_worklist_nt_binding maxnt; (* inits worklist_nt_binding to [] on fst, and [] for each
-                                     nt_id in array on snd, same with updated_nt_ty *)
-  init_worklist_var_ty maxid; (* same with for worklist_var_ty and worklist_var_ty_wo_overwrite
-                                 for each aterm_id. *)
-  let _ = (worklist_var := Setqueue.make maxid) in (* queue for aterms that were args to
-                                                      nonterminals *)
-  let _ = for id=0 to maxid-1 do 
+  worklist_nt_binding := TwoLayerQueue.mk_queue nt_count;
+  worklist_var_ty := TwoLayerQueue.mk_queue aterms_count;
+  worklist_var := SetQueue.make aterms_count;
+  let _ = for id=0 to aterms_count-1 do 
       if (!Cfa.termid_isarg).(id) then
-        Setqueue.enqueue !worklist_var id (* enqueue all aterms that are arguments to nonterminals
+        SetQueue.enqueue !worklist_var id (* enqueue all aterms that are arguments to nonterminals
                                              with ones with largest id on top (the ones created
                                              last when following the first nonterminal) *)
     done in
@@ -1512,10 +1495,10 @@ let init_saturation() =
 	        however, if f is unreachable, the state set for f is empty, so
 	        it does not do much harm to add f here
              *)
-             Setqueue.make_fromlist maxnt
+             SetQueue.make_fromlist nt_count
                (List.filter (fun f-> arity_of_nt f=0 || has_noheadvar f)
-                  (Utilities.fromto 0 maxnt))) in
-  let _ = (updated_nts := Setqueue.make maxnt) in (* queue for nonterminals *)
+                  (Utilities.fromto 0 nt_count))) in
+  let _ = (updated_nts := SetQueue.make nt_count) in (* queue for nonterminals *)
   (*
   if !Flags.debugging then print_nte() else ();
   if !Flags.debugging then print_terms_te() else ();
@@ -1552,13 +1535,13 @@ let rec saturation_loop() : bool =
     List.iter (fun g -> update_ty_of_nt_incremental_for_nt g f ty) nts
    with WorklistVarTyEmpty ->
    try (* trying nonterminals from updated_nts *)
-    let f = Setqueue.dequeue !updated_nts in
+    let f = SetQueue.dequeue !updated_nts in
     let ids = Cfa.lookup_dep_nt_termid f in
-     List.iter (Setqueue.enqueue !worklist_var) ids;
+     List.iter (SetQueue.enqueue !worklist_var) ids;
      let nts = Cfa.lookup_dep_nt_nt f in
         remove_worklist_nt_binding nts;
-        List.iter (Setqueue.enqueue !worklist_nt) nts
-   with Setqueue.Empty ->
+        List.iter (SetQueue.enqueue !worklist_nt) nts
+   with SetQueue.Empty ->
    try (* trying nonterminals from worklist_nt_binding *)
     let (f,binding,qs)=dequeue_worklist_nt_binding() in
      let _ = Utilities.debug ("processing nt "^(Grammar.name_of_nt f)^"\n") in
@@ -1566,14 +1549,14 @@ let rec saturation_loop() : bool =
   with WorklistBindingEmpty ->
   try (* trying to type nonterminals from worklist_nt and enqueue nt and nt : type if type
          restricted nonterminal further than before *)
-     let f = Setqueue.dequeue !worklist_nt in
+     let f = SetQueue.dequeue !worklist_nt in
       if has_noheadvar f then
         update_ty_of_nt_wo_venv f
       else
         add_worklist_nt_binding f
-  with Setqueue.Empty ->
+  with SetQueue.Empty ->
   try
-    let id = Setqueue.dequeue !worklist_var (* we take one of enqueued aterms *)
+    let id = SetQueue.dequeue !worklist_var (* we take one of enqueued aterms *)
   in
   let _ = Utilities.debug ("processing terms "^(string_of_int id)^"\n") in
   let envs = Cfa.lookup_dep_id_envs id in (* aterms that were (possibly) put into given variables
@@ -1583,7 +1566,7 @@ let rec saturation_loop() : bool =
      in its nonterminal - process it.
      *)
   List.iter (fun env-> update_ty_of_id id env true) envs
-  with Setqueue.Empty -> proceed := true
+  with SetQueue.Empty -> proceed := true
    );
    if !proceed then saturate_vartypes_wo_overwrite() 
    else saturate_vartypes()

@@ -7,11 +7,11 @@ type ty = PR | NP | Fun of ty_id * ity * ty
 (** Intersection type of a function - /\_j (/\ t_ji -> t_j) *)
 and ity = ty list
 
-let last_ty_id : ty_id ref = ref 2
+let next_ty_id : ty_id ref = ref 2
 let new_ty_id() =
-  let x = !last_ty_id in
+  let x = !next_ty_id in
   begin
-    last_ty_id := x + 1;
+    next_ty_id := x + 1;
     x
   end
 

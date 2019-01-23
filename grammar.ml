@@ -32,7 +32,7 @@ let get_def (f: nameNT) (g:gram) =
 let lookup_rule (f: nameNT) =
   get_def f (!gram)
 
-let max_nt() = Array.length (!gram.r)
+let nt_count() = Array.length (!gram.r)
 
 (** change normal tree with app nodes to tree with (head, list-of-arg-terms) nodes *)
 let rec decompose_term t =
