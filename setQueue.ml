@@ -11,14 +11,14 @@ let makeall n : t = (ref (Utilities.fromto 0 n), Array.make n true)
 (** Creates LIFO queue for values from 0 to n-1 filled with l. If there are duplicates in l, they
     will be ignored during dequeue and only the topmost one will be used. *)
 let make_fromlist n l : t =
-   let bitmap= Array.make n false in
-     List.iter (fun i -> bitmap.(i) <- true) l;
-     (ref l, bitmap)
+  let bitmap = Array.make n false in
+  List.iter (fun i -> bitmap.(i) <- true) l;
+  (ref l, bitmap)
 
 (** Dequeues an integer or raises Empty. *)
 let rec dequeue (qref,bitmap) =
   match !qref with
-    [] -> raise Empty
+  | [] -> raise Empty
   | n::ns ->
     qref := ns;
     if bitmap.(n) then (bitmap.(n) <- false; n)

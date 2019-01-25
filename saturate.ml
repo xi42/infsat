@@ -6,6 +6,31 @@ open Syntax
 open Type
 open Utilities
 
+(* --- queues --- *)
+
+(* TODO docs *)
+
+(** A two-level LIFO queue, with stack of ids in the first one, and arr[id] in the second
+    representing another stack. It differs from normal queue in that it locks the fst of dequeued
+    first, giving them priority until they are depleted. *)
+let worklist_var_ty : ity TwoLayerQueue.t ref = ref (TwoLayerQueue.make 0)
+
+(*let worklist_var_ty_wo_overwrite = ref ([], Array.make 1 [])*)
+
+(** A LIFO queue, with stack of ids in the first one and arr[id] in the second one being a list
+    with data that is returned with it and set to [] after dequeue. *)
+let updated_nt_ty : ty BatchQueue.t ref = ref (BatchQueue.make 0)
+
+let worklist_var = ref (SetQueue.make 1)
+
+(*let worklist_var_overwritten = ref (SetQueue.make 1)*)
+
+let worklist_nt = ref (SetQueue.make 1)
+
+let updated_nts = ref (SetQueue.make 1)
+
+let worklist_nt_binding : Cfa.binding TwoLayerQueue.t ref = ref (TwoLayerQueue.make 0)
+
 (*
 type tstate = ity * Stype.st
 type delta = (tstate * tr) list
@@ -50,10 +75,13 @@ let rec eq_tyarray_mask j mask tys1 tys2 =
 
 
 let emptyTE = []
+*)
+    
+(** nt_tys[f][p] has all typings of nonterminal f that have codomain p (0 for productive, 1
+    for not). *)
+let nt_tys : ity array array ref = ref [||]
 
-(** nteref[f][q] has all typings of nonterminal f that have codomain q. *)
-let nteref = ref [||]
-
+(*
 (** convert a transition q->q1...qn(=qs) to a negated type, i.e., produce function types
     [q1] -> T -> ... -> T -> q, T -> [q2] -> T -> ... -> q, ..., T -> ... -> T -> qn -> q *)
 (* TODO this implementation is really overcomplicated for what it does *)
@@ -168,10 +196,10 @@ let print_itylist ty =
 
 let print_nte() =
   print_string "types for nt:\n===========\n";
-  for nt=0 to (Array.length (!nteref))-1 do
+  for nt=0 to (Array.length (!nt_tys))-1 do
     print_string ((Grammar.name_of_nt nt)^":\n");
-    for q=0 to (Array.length (!nteref).(nt))-1 do
-      print_itylist (!nteref).(nt).(q)
+    for q=0 to (Array.length (!nt_tys).(nt))-1 do
+      print_itylist (!nt_tys).(nt).(q)
     done
   done
 
@@ -183,19 +211,20 @@ let print_cte() =
     print_string (a^":\n");
     Array.iter (fun ty -> List.iter (fun ity->print_ity ity;print_string "\n") ty) tyarray)
   cte
-
+*)
 (** Typed pointers to lists of intersections of functional types in the form of
     /\_i (/\_a q_ia -> /\_b q_ib -> ... -> q_i)
     used to type aterms. *)
-type tyseq = TySeq of (Grammar.ty * (tyseq ref)) list | TySeqNil
+type tyseq = TySeq of (Type.ity * (tyseq ref)) list | TySeqNil
 type tyseqref = tyseq ref
 
 (** Different typings of aterms, changed in tyseq_*. *)
-let terms_te: (tyseqref array ref) = ref (Array.make 0 (ref TySeqNil))
+let aterms_atys : (tyseqref array ref) = ref (Array.make 0 (ref TySeqNil))
 
 (** Typings of aterms, assigned in enqueue_var_*. *)
-let terms_tyss = ref (Array.make 0 (None))
+let terms_tyss : ity list option array ref = ref (Array.make 0 (None))
 
+(*
 let rec tys2tyseq_singleton tys =
   match tys with
    [] -> TySeqNil
@@ -330,22 +359,22 @@ let rec tyseq2tyss tyseq len =
            List.rev_append tyss1 tyss)
        [] tyseqlist
 
-let lookup_terms_te id =
+let lookup_aterms_atys id =
   match (!terms_tyss).(id) with
     Some(tyss) -> tyss
   | None ->
-      let tyss = tyseq2tyss(!((!terms_te).(id))) 0 in
+      let tyss = tyseq2tyss(!((!aterms_atys).(id))) 0 in
               (!terms_tyss).(id) <- Some(tyss); tyss
 
 
-let print_terms_te() =
+let print_aterms_atys() =
   print_string "Types_of_terms:\n=========\n";
-  for id=0 to (Array.length !terms_te)-1 do
+  for id=0 to (Array.length !aterms_atys)-1 do
    if (!Cfa.termid_isarg).(id) then
     let terms = Cfa.id2terms id in
     List.iter (fun t-> print_term t; print_string ", ") terms;
     print_string "\n";
-    let tyss = lookup_terms_te id in
+    let tyss = lookup_aterms_atys id in
     List.iter (fun tys -> print_tys tys;
       print_string "\n") tyss
   else ()
@@ -360,85 +389,13 @@ let rec subtype_tys tys1 tys2 =
      && subtype_tys tys1' tys2'
  | _ -> assert false
 *)
-    
-(** A two-level LIFO queue, with stack of ids in the first one, and arr[id] in the second
-    representing another stack. It differs from normal queue in that it locks the fst of dequeued
-    first, giving them priority until they are depleted. *)
-let worklist_var_ty : ity TwoLayerQueue.t ref = ref (TwoLayerQueue.mk_queue 0)
 
-(*
-let worklist_var_ty_wo_overwrite = ref ([], Array.make 1 [])
-*)
-
-(** A LIFO queue, with stack of ids in the first one and arr[id] in the second one being a list
-    with data that is returned with it and set to [] after dequeue. *)
-let updated_nt_ty : ty BatchQueue.t ref = ref (BatchQueue.mk_queue 0)
-
-let worklist_var = ref (SetQueue.make 1)
-(*let worklist_var_overwritten = ref (SetQueue.make 1)*)
-let worklist_nt = ref (SetQueue.make 1)
-let updated_nts = ref (SetQueue.make 1)
-
-(*
-let enqueue_var_ty termid tys =
-  (*
-  let _ = (!terms_tyss).(termid) <- None in (* invalidate the previous type table for id *)
-  *)
-  let (ids, a) = !worklist_var_ty in
-  let x = a.(termid) in
-    a.(termid) <- tys::x;
-    if x=[] then worklist_var_ty := (termid::ids, a)
-    else ()
-
-(** Enqueue (f,ity) if f is not queued yet. Otherwise, prepend ity to ty in already enqueued
-    (f,ty). *)
-let enqueue_nt_ty f ity =
-  let (nts,a) = !updated_nt_ty in
-  let x = a.(f) in
-    a.(f) <- ity::x;
-    if x=[] then updated_nt_ty := (f::nts, a)
-    else ()
-
-
-exception WorklistVarTyEmpty
-
-let rec dequeue_var_ty_gen worklist =
-  let (ids, a) = !worklist in
-   match ids with
-     [] -> raise WorklistVarTyEmpty 
-   | id::ids' ->
-       match a.(id) with
-          [] -> (worklist := (ids',a);
-	         dequeue_var_ty_gen worklist)
-	| tys::tyss ->
-	    a.(id) <- tyss;
-	    (if tyss=[] then worklist := (ids',a));
-	    (id, tys)
-
-let rec dequeue_var_ty() =
-  dequeue_var_ty_gen worklist_var_ty
-*)
-
-(*
-let rec dequeue_var_ty_wo_overwrite() =
-  dequeue_var_ty_gen worklist_var_ty_wo_overwrite
-*)
-(*
-(** Dequeue (f,ty) for some f : ty, where f is a nonterminal and ty its computed types. *)
-let dequeue_nt_ty() = 
-  let (nts, a) = !updated_nt_ty in
-   match nts with
-     [] -> raise WorklistVarTyEmpty
-   | f::nts' ->
-       let ty = a.(f) in
-         (updated_nt_ty := (nts',a); a.(f) <- []; (f,ty))
-*)
 (*
 (** Called to save that aterm with given id was computed to have an intersection type ty. *)
-let register_terms_te id ty overwrite_flag =
+let register_aterms_atys id ty overwrite_flag =
 (*  assert (not(ty=[]));*)
  if !Flags.merge_vte then
-   let tyseqref = (!terms_te).(id) in
+   let tyseqref = (!aterms_atys).(id) in
    (merged_vte_updated := false;
      tyseq_merge_tys ty tyseqref;
      if !merged_vte_updated then
@@ -447,14 +404,14 @@ let register_terms_te id ty overwrite_flag =
        enqueue_var_ty id tys)
      else ())
  else
-  let tyseqref = (!terms_te).(id) in
+  let tyseqref = (!aterms_atys).(id) in
   if overwrite_flag && !Flags.overwrite then
-    if tyseq_mem ty tyseqref then () (* if terms_te[id] already has the computed type *)
-    else if tyseq_subsumed ty tyseqref (* if terms_te[id] has has a type not less restrictive than
+    if tyseq_mem ty tyseqref then () (* if aterms_atys[id] already has the computed type *)
+    else if tyseq_subsumed ty tyseqref (* if aterms_atys[id] has has a type not less restrictive than
                                           ty, on each argument, we delegate it *)
     then ((*flag_overwritten := true; *)
           SetQueue.enqueue !worklist_var_overwritten id) (* enqueue for replacing *)
-    else  (* we can't compare ty with terms_te[id] *)
+    else  (* we can't compare ty with aterms_atys[id] *)
      (let overwritten = tyseq_add_with_subtyping ty tyseqref in (* more or less remove subtyped
                                                                    stuff from tyseqref and add ty
                                                                    to it *)
@@ -494,10 +451,10 @@ let rec mk_prod_venvs (i,j,tys) venvs acc =
 let rec mk_venvs env =
   match env with
     [] -> [[]]
-  | [(i,j,id)] -> let tys = lookup_terms_te(id) in 
+  | [(i,j,id)] -> let tys = lookup_aterms_atys(id) in 
        List.map (fun ty -> [(i,j,ty)]) tys
   | (i,j,id)::env' ->
-     let tys = lookup_terms_te(id) in
+     let tys = lookup_aterms_atys(id) in
      if tys=[] then []
      else 
       let venvs = mk_venvs env' in
@@ -514,7 +471,7 @@ let rec mk_venvs_incremental env (id,tys) =
       let venvs = mk_venvs env' in
         List.map (fun venv-> (i,j,tys)::venv) venvs
      else
-       let tyss = lookup_terms_te(id1) in
+       let tyss = lookup_aterms_atys(id1) in
        if tyss=[] then []
        else 
         let venvs = mk_venvs_incremental env' (id,tys) in
@@ -552,12 +509,12 @@ let rec mk_venvs_mask env =
   match env with
     [] -> [[]]
   | [(i,j,mask,id)] -> 
-       let tys = lookup_terms_te(id) in 
+       let tys = lookup_aterms_atys(id) in 
        let tys' = if List.length mask=j+1-i then tys
                   else mask_tys i mask tys []
        in  List.map (fun ty -> [(i,j,ty)]) tys'
   | (i,j,mask,id)::env' ->
-     let tys = lookup_terms_te(id) in
+     let tys = lookup_aterms_atys(id) in
      if tys=[] then []
      else 
       let venvs = mk_venvs_mask env' in
@@ -576,7 +533,7 @@ let rec mk_venvs_mask_incremental env (id,tys) =
   match env with
     [] -> [[]]
   | (i,j,mask,id1)::env' ->
-     let tyss = if id=id1 then  [tys] else lookup_terms_te(id1) in (* get the type or replaced
+     let tyss = if id=id1 then  [tys] else lookup_aterms_atys(id1) in (* get the type or replaced
                                                                       for id type tys *)
      if tyss=[] then []
      else 
@@ -681,14 +638,14 @@ let rec range_types_with_vte ty1 ty2 =
   ) [] ty1 
 
 let ty_of_nt f =
-  Array.fold_left (@) []  (!nteref).(f)
+  Array.fold_left (@) []  (!nt_tys).(f)
 
 
 let ty_of_nt_q f q =
-  (!nteref).(f).(q)
+  (!nt_tys).(f).(q)
 
 let ty_of_nt_qs f qs =
-  let tyarray = (!nteref).(f) in
+  let tyarray = (!nt_tys).(f) in
   List.fold_left (fun ty q -> List.rev_append tyarray.(q) ty) [] qs
 
 let ty_of_t_qs a qs = 
@@ -773,7 +730,7 @@ let rec ty_of_head_q h venv q =
 
 let rec ty_of_head_q2 h venv q = 
   match h with
-    NT(f) -> (ty_of_nt_q f q) (* lookup in nteref *)
+    NT(f) -> (ty_of_nt_q f q) (* lookup in nt_tys *)
   | T(a) -> (ty_of_t_q a q) (* lookup in cte *)
   | Var(v) -> ty_of_var venv v (* lookup in venv *)
  | _ -> assert false
@@ -806,7 +763,7 @@ let match_head_ity h venv arity ity =
             let ty = List.filter (fun ity1->codom_of_ity ity1=q) (ty_of_var venv v) in
               List.map (fun ity1 -> get_argtys arity ity1) ty
         | _ ->
-             let ty = ty_of_head_q2 h venv q in (* lookup in nteref or cte what types with
+             let ty = ty_of_head_q2 h venv q in (* lookup in nt_tys or cte what types with
                                                    codomain ity does this head have *)
              List.map (fun ity1 -> get_argtys arity ity1) ty
              (* functional ty as triple nested list, but without codomain ite:
@@ -897,7 +854,7 @@ let ty_of_term2 venv term =
   let tys_ity_list = List.map (split_ity arity) ty in
      check_args tys_ity_list terms venv []
 (* returns ty list *)
-(** Computes the types of terms based on constant typing of terminals (cte), available in nteref
+(** Computes the types of terms based on constant typing of terminals (cte), available in nt_tys
     typing of nonterminals, and variable typings from venv. *)
 let ty_of_terms venv terms =
   if !(Flags.ty_of_term) then
@@ -1005,9 +962,9 @@ let update_ty_of_id_aux id venvs overwrite_flag =
    (fun venv -> 
      let ty = ty_of_terms venv terms in (* compute type of terms (iteration) in given environment
                                            based on automata typings (cte) for terminals,
-                                           computed nonterminal types (nteref) for nonterminals,
+                                           computed nonterminal types (nt_tys) for nonterminals,
                                            and given environment for vars *)
-     register_terms_te id ty overwrite_flag)
+     register_aterms_atys id ty overwrite_flag)
    venvs
 
 (* update the set of types for each term list [t1;...;tk] *)
@@ -1053,17 +1010,17 @@ and mk_funty_with_vte_aux vte ity i arity =
 
 exception REFUTED
 
-(* Saves in nteref[nt][q] that nt : ity, ity = t1 -> ... -> tK -> q and enqueues nt and nt : ity
+(* Saves in nt_tys[nt][q] that nt : ity, ity = t1 -> ... -> tK -> q and enqueues nt and nt : ity
    in updated_nts and updated_nt_ty queues.
-   nteref[nt][q] is updated to contain only minimal elements after adding ity, essentially
+   nt_tys[nt][q] is updated to contain only minimal elements after adding ity, essentially
    working as intersection of types. *)
 let register_nte nt ity =
-  let tyarray = (!nteref).(nt) in
+  let tyarray = (!nt_tys).(nt) in
   let q = codom_of_ity ity in
-  let ty = tyarray.(q) in (* ty = nteref[nt][q] *)
+  let ty = tyarray.(q) in (* ty = nt_tys[nt][q] *)
    if List.exists (fun ity1 -> subtype ity1 ity) ty then () (* do nothing if subtype of the
                                                                computed type is already in
-                                                               nteref *)
+                                                               nt_tys *)
    else 
       (Cegen.register_nte_for_cegen nt ity q;
        let _ = Utilities.debug ("updated type of nt "^(name_of_nt nt)^"\n") in 
@@ -1072,11 +1029,11 @@ let register_nte nt ity =
        enqueue_nt_ty nt ity; (* enqueue f : ity in updated_nt_ty or just add ity to enqueued types
                                 if it is already enqueued *)
        let ty' = List.filter (fun ity1->not(subtype ity ity1)) ty in
-       (* ty' are types in nteref that are not supertypes of ity *)
+       (* ty' are types in nt_tys that are not supertypes of ity *)
        let ty'' = ity::ty' in
 (* no need to sort the type of nt *)
 (*       let ty'' = merge_ty ty' [ity] in *)
-       (!nteref).(nt).(q) <- ty''; (* add current type and update *)
+       (!nt_tys).(nt).(q) <- ty''; (* add current type and update *)
          if nt=0 && id_of_ity ity=0 then raise REFUTED else ()) (* stop if args were S : q0 *)
 
 (** Compute and update the type of aterm termid for all environments that contain id and that have
@@ -1100,7 +1057,7 @@ if not(!(Flags.compute_alltypes)) then
      List.iter (fun q ->
 (*  this check actually often slows down
       let ity = mk_funty venv (ItyQ(q)) in
-      if List.exists (fun ity'->subtype ity' ity) (!nteref).(nt).(q) then ()
+      if List.exists (fun ity'->subtype ity' ity) (!nt_tys).(nt).(q) then ()
       else
 *)
         try
@@ -1112,7 +1069,7 @@ else
 (* List.filter
               (fun q ->
                  let ity = mk_funty venv (ItyQ(q)) in
-                 not(List.exists (fun ity' ->subtype ity' ity) (!nteref).(nt).(q))) qs in
+                 not(List.exists (fun ity' ->subtype ity' ity) (!nt_tys).(nt).(q))) qs in
 *)
      let ty = ty_of_term_with_vte_qs venv term qs' in
      let ty' = List.filter (fun (ity,_)-> List.mem (id_of_ity ity) qs') ty in
@@ -1316,7 +1273,7 @@ let update_ty_of_nt_wo_venv f =
                                                 inner list represents mappings for different
                                                 variables *)
        List.iter (fun vte ->
-           register_nte f (* intersect f : t1 -> .. -> tK -> q with nteref[f][q], put the result
+           register_nte f (* intersect f : t1 -> .. -> tK -> q with nt_tys[f][q], put the result
                              back, and enqueue f and f : type if intersection changed anything. *)
 	  (mk_funty_with_vte vte ity (Grammar.arity_of_nt f))) (* this line changes variable type
                                                                   bindings to type of nonterminal
@@ -1358,8 +1315,6 @@ let update_ty_of_nt_incremental_for_nt g f ty =
        update_ty_of_nt_inc_for_nt_sub
           g term binding !qsref f ty) bindings
 *)
-    
-let worklist_nt_binding : Cfa.binding TwoLayerQueue.t ref = ref (TwoLayerQueue.mk_queue 0)
 
 (*
 let init_worklist_nt_binding maxnt =
@@ -1463,45 +1418,45 @@ and saturate_vartypes_wo_overwrite() : unit =
 *)
 
 let init_saturation() =
-  (* initialize the set of types for variables and non-terminals to empty *)
+  (* size of structures will be dependent on number of aterms or nonterminals *)
   let aterms_count = Cfa.aterms_count() in
   let nt_count = Grammar.nt_count() in
-  (*
-  terms_te := Array.make aterms_count (ref TySeqNil); (* terms_te[aterm_id] = ref TySeqNil *)
+
+  aterms_atys := Array.make aterms_count (ref TySeqNil); (* aterms_atys[aterm_id] = ref TySeqNil *)
   terms_tyss := Array.make aterms_count (Some []); (* terms_tyss[aterm_id] = Some [] *)
-  for id=0 to aterms_count-1 do (* for each aterm *)
+  for id = 0 to aterms_count - 1 do (* for each aterm *)
     if (!Cfa.termid_isarg).(id) then (* that is an argument to a nonterminal *)
-      (!terms_te).(id) <- ref (TySeq []) (* initialize it with TySeq [] instead of TySeqNil *)
+      (!aterms_atys).(id) <- ref (TySeq []) (* initialize it with TySeq [] instead of TySeqNil *)
   done;
-  nteref := Array.make maxnt [| |];
-  for i=0 to maxnt-1 do
-    (!nteref).(i) <- Array.make (!num_of_states) [] (* nteref[nt_id][q_id] = [], like nteallref *)
+  nt_tys := Array.make nt_count [| |];
+  for i = 0 to nt_count - 1 do
+    (!nt_tys).(i) <- Array.make 2 [] (* nt_tys[nt_id][q_id] = [], like nteallref *)
   done;
-  *)
-  worklist_nt_binding := TwoLayerQueue.mk_queue nt_count;
-  worklist_var_ty := TwoLayerQueue.mk_queue aterms_count;
+
+  (* creating task queues *)
+  worklist_var_ty := TwoLayerQueue.make aterms_count;
+  worklist_nt_binding := TwoLayerQueue.make nt_count;
   worklist_var := SetQueue.make aterms_count;
+  updated_nt_ty := BatchQueue.make nt_count;
   updated_nts := SetQueue.make nt_count;
-  let _ = for id=0 to aterms_count-1 do 
-      if (!Cfa.termid_isarg).(id) then
-        SetQueue.enqueue !worklist_var id (* enqueue all aterms that are arguments to nonterminals
+  (* worklist_nt is initialized with all nonterminals that have arity 0 or, if Flags.eager is
+     false, have no head variables (i.e., variables that are applied to other terms).
+     If a nonterminal is unreachable (according to 0CFA) from initial state, there will be no
+     terms registered to be flowing into its variables, so it will not be updated later. *)
+  worklist_nt :=
+    SetQueue.make_fromlist nt_count
+      (List.filter (fun f-> arity_of_nt f=0 || has_noheadvar f)
+         (Utilities.fromto 0 nt_count));
+  (* worklist_var is initialized with all aterms that are arguments to a nonterminal. *)
+  for id=0 to aterms_count - 1 do 
+    if (!Cfa.termid_isarg).(id) then
+      SetQueue.enqueue !worklist_var id (* enqueue all aterms that are arguments to nonterminals
                                              with ones with largest id on top (the ones created
                                              last when following the first nonterminal) *)
-    done in
-  let _ = (worklist_nt := (* queue for nonterminals initialized to ones with arity 0 or with no
-                             variables used as functions (head variables, and only if Flags.eager
-                             is false) *)
-             (* We can further restrict non-terminals to those that are reachable
-                from the initial state;
-	        however, if f is unreachable, the state set for f is empty, so
-	        it does not do much harm to add f here
-             *)
-             SetQueue.make_fromlist nt_count
-               (List.filter (fun f-> arity_of_nt f=0 || has_noheadvar f)
-                  (Utilities.fromto 0 nt_count))) in
+  done;
   (*
   if !Flags.debugging then print_nte() else ();
-  if !Flags.debugging then print_terms_te() else ();
+  if !Flags.debugging then print_aterms_atys() else ();
 *)
   ()
 
@@ -1574,15 +1529,5 @@ let rec saturation_loop() : bool =
   false
 
 let saturate() : unit =
-  if !Flags.debugging then
-    begin
-      print_string "Initializing saturation.\n";
-      flush stdout
-    end;
   profile "initializing saturation" (fun () -> init_saturation());
-  if !Flags.debugging then
-    begin
-      print_string "Starting saturation loop.\n";
-      flush stdout
-    end;
   profile "saturation" (fun () -> while saturation_loop() do () done)

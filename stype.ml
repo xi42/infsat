@@ -1,9 +1,8 @@
-(** check the sorts of non-terminals, print them and the order of the recursion scheme **)
-(** Note: the implementation below is naive and slow **)
+(** Check the sorts of non-terminals, and print them and the order of the recursion scheme **)
+(* Note: the implementation below is naive and slow *)
 
 open Utilities
 open Grammar
-(*open Automaton;;*)
 
 type tvar = int
 type st = STvar of (st option) ref | STbase | STfun of st * st 
@@ -24,7 +23,7 @@ let rec deref_st st =
 let rec kind_of_sty st =
   match deref_st st with
     | STvar _ | STbase -> O
-    | STfun (t1,t2) -> Kfun (kind_of_sty t1,kind_of_sty t2);;
+    | STfun (t1,t2) -> Kfun (kind_of_sty t1,kind_of_sty t2)
 
 let rec arity2sty n =
   if n<0 then assert false
@@ -205,7 +204,7 @@ let order_of_nste nste =
     x
 
 let print_order (f,ord) =
-  let _ = print_string ("\nOrder of recursion scheme: "^(string_of_int ord)^"\n") in
+  let _ = print_string ("Order of recursion scheme: "^(string_of_int ord)^"\n") in
   let _ = print_string ("Non-terminal of highest order: "^(name_of_nt f)^"\n") in
     ()
 

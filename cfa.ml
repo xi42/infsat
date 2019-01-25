@@ -1,5 +1,9 @@
+(** Control flow analysis module implementing 0CFA. *)
+
 open Grammar
 open Utilities
+
+(* --- types --- *)
 
 (** All sequences of terms converted into head form and having the same environment
     TODO describe what environment
@@ -16,6 +20,12 @@ type aterm = head * aterms_id list
 type node = aterm
 type binding = (int * int * aterms_id) list
 
+(* aterm -> ref (aterm, qs) *)
+module HType = struct type t=aterm;; let equal i j = i=j;; let hash = Hashtbl.hash_param 100 100 end
+module ATermHashtbl = Hashtbl.Make(HType)
+
+(* --- registers --- *)
+
 (** After the nonterminals are numbered, this is a map from nonterminals' ids to their bodies in
     head form. Bodies in head form are tuples (h, [as1; as2; ..]), where asX are integers that
     are mapped to lists of terms in head form, i.e., as1 = [a11; a12; ...]. The original tuple
@@ -24,23 +34,7 @@ type binding = (int * int * aterms_id) list
     Mappings from asX to lists are in tab_id_terms. *)
 let normalized_body : aterm array ref = ref [||]
 
-let lookup_body f = (!normalized_body).(f)
-
 (* necessary tables:
-- trtab:
-   information about transitions of the form
-    (q,a) -->  [|Q1,...,Qk|]
-  this is extracted from transition rules of the automaton.
-  If the automaton is deterministic,
-  the table should keep the map
-    (q,a) --> ({q1},...,{qk})
-  for each transition rule delta(q,a)=q1...qk.
-  If the automaton is alternating,
-  the table should keep the map
-    (q,a) --> (Q1,...,Qk)
-  where Qi is the set of states q occurring in the form of (i,q)
-  in delta(q,a)
-
 - map from aterm to node
 
 - binding information, which maps 
@@ -69,9 +63,102 @@ let lookup_body f = (!normalized_body).(f)
 let tab_id_terms : (aterm list * Grammar.term list * nameV list) array ref = ref [||]
 
 (** termid_isarg[i] contains a boolean whether tab_id_terms[i] was ever used as an argument when
-    expanding terms in expand, i.e., if it was a used argument to a nonterminal. *)
+    expanding terms in expand, i.e., if it was a used argument to a nonterminal. Filled during
+    expansion. *)
 let termid_isarg : bool array ref = ref [||]
 
+(** binding_array_nt[f] contains a list of bindings for nonterminal f (int), i.e., a list of
+    tuples (ts, qs) such that ts are terms that f was applied to under states qs, where qs is a
+    reference to a list of states (ints), and ts is a list of tuples (i, j, asW) such that
+    nonterminal f was applied to arguments
+    f a11 a12 .. a1X a21 .. a2Y .. aP1 .. aPZ
+    where tab_id_terms[asW] translates to a list of terms aW1 .. aWR for some R, and term aW1 was
+    i-th on the list of arguments and term aWR was j-th on the list of arguments applied to f.
+    In short, this is used to tell what terms where which arguments of f under what states.
+    Internal for this module, filled during expansion. *)
+let binding_array_nt : binding list array ref = ref [||]
+
+(** binding_array_var[f][i] contains terms in head form (h, [ID..]) that were i-th argument
+    (0-indexed) to nonterminal f (int). *)
+let binding_array_var : aterm list array array ref = ref [||]
+
+
+(** Reverse of fst tab_id_terms, i.e., tab_id_terms[tab_terms_id[aterms]] = (aterms, _, _). *)
+let tab_terms_id = Hashtbl.create 100000
+
+(* identifier of [t1;...;tk] to a set of non-terminals
+   whose variables may be bound to [t1;...;tk] *)
+(** tab_termid_nt[as] contains tuples (f, ts, qs) of nonterminals f, head terms ts, and states qs
+    that were applied to list of terms tab_id_terms[as] and either Flags.eager is false or
+    f has a head variable in its definition. *)
+let tab_termid_nt : (int * binding) list array ref = ref [| |]
+
+(** variable_head_nodes[f][i] is a list of processed nodes that have variable (f,i) as head,
+    i.e., i-th variable in definition of nonterminal f. Internal for this module. *)
+let variable_head_nodes : node ref list array array ref = ref [||]
+
+(** nodetab[aterm] = (aterm, qs), where qs is a list of states under which term aterm (in head
+    form) was processed. *)
+(* TODO change this to set *)
+let nodetab = ATermHashtbl.create 100000
+
+(** Queue of nodes to process as a list of (t, qs), where t is a term in head form (H, [ID..]), and
+    qs is a list of states (ints). The queue eventually processes all (t, qs) combinations that are
+    possible during reducing the starting symbol, and more (some unnecessary terms may be analyzed,
+    such as in K t id, and some unnecessary states may be analyzed). *)
+let nodequeue : node list ref = ref []
+
+(** array_headvars[f] is a list of head variables in nonterminal's definition, i.e., variables
+    that are applied to something. *)
+let array_headvars : nameV list array ref = ref [||]
+
+(* identifier of [t1;...;tk] --> identifiers of [s1;...;sl] 
+   that depend on the value of [t1;...;tk];
+   in other words, if id is mapped to [id1;...;idk] and
+   the type of id has been updated, the types of id1,...,idk should
+   be recomputed
+   let tab_penv_binding = Hashtbl.create 10000 TODO remove old ver *)
+
+(** tab_penv_binding[as] contains a list of identifiers of lists of arguments (aterms) asX such
+    that term tab_id_terms[asX] was applied with nonterminal containing tab_id_terms[as]
+    substituting one of more variables present in snd tab_id_terms[as] (i.e., somewhere in the
+    whole applicative term).
+    In other words, these are the aterms that as is substituted into. *)
+let tab_penv_binding = ref [| |]
+
+(* identifier of [t1;...;tk] ---> a list of [(i,j,id1);...]
+  [(i1,j1,id1);...;(ik,j1,idk)] being an element of the list
+  means that the i_x-th to j_x-th free variables in [t1;...;tk]
+  may be bound to the terms represented by id_x 
+let tab_binding_env: (termid, (int*int*termid) list list) Hashtbl.t = Hashtbl.create 10000
+*)
+
+(** tab_binding_env[as] describes which aterms (sequences of terms) substitute which variables in
+    term with id as.
+    This as aterm was present in some nonterminal with variables numbered form 0 to K.
+    Specifically, it is a list of list of tuples (i, j, vs, as'), where each list of tuples is
+    one application, and in this application arguments i-j (sub-interval of 0-K) were substituted
+    (specifically variables vs (list of ints from interval i-j)) with aterms with id as'.
+    Intuitively, this means that as' was substituted for a variable inside as. *)
+let tab_binding_env = ref [| |]
+
+(** array_dep_nt_termid[f] is a list of as ids such that tab_terms_id[as] expanded to applicative
+    form (i.e., recursively) contains nonterminal f somewhere and this term was used as an
+    argument to some nonterminal. *)
+let array_dep_nt_termid = ref [| |]
+
+(** array_dep_nt_nt[f] contains all nonterminals (int) that have f present in their body except
+    for ones present in array_dep_nt_nt_lin[f]. *)
+let array_dep_nt_nt = ref [| |]
+
+(** If Flags.incremental is false then array_dep_nt_nt_lin[f] contains list of nonterminals g that
+    have f present in their body exactly once at root or applied a number of times to a terminal,
+    i.e., t1 .. (t2 .. (tN (f arg1 .. argK) ..) ..) .. for some terminals tX and terms argY. *)
+let array_dep_nt_nt_lin = ref [| |]
+
+(* --- logic --- *)
+
+let lookup_body f = (!normalized_body).(f)
 
 let lookup_id_terms id =
  (!tab_id_terms).(id)
@@ -91,25 +178,6 @@ let decompose_aterm (aterm: aterm) =
     	    List.rev_append aterms' aterms) [] termids) []
   in (h, aterms)
 
-(** binding_array_nt[f] contains a list of bindings for nonterminal f (int), i.e., a list of
-    tuples (ts, qs) such that ts are terms that f was applied to under states qs, where qs is a
-    reference to a list of states (ints), and ts is a list of tuples (i, j, asW) such that
-    nonterminal f was applied to arguments
-    f a11 a12 .. a1X a21 .. a2Y .. aP1 .. aPZ
-    where tab_id_terms[asW] translates to a list of terms aW1 .. aWR for some R, and term aW1 was
-    i-th on the list of arguments and term aWR was j-th on the list of arguments applied to f.
-    In short, this is used to tell what terms where which arguments of f under what states. *)
-let binding_array_nt : binding list array ref = ref [||]
-
-(** binding_array_var[f][i] contains terms in head form (h, [ID..]) that were i-th argument
-    (0-indexed) to nonterminal f (int). *)
-let binding_array_var : aterm list array array ref = ref [||]
-
-
-(** array_headvars[f] is a list of head variables in nonterminal's definition, i.e., variables
-    that are applied to something. *)
-let array_headvars : nameV list array ref = ref [||]
-
 let print_binding binding =
    List.iter (fun (i,j,id1) ->
        print_string ("("^(string_of_int i)^","^(string_of_int j)^","^(string_of_int id1)^"), "))
@@ -124,27 +192,14 @@ let print_binding_array() =
   done
 
 (** Increasing counter for fresh identifiers for aterms (all terms and subterms in head form). *)
-let next_aterms_id = ref 0
+let next_aterms_id : int ref = ref 0
 let new_aterms_id() =
   let x = !next_aterms_id in
-  begin
-    next_aterms_id := x + 1;
-    x
-  end
+  next_aterms_id := x + 1;
+  x
 
 let aterms_count() : int = !next_aterms_id
 
-(** Reverse of fst tab_id_terms, i.e., tab_id_terms[tab_terms_id[aterms]] = (aterms, _, _). *)
-let tab_terms_id = Hashtbl.create 100000
-
-(*
-let lookup_aterms aterms =
-  try
-    Hashtbl.find tab_terms_id aterms
-  with Not_found ->
-    let id = new_terms_id() in
-     (Hashtbl.add tab_terms_id aterms id;  id)
-*)
 (* tables that associate a list of terms [t1;...;tk] with its identifier *)
 
 let id2aterms (id : aterms_id) : aterm list =
@@ -159,17 +214,18 @@ let id2vars (id : aterms_id) : nameV list  =
 
 let print_tab_id_terms() =
   print_string "Id --> Terms\n";
-  for id=0 to !next_aterms_id-1 do
-   if (!termid_isarg).(id) then 
-    let terms = id2terms id in
-    if terms=[] then ()
-    else
-    (
-     print_int id;
-     print_string ":";
-     List.iter (fun t -> print_term t; print_string ", ") terms;
-     print_string "\n")
-   else ()
+  for id = 0 to !next_aterms_id - 1 do
+    if (!termid_isarg).(id) then 
+      let terms = id2terms id in
+      if terms = [] then ()
+      else
+        begin
+          print_int id;
+          print_string ":";
+          List.iter (fun t -> print_term t; print_string ", ") terms;
+          print_string "\n"
+        end
+    else ()
   done
   
 let arity_of_term id =
@@ -184,13 +240,6 @@ let rec add_index rho i =
 (*       if n<9 then *)
     let j = i+n in
     (i,j-1,termsid)::(add_index rho' j) (* each termsid is converted to (first_term_number, last_term_number, termsid), like (0, 3, ...);(4, 5, ...);(6, 11, ...), i.e., start and end positions on a concatenated list of all terms *)
-
-(* identifier of [t1;...;tk] to a set of non-terminals
-   whose variables may be bound to [t1;...;tk] *)
-(** tab_termid_nt[as] contains tuples (f, ts, qs) of nonterminals f, head terms ts, and states qs
-    that were applied to list of terms tab_id_terms[as] and either Flags.eager is false or
-    f has a head variable in its definition. *)
-let tab_termid_nt : (int * binding) list array ref = ref [| |]
 
 (* TODO change int to nt_id *)
 let register_dep_termid_nt (id : aterms_id) (nt : int) (termss : binding) =
@@ -218,26 +267,19 @@ let insert_nt_binding (args : int list) bindings =
   iargs::bindings
 
 
-(** tab_variableheadnode[f][i] is a list of processed nodes that have variable (f,i) as head,
-    i.e., i-th variable in definition of nonterminal f. *)
-let tab_variableheadnode : node ref list array array ref = ref [||]
-
-let register_VariableHeadNode v (noderef: node ref) =
+let register_variable_head_node v (noderef: node ref) =
   let (nt,i) = v in
-  let a = (!tab_variableheadnode).(nt) in
+  let a = (!variable_head_nodes).(nt) in
     a.(i) <- noderef::a.(i)
 
-let lookup_VariableHeadNode (nt,i) =
-   (!tab_variableheadnode).(nt).(i)
+let lookup_variable_head_node (nt,i) =
+   (!variable_head_nodes).(nt).(i)
 
 (** Prepends term to list terms if it is not already there. Returns tuple of resulting list and
     boolean whether it was prepended to list. *)
 let insert_var_binding (term : 'a) (terms : 'a list) : 'a list * bool =
   if List.mem term terms then (terms,false)
   else (term::terms,true)
-
-(*  merge_and_unify compare [term] terms
-*)
 
 let print_aterm (term,termss) =
   print_term term;
@@ -253,30 +295,10 @@ let print_aterm (term,termss) =
 let print_node aterm =
   print_aterm aterm
 
-(*
-let nodequeue = ref ([], [])
-let clear_nodequeue() = (nodequeue := ([], []))
-let enqueue_node node =
-(*   print_string "Enqueued:"; print_node node; print_string "\n";*)
-   Utilities.enqueue node nodequeue
-
-let dequeue_node () =
-   Utilities.dequeue nodequeue
-
-let enqueue_nodes nodes =
-   List.iter enqueue_node nodes
-*)
-
-(** Queue of nodes to process as a list of (t, qs), where t is a term in head form (H, [ID..]), and
-    qs is a list of states (ints). The queue eventually processes all (t, qs) combinations that are
-    possible during reducing the starting symbol, and more (some unnecessary terms may be analyzed,
-    such as in K t id, and some unnecessary states may be analyzed). *)
-let nodequeue : node list ref = ref []
-
 let clear_nodequeue() = (nodequeue := [])
+
 let enqueue_node node =
-(*   print_string "Enqueued:"; print_node node; print_string "\n";*)
-   nodequeue := node::!nodequeue
+  nodequeue := node::!nodequeue
 
 let dequeue_node () =
    match !nodequeue with
@@ -290,14 +312,14 @@ let expand_varheadnode term (node: node ref) =
   let aterm = !node in
   let (h,termss) = aterm in
     match h with
-      Hvar(x) ->
-        let (h',terms)=term in
-	   enqueue_node (h', terms@termss)
+    | Hvar(x) ->
+      let (h',terms)=term in
+      enqueue_node (h', terms@termss)
     | _ -> assert false
 
-(** Iterates (expand_varheadnode term) over everything in tab_variableheadnode[nt_id][arg_id] *)
+(** Iterates (expand_varheadnode term) over everything in variable_head_nodes[nt_id][arg_id] *)
 let expand_varheadnodes f i term =
-  let nodes = lookup_VariableHeadNode (f,i) in
+  let nodes = lookup_variable_head_node (f,i) in
   List.iter (expand_varheadnode term) nodes
 
 (** Called when term was i-th argument in a call f arg1 arg2 ...
@@ -333,13 +355,6 @@ let rec register_var_bindings f rho i =
       aterms';
     register_var_bindings f rho' (i+List.length aterms) (* recursively *)
 
-(*
-let add_binding_st f rho qs =
-  let rho' = add_index rho 0 in
-  let qref = try List.assoc rho' (!binding_array_nt).(f) with Not_found -> assert false in
-    qref := merge_and_unify compare qs !qref
-*)
-
 (** Register information that there was a call f args, i.e., save this as a binding in
     binding_array_nt and register in termid_isarg that args were an argument to nonterminal f. *)
 let register_binding (f : int) (args : int list) =
@@ -348,22 +363,9 @@ let register_binding (f : int) (args : int list) =
   List.iter (fun id -> (!termid_isarg).(id) <- true) args;
   (!binding_array_nt).(f) <- (insert_nt_binding args (!binding_array_nt).(f));
   register_var_bindings f args 0
+
 let lookup_bindings_for_nt f =
   (!binding_array_nt).(f)
-
-(*
-let merge_states qs1 qs2 = merge_and_unify compare qs1 qs2
-let diff_states qs1 qss2 = List.filter (fun q -> not(List.mem q qss2)) qs1
-*)
-    
-(* aterm -> ref (aterm, qs) *)
-module HType = struct type t=aterm;; let equal i j = i=j;; let hash = Hashtbl.hash_param 100 100 end
-module ATermHashtbl = Hashtbl.Make(HType)
-
-(** nodetab[aterm] = (aterm, qs), where qs is a list of states under which term aterm (in head
-    form) was processed. *)
-(* TODO change this to set *)
-let nodetab = ATermHashtbl.create 100000
 
 (** Registering in nodetab that a new aterm is being processed. *)
 let register_newnode aterm = 
@@ -431,12 +433,11 @@ let rec convert_term t =
      in
      (term2head h, [id]) (* return just the head and id of list of args, note that this fun will only return [] or [id] in snd *)
 
-let dummy_aterm : aterm = (Hnt(-1), [])
-
 let init_tab_id_terms g =
   let size = size_of_rules g.r in
   tab_id_terms := Array.make size ([],[],[]); (* for each a-term, i.e., @ x t, where x is not an application *)
   termid_isarg := Array.make size false;
+  let dummy_aterm : aterm = (Hnt(-1), []) in
   normalized_body := Array.make (Array.length g.r) dummy_aterm; (* convert each rule to a normalized form and store in this global array along with its arity (this is ref) *)
   for f=0 to Array.length g.r - 1 do
     let (arity,body)=Grammar.lookup_rule f in
@@ -455,94 +456,52 @@ let init_expansion() =
   for i=0 to num_of_nts-1 do
     (!binding_array_var).(i) <- Array.make (arity_of_nt i) []
   done;
-  tab_variableheadnode := Array.make num_of_nts [||];
+  variable_head_nodes := Array.make num_of_nts [||];
   for i=0 to num_of_nts-1 do
-    (!tab_variableheadnode).(i) <- Array.make (arity_of_nt i) [] (* tab_variableheadnode[nt_id][arg_id] = [] *)
+    (!variable_head_nodes).(i) <- Array.make (arity_of_nt i) [] (* variable_head_nodes[nt_id][arg_id] = [] *)
   done;
   enqueue_node (Hnt(0), []) (* enqueue first nonterminal with no args and first state *)
-
-let childnodes (h,termss) = 
-(* we need to compute child nodes explicitly, 
-  since aterms in the queue have not been registered yet.
-  To avoid duplicated work, we may wish to register nodes immediately *)
-  match h with
-     Hnt(f) -> [lookup_body f]
-   | Hvar(v) ->
-         let terms = lookup_binding_var v in
-           List.map (fun (h,terms) -> (h,terms@termss)) terms;
-   | _ -> assert false
 
 (** Processing aterms. *)
 let process_node aterm = 
   match lookup_nodetab aterm with
-  | Some(node) -> (* aterm has been processed before *)
+  | Some(_) -> (* aterm has been processed before *)
     ()
   | None -> (* the aterm has not been processed yet *)
-    (* decoding arguments as aterm ids into aterms *)
-    let (h, termss) = decompose_aterm aterm in
+    let (h, h_args) = aterm in
     (* saving that the aterm is already processed *)
     let node = register_newnode aterm in
     (* expanding the calls to see what aterms go in what variables *)
     match h with
     | Ht(_) ->
+      (* decoding arguments as aterm ids into aterms *)
+      let (_, termss) = decompose_aterm aterm in
       (* ignore the terminal and go deeper *)
       expand_terminal termss
     | Hvar(x) ->
-      let (_, h_args) = aterm in
-      (* check what aterms flow into x *)
+      (* check what aterms flow into x (these can also be variables) *)
       let x_aterms = lookup_binding_var x in
       (* substitute these aterms into x and enqueue resulting application *)
       List.iter (fun (h, x_args) -> enqueue_node (h, x_args@h_args)) x_aterms;
-      register_VariableHeadNode x node
+      register_variable_head_node x node
     | Hnt(f) ->
-      (* get body aterm *)
-      let (_, h_args) = aterm in
-      begin
-        (* Remember in binding_array_nt that there was an application f h_args. Also remember
-           that h_args were being used as an argument to a nonterminal in termid_isarg. *)
-        register_binding f h_args;
-        (* enqueue the body aterm ignoring all arguments *)
-        enqueue_node (lookup_body f)
-      end
+      (* Remember in binding_array_nt that there was an application f h_args. Also remember
+         that h_args were being used as an argument to a nonterminal in termid_isarg. *)
+      register_binding f h_args;
+      (* Enqueue the body aterm, ignoring all arguments. Note that arguments are not enqueued.
+         If the arguments don't have kind O, they can be passed as arguments again, or used
+         as variable head, which finds the original terms. *)
+      enqueue_node (lookup_body f)
 
-(* let num = ref 0 *)
-
-let rec expand() =
-    match dequeue_node() with
-    None -> (print_string ("size of ACG: "^(string_of_int (ATermHashtbl.length nodetab))^"\n")
-           (*  print_string ("# of expansion: "^(string_of_int (!num))^"\n") *))     (* no more node to expand *)
+(** Expand nodes in queue until it's empty. *)
+let rec expand() : unit =
+  match dequeue_node() with
+  | None ->
+    print_tab_id_terms();
+    print_binding_array();
+    print_string ("\nSize of abstract control flow graph: "^(string_of_int (ATermHashtbl.length nodetab))^"\n")
   | Some(aterm) ->
-    (* num := !num+1;*) process_node aterm; expand() (* recursively process each ((head, [args id]); state) *)
-
-(* identifier of [t1;...;tk] --> identifiers of [s1;...;sl] 
-   that depend on the value of [t1;...;tk];
-   in other words, if id is mapped to [id1;...;idk] and
-   the type of id has been updated, the types of id1,...,idk should
-   be recomputed
-   let tab_penv_binding = Hashtbl.create 10000 TODO remove old ver *)
-
-(** tab_penv_binding[as] contains a list of identifiers of lists of arguments (aterms) asX such
-    that term tab_id_terms[asX] was applied with nonterminal containing tab_id_terms[as]
-    substituting one of more variables present in snd tab_id_terms[as] (i.e., somewhere in the
-    whole applicative term).
-    In other words, these are the aterms that as is substituted into. *)
-let tab_penv_binding = ref [| |]
-
-(* identifier of [t1;...;tk] ---> a list of [(i,j,id1);...]
-  [(i1,j1,id1);...;(ik,j1,idk)] being an element of the list
-  means that the i_x-th to j_x-th free variables in [t1;...;tk]
-  may be bound to the terms represented by id_x 
-let tab_binding_env: (termid, (int*int*termid) list list) Hashtbl.t = Hashtbl.create 10000
-*)
-
-(** tab_binding_env[as] describes which aterms (sequences of terms) substitute which variables in
-    term with id as.
-    This as aterm was present in some nonterminal with variables numbered form 0 to K.
-    Specifically, it is a list of list of tuples (i, j, vs, as'), where each list of tuples is
-    one application, and in this application arguments i-j (sub-interval of 0-K) were substituted
-    (specifically variables vs (list of ints from interval i-j)) with aterms with id as'.
-    Intuitively, this means that as' was substituted for a variable inside as. *)
-let tab_binding_env = ref [| |]
+    process_node aterm; expand()
 
 (** Appends aterm id2 to id1's list of tab_penv_binding. *)
 let register_dep_penv_binding id1 id2 =
@@ -694,20 +653,6 @@ let mk_binding_depgraph_for_nt (f : int) (termsss : binding list) =
   else
     List.iter (mk_binding_depgraph_for_termss f) termsss
 
-(** array_dep_nt_termid[f] is a list of as ids such that tab_terms_id[as] expanded to applicative
-    form (i.e., recursively) contains nonterminal f somewhere and this term was used as an
-    argument to some nonterminal. *)
-let array_dep_nt_termid = ref [| |]
-
-(** array_dep_nt_nt[f] contains all nonterminals (int) that have f present in their body except
-    for ones present in array_dep_nt_nt_lin[f]. *)
-let array_dep_nt_nt = ref [| |]
-
-(** If Flags.incremental is false then array_dep_nt_nt_lin[f] contains list of nonterminals g that
-    have f present in their body exactly once at root or applied a number of times to a terminal,
-    i.e., t1 .. (t2 .. (tN (f arg1 .. argK) ..) ..) .. for some terminals tX and terms argY. *)
-let array_dep_nt_nt_lin = ref [| |]
-
 let print_dep_nt_nt_lin() =
  for i=0 to Array.length (!array_dep_nt_nt_lin)-1 do
    let nts = (!array_dep_nt_nt_lin).(i) in
@@ -849,8 +794,6 @@ let mk_binding_depgraph() =
             List.iter (fun nt-> register_dep_nt_nt nt i) nts1)
     done;
   if !Flags.debugging then
-   (print_binding_array();
-    print_tab_id_terms();
-    print_tab_binding_env();
+   (print_tab_binding_env();
     print_dep_nt_nt_lin())
   else ()

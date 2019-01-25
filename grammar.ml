@@ -201,8 +201,6 @@ let rec arity_of_kind = function
 let report_grammar g =
   let r = Array.length g.r in
   let s = size_of g in
-  begin
-    print_gram g;  
-    print_string ("The number of rewrite rules: "^(string_of_int r)^"\n"^
-                  "The size of recursion scheme: "^(string_of_int s)^"\n\n")
-  end
+  print_gram g;  
+  print_string ("\nThe number of rewrite rules: "^(string_of_int r)^"\n"^
+                "The size of recursion scheme: "^(string_of_int s)^"\n\n")

@@ -10,10 +10,8 @@ and ity = ty list
 let next_ty_id : ty_id ref = ref 2
 let new_ty_id() =
   let x = !next_ty_id in
-  begin
-    next_ty_id := x + 1;
-    x
-  end
+  next_ty_id := x + 1;
+  x
 
 (* better to prepare a separate table for each sort? *)
 (** mapping state ids/fun type ids of args and of fun to its type *)
@@ -43,10 +41,8 @@ let mk_fun_ty (arg_ity : ity) (res_ty : ty) : ty =
   with Not_found ->
    let id = new_ty_id() in
    let ty = Fun(id, arg_ity, res_ty) in
-   begin
-     Hashtbl.add fun_ty_ids (arg_ids, res_id) ty;
-     ty
-   end
+   Hashtbl.add fun_ty_ids (arg_ids, res_id) ty;
+   ty
 
 (** Given a single type /\_i t_1i -> ... -> /\_i t_ki -> t, it returns t. *)
 let rec codom_of_ty ty =

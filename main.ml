@@ -186,7 +186,7 @@ let main () =
         else
           parse_file(Sys.argv.(index))
       with
-        InfSatLexer.LexError s -> (print_string ("Lexer error: "^s^"\n"); exit (-1))
+        InfSatLexer.LexError s -> failwith ("Lexer error: "^s)
     )
   in
   if !Flags.debugging then
