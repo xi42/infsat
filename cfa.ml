@@ -179,13 +179,13 @@ let decompose_aterm (aterm: aterm) =
   in (h, aterms)
 
 let print_binding binding =
-   List.iter (fun (i,j,id1) ->
-       print_string ("("^(string_of_int i)^","^(string_of_int j)^","^(string_of_int id1)^"), "))
-   binding; 
-   print_string "\n"
+  print_string (String.concat ", " (List.map (fun (i, j, id1) ->
+      (string_of_int i)^"-"^(string_of_int j)^" <- "^(string_of_int id1))
+      binding));
+  print_string "\n"
 
 let print_binding_array() =
-  print_string "bindings (nt --> bindings list )\n";
+  print_string "bindings (nt --> bindings list)\n\n";
   for f=0 to Array.length !binding_array_nt - 1 do
     print_string ((Grammar.name_of_nt f)^":\n");
     List.iter print_binding (!binding_array_nt).(f)
@@ -213,7 +213,7 @@ let id2vars (id : aterms_id) : nameV list  =
 
 
 let print_tab_id_terms() =
-  print_string "Id --> Terms\n";
+  print_string "aterms id --> terms\n\n";
   for id = 0 to !next_aterms_id - 1 do
     if (!termid_isarg).(id) then 
       let terms = id2terms id in
@@ -221,8 +221,8 @@ let print_tab_id_terms() =
       else
         begin
           print_int id;
-          print_string ":";
-          List.iter (fun t -> print_term t; print_string ", ") terms;
+          print_string ": ";
+          print_string (String.concat ", " (List.map string_of_term terms));
           print_string "\n"
         end
     else ()
@@ -498,10 +498,12 @@ let rec expand() : unit =
   match dequeue_node() with
   | None ->
     print_tab_id_terms();
+    print_string "\n";
     print_binding_array();
     print_string ("\nSize of abstract control flow graph: "^(string_of_int (ATermHashtbl.length nodetab))^"\n")
   | Some(aterm) ->
-    process_node aterm; expand()
+    process_node aterm;
+    expand()
 
 (** Appends aterm id2 to id1's list of tab_penv_binding. *)
 let register_dep_penv_binding id1 id2 =

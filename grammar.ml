@@ -141,13 +141,15 @@ let name_of_var x =
      else
        (!gram).vinfo.(f).(i)
 
-let rec print_term term =
+let rec string_of_term term =
   match term with
-    NT(f) -> print_string (name_of_nt f)
-  | T(a) -> print_string a
-  | Var(x) -> print_string (name_of_var x)
-  | App(t1,t2) -> (print_string "(";print_term t1;print_string " ";
-                  print_term t2;print_string ")")
+  | NT(f) -> name_of_nt f
+  | T(a) -> a
+  | Var(x) -> name_of_var x
+  | App(t1,t2) -> "("^(string_of_term t1)^" "^(string_of_term t2)^")"
+
+let print_term term =
+  print_string (string_of_term term)
 
 let rec subst_term s term =
   match term with

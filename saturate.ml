@@ -168,34 +168,36 @@ let automaton2cte m =
                   qs
         in register_cte_ty (a, List.map (fun q->add_topty (arity_of a m) (ItyQ(Cfa.state2id q))) qs1)) (* register in cte functions [] -> ... -> [] -> q for all q in qs *)
      terminals
+*)
 
-let rec print_ity ity =
-  match ity with
-   ItyQ x -> print_string ("~"^(Cfa.id2state x))
- | ItyFun(_,ty,ity) ->
-     print_string "(";
-     print_ty ty;
-     print_string "->";
-     print_ity ity;
-     print_string ")"
-and print_ty ty =
+let rec print_ty (ty : ty) =
   match ty with
-    [] -> print_string "top"
-  | [ity] -> print_ity ity
-  | ity::ty' ->
-      print_ity ity;
-      print_string "^";
-      print_ty ty'
+  | PR -> print_string "pr"
+  | NP -> print_string "np"
+  | Fun(_, ity, ty) ->
+    print_string "(";
+    print_ity ity;
+    print_string "->";
+    print_ty ty;
+    print_string ")"
+and print_ity (ity : ity) =
+  match ity with
+  | [] -> print_string "top"
+  | [ty] -> print_ty ty
+  | ty::ity' ->
+    print_ty ty;
+    print_string "^";
+    print_ity ity'
 
-let print_tys tys =
-   Array.iter (fun ty-> print_ty ty; print_string " * ") tys
+let print_itys (itys : ity array) =
+   Array.iter (fun ity-> print_ity ity; print_string " * ") itys
 
-let print_itylist ty =
-  List.iter (fun ity ->
-      print_ity ity; print_string "\n") ty
+let print_itylist (ity : ity) =
+  List.iter (fun ty ->
+      print_ty ty; print_string "\n") ity
 
-let print_nte() =
-  print_string "types for nt:\n===========\n";
+let print_nt_tys() =
+  print_string "Types of nt:\n============\n";
   for nt=0 to (Array.length (!nt_tys))-1 do
     print_string ((Grammar.name_of_nt nt)^":\n");
     for q=0 to (Array.length (!nt_tys).(nt))-1 do
@@ -203,7 +205,7 @@ let print_nte() =
     done
   done
 
-
+(*
 let print_cte() =
   print_string "Constant types:\n=============\n";
   Hashtbl.iter
@@ -222,7 +224,7 @@ type tyseqref = tyseq ref
 let aterms_atys : (tyseqref array ref) = ref (Array.make 0 (ref TySeqNil))
 
 (** Typings of aterms, assigned in enqueue_var_*. *)
-let terms_tyss : ity list option array ref = ref (Array.make 0 (None))
+let terms_tyss : ity array list option array ref = ref (Array.make 0 (None))
 
 (*
 let rec tys2tyseq_singleton tys =
@@ -347,39 +349,45 @@ let rec tyseq_merge_tys tys tyseqref =
                 else (merged_vte_updated:= true;
                       tyseqref := TySeq([(ty2, tyseqref')]))
       )
+*)
 
-let rec tyseq2tyss tyseq len =
+let rec tyseq2tyss (tyseq : tyseq) (len : int) : ity array list =
   match tyseq with
-    TySeqNil -> [Array.make len []]
+  | TySeqNil -> [Array.make len []]
   | TySeq(tyseqlist) ->
-      List.fold_left
-       (fun tyss (ty,tyseqref) ->
-          let tyss1 = tyseq2tyss (!tyseqref) (len+1) in
-	  let _ = List.iter (fun tys -> tys.(len) <- ty) tyss1 in
-           List.rev_append tyss1 tyss)
-       [] tyseqlist
+    List.fold_left
+      (fun tyss (ty,tyseqref) ->
+         let tyss1 = tyseq2tyss (!tyseqref) (len+1) in
+	 let _ = List.iter (fun tys -> tys.(len) <- ty) tyss1 in
+         List.rev_append tyss1 tyss)
+      [] tyseqlist
 
-let lookup_aterms_atys id =
+let lookup_aterms_atys (id : Cfa.aterms_id) : ity array list =
   match (!terms_tyss).(id) with
-    Some(tyss) -> tyss
+  | Some(tyss) -> tyss
   | None ->
-      let tyss = tyseq2tyss(!((!aterms_atys).(id))) 0 in
-              (!terms_tyss).(id) <- Some(tyss); tyss
-
+    let tyss = tyseq2tyss(!((!aterms_atys).(id))) 0 in
+    (!terms_tyss).(id) <- Some(tyss);
+    tyss
 
 let print_aterms_atys() =
-  print_string "Types_of_terms:\n=========\n";
+  print_string "Types of aterms:\n================\n";
   for id=0 to (Array.length !aterms_atys)-1 do
-   if (!Cfa.termid_isarg).(id) then
-    let terms = Cfa.id2terms id in
-    List.iter (fun t-> print_term t; print_string ", ") terms;
-    print_string "\n";
-    let tyss = lookup_aterms_atys id in
-    List.iter (fun tys -> print_tys tys;
-      print_string "\n") tyss
-  else ()
- done
+    if (!Cfa.termid_isarg).(id) then
+      begin
+        print_int id;
+        print_string " (";
+        let terms = Cfa.id2terms id in
+        print_string (String.concat ", " (List.map string_of_term terms));
+        print_string "):\n";
+        let ityss = lookup_aterms_atys id in
+        List.iter (fun itys ->
+            print_itys itys;
+            print_string "\n") ityss
+      end
+  done
 
+(*
 (** Given equally long lists of types t and r it computes if t.(i) <= r.(i) for all i. *)
 let rec subtype_tys tys1 tys2 =
   match (tys1,tys2) with
@@ -1379,7 +1387,7 @@ let rec mk_worklist_var updated_nts =
 
 let report_yes() =
   (print_string "The property is satisfied.\n";
-   (if !Flags.certificate then (print_cte();print_nte()));
+   (if !Flags.certificate then (print_cte();print_nt_tys()));
    if !Flags.outputfile="" then ()
                   else let fp = open_out !Flags.outputfile in
                      (output_string fp ("SATISFIED\n") ; close_out fp))
@@ -1454,10 +1462,12 @@ let init_saturation() =
                                              with ones with largest id on top (the ones created
                                              last when following the first nonterminal) *)
   done;
-  (*
-  if !Flags.debugging then print_nte() else ();
-  if !Flags.debugging then print_aterms_atys() else ();
-*)
+  if !Flags.debugging then
+    begin
+      print_nt_tys();
+      print_string "\n";
+      print_aterms_atys()
+    end;
   ()
 
 let rec saturation_loop() : bool =
