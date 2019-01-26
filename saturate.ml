@@ -1538,6 +1538,8 @@ let rec saturation_loop() : bool =
 *)
   false
 
-let saturate() : unit =
+(** Performs saturation and returns whether the language is finite. *)
+let saturate() : bool =
   profile "initializing saturation" (fun () -> init_saturation());
-  profile "saturation" (fun () -> while saturation_loop() do () done)
+  profile "saturation" (fun () -> while saturation_loop() do () done);
+  true (* TODO *)

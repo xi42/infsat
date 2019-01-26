@@ -497,10 +497,13 @@ let process_node aterm =
 let rec expand() : unit =
   match dequeue_node() with
   | None ->
-    print_tab_id_terms();
-    print_string "\n";
-    print_binding_array();
-    print_string ("\nSize of abstract control flow graph: "^(string_of_int (ATermHashtbl.length nodetab))^"\n")
+    if !Flags.debugging then
+      begin
+        print_tab_id_terms();
+        print_string "\n";
+        print_binding_array();
+        print_string ("\nSize of abstract control flow graph: "^(string_of_int (ATermHashtbl.length nodetab))^"\n")
+      end
   | Some(aterm) ->
     process_node aterm;
     expand()

@@ -1,17 +1,25 @@
 open Main
+open OUnit2
 open Type
 
-open OUnit
+let examples_test : test =
+  let filenames_in_dir = Array.to_list (Sys.readdir "examples") in
+  let inf_filenames = List.filter (fun f ->
+      String.length f > 4 && String.sub f (String.length f - 4) 4 = ".inf") filenames_in_dir in
+  let (negative_filenames, positive_filenames) = List.partition (fun f ->
+      String.length f > 8 && String.sub f (String.length f - 8) 8 = "_neg.inf") inf_filenames in
+  let path filename = Some (String.concat "" ["examples/"; filename]) in
+  "Examples" >::: [
+    "Positive examples" >::: List.map (fun filename ->
+        filename >:: (fun _ ->
+            assert_equal (Main.parse_and_report_finiteness (path filename)) true))
+      positive_filenames;
+    "Negative examples" >::: List.map (fun filename ->
+        filename >:: (fun _ ->
+            assert_equal (Main.parse_and_report_finiteness (path filename)) false))
+      negative_filenames]
 
-let test_parsing = "Parsing" >:::
-                   [
-                     "a" >:: (fun () ->
-                         assert_equal 1 (1+0);
-                         assert_equal 2 2
-                       );
-
-                     "b" >:: (fun () -> ()
-                       )
-                   ]
-
-let _ = run_test_tt test_parsing
+let _ =
+  Flags.debugging := true;
+  Flags.verbose := true;
+  run_test_tt_main (test_list [examples_test])
