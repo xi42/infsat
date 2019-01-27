@@ -122,7 +122,7 @@ let parse_and_report_finiteness (filename : string option) : bool =
     )
   in
   if !Flags.debugging then
-    print_string ("Input:\n"^(string_of_input input)^"\n");
+    print_string ("Input:\n"^(string_of_input input));
   report_finiteness input
   
 let main() : unit =

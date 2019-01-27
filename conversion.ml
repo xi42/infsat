@@ -1,6 +1,11 @@
 open Grammar
 open Utilities
 
+type midhead = MVar of string | MA | MB | ME | MNT of string | MFun of string list * midterm
+and midterm = MApp of midhead * midterm list
+type midrule = string * string list * midterm
+type midrules = midrule list
+
 let nt_kinds = ref (Array.make 0 ("", O))
 let ntid = ref 0
 let new_nt() =
@@ -32,29 +37,34 @@ let register_new_rule f arity body =
 
 let rec depth_of_term term =
   match term with
-    T(_) -> 0
-  |NT(_) -> 0
-  | Var(_) -> 0
-  | App(t1,t2) -> max (depth_of_term t1) (depth_of_term t2+1)
+  | A | B | E | NT(_) | Var(_) -> 0
+  | App(t1, t2) -> max (depth_of_term t1) (depth_of_term t2 + 1)
 
 
 
-let rec pterm2term vmap pterm =
-(** distinguish between variables and terminal symbols **)
+let rec midterm2term vmap pterm =
   match pterm with
-    Syntax.PApp(h, pterms) ->
-     let h' = 
-       match h with
-       | Syntax.Name(s) -> (try Var(List.assoc s vmap) with Not_found -> T(s))
-       | Syntax.NT(s) -> NT(lookup_ntid s)
-       | Syntax.Fun(_, _) -> assert false
-     in
-     let terms = List.map (pterm2term vmap) pterms in
-     let terms' = if !(Flags.normalize) then
-                     List.map normalize_term terms
-                  else terms
-     in
-        mk_app h' terms'
+    MApp(h, pterms) ->
+    let h' = 
+      match h with
+      | MVar(s) ->
+        begin
+          try
+            Var(List.assoc s vmap)
+          with Not_found -> failwith ("Undefined variable "^s^" used")
+        end
+      | MNT(s) -> NT(lookup_ntid s)
+      | MFun(_, _) -> failwith "Expected no functions at this point"
+      | MA -> A
+      | MB -> B
+      | ME -> E
+    in
+    let terms = List.map (midterm2term vmap) pterms in
+    let terms' = if !(Flags.normalize) then
+        List.map normalize_term terms
+      else terms
+    in
+    mk_app h' terms'
 
 and normalize_term term =
   match term with
@@ -71,30 +81,28 @@ and normalize_term term =
         else term
   | _ -> term
 
-let dummy_vname = "dummy_var" 
+let dummy_vname = "dummy_var"
+let dummy_term = NT(0)
+let dummy_ntname = "DummyNT"
 
-let prerule2rule rules vinfo (f, (_, ss, pterm)) =
+let midrule2rule rules vinfo (f, (_, ss, pterm)) =
   let ss' = indexlist ss in
   let arity = List.length ss in
   let vmap = List.map (fun (i,v) -> (v, (f,i))) ss' in (* [(arg name, (nonterm ix, arg ix)) *)
   let _ = vinfo.(f) <- Array.make arity dummy_vname in
   let _ = List.iter (fun (i,v) -> (vinfo.(f).(i) <- v)) ss' in (* vinfo[nonterm id][arg ix] = arg name *)
-  let term = pterm2term vmap pterm in
+  let term = midterm2term vmap pterm in
   rules.(f) <- (arity, term) (* F x_1 .. x_n = t => rules[F] = (n, potentially normalized term with names changed either to var or to terminal) *)
 
-let prerules2rules rules vinfo prerules =
-  let prerules_indexed = indexlist prerules in
-  List.iter (prerule2rule rules vinfo) prerules_indexed
+let midrules2rules rules vinfo (midrules : midrules) =
+  let midrules_indexed = indexlist midrules in
+  List.iter (midrule2rule rules vinfo) midrules_indexed
 
-
-
-let dummy_term = NT(0)
-let dummy_ntname = "DummyNT"
 
 let add_auxiliary_rules nt_kinds rules =
   let num_of_nts = !ntauxid in
   let nt_kinds' = Array.make num_of_nts ("",O) in
-  let rules' = Array.make num_of_nts (0,dummy_term) in
+  let rules' = Array.make num_of_nts (0, dummy_term) in
    for i=0 to Array.length rules -1 do
       nt_kinds'.(i) <- nt_kinds.(i);
       rules'.(i) <- rules.(i)
@@ -106,60 +114,57 @@ let add_auxiliary_rules nt_kinds rules =
       !aux_rules;
    (nt_kinds', rules')
 
-let rec elim_fun_from_preterm vl preterm newrules =
-  let Syntax.PApp(h, pterms) = preterm in
-  let (pterms',newrules') = elim_fun_from_preterms vl pterms newrules in
-  let (Syntax.PApp(h',pterms''), newrules'') =
+let rec elim_fun_from_midterm vl (term : midterm) newrules : midterm * midrules =
+  let MApp(h, pterms) = term in
+  let (pterms',newrules') = elim_fun_from_midterms vl pterms newrules in
+  let (MApp(h',pterms''), newrules'') =
          elim_fun_from_head vl h newrules' in
-     (Syntax.PApp(h', pterms''@pterms'), newrules'')
-and elim_fun_from_preterms vl preterms newrules =
-  match preterms with
-    [] -> ([], newrules)
+     (MApp(h', pterms''@pterms'), newrules'')
+and elim_fun_from_midterms vl (terms : midterm list) newrules =
+  match terms with
+  | [] -> ([], newrules)
   | pterm::pterms ->
-      let (pterms',newrules') = elim_fun_from_preterms vl pterms newrules in
-      let (pterm', newrules'') = elim_fun_from_preterm vl pterm newrules' in
+      let (pterms',newrules') = elim_fun_from_midterms vl pterms newrules in
+      let (pterm', newrules'') = elim_fun_from_midterm vl pterm newrules' in
          (pterm'::pterms', newrules'')
-and elim_fun_from_head vl h newrules =
+and elim_fun_from_head vl (h : midhead) newrules : midterm * midrules =
   match h with
-    Syntax.Name(s) -> (Syntax.PApp(Syntax.Name(s),[]), newrules)
-  | Syntax.NT(s) -> (Syntax.PApp(Syntax.NT(s),[]), newrules)
-  | Syntax.Fun(vl1,pterm) ->
+  | MVar(_) | MNT(_) | MA | MB | ME -> (MApp(h, []), newrules)
+  | MFun(vl1, pterm) ->
        let vl' = vl@vl1 in (* what if names in vl and vl1 clashe? *)
-       let (pterm',newrules') = elim_fun_from_preterm vl' pterm newrules in
+       let (pterm',newrules') = elim_fun_from_midterm vl' pterm newrules in
        let f = Syntax.new_ntname() in
-       let pterms1 = List.map (fun v -> Syntax.PApp(Syntax.Name(v), [])) vl in
-         (Syntax.PApp(Syntax.NT(f), pterms1), (f, vl', pterm')::newrules')
+       let terms1 = List.map (fun v -> MApp(MVar(v), [])) vl in
+       (MApp(MNT(f), terms1), (f, vl', pterm')::newrules')
 
-let elim_fun_from_prerule prerule newrules =
-  let (f, vl, preterm) = prerule in
-  let (preterm', newrules')= elim_fun_from_preterm vl preterm newrules in
-    ((f,vl,preterm'), newrules')
+let elim_fun_from_midrule (rule : midrule) newrules : midrule * midrules =
+  let (f, vl, term) = rule in
+  let (term', newrules') = elim_fun_from_midterm vl term newrules in
+  ((f, vl, term'), newrules')
 
 (** Removes lambdas from bodies of nonterminals. *)
-let elim_fun_from_prerules prerules =
- let (prerules', newrules) =
-  ( List.fold_left
-   (fun (prerules',newrules) prerule ->
-      let (prerule',newrules')=
-          elim_fun_from_prerule prerule newrules
-      in (prerule'::prerules', newrules'))
-   ([], [])
-   prerules)
- in List.rev_append prerules' newrules
+let elim_fun_from_midrules (rules : midrules) : midrules =
+  let (rules', newrules) =
+    List.fold_left
+      (fun (rules', newrules) rule ->
+         let (rule', newrules') =
+           elim_fun_from_midrule rule newrules
+         in (rule'::rules', newrules'))
+      ([], [])
+      rules
+  in
+  List.rev_append rules' newrules
 
 module SS = Set.Make(String)
 
-type abc_atom = AVar of string | ANT of string | A | B | C
-type abc_prerule = AApp of abc_atom * abc_prerule list
-
-let b_tree k counted arg_preterms =
+let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
   let rec b_tree_aux from_arg to_arg =
     if from_arg = to_arg then
-      Syntax.PApp(Syntax.Name("_"^(string_of_int from_arg)), [])
+      MApp(MVar("_"^(string_of_int from_arg)), [])
     else
       let mid_arg = (from_arg + to_arg) / 2 in
       let args = [b_tree_aux from_arg mid_arg; b_tree_aux (mid_arg + 1) to_arg] in
-      Syntax.PApp(Syntax.Name("_b"), args)
+      MApp(MB, args)
   in
   let rec vars k acc =
     if k = 0 then
@@ -170,21 +175,21 @@ let b_tree k counted arg_preterms =
   let (body, wrap_fun) =
     if k = 0 then
       (* converted terminal with no children as _e *)
-      (Syntax.PApp(Syntax.Name("_e"), []), false)
-    else if k = 1 && List.length arg_preterms = 1 then
+      (MApp(ME, []), false)
+    else if k = 1 && List.length arg_terms = 1 then
       (* removing identities *)
-      (List.hd arg_preterms, false)
+      (List.hd arg_terms, false)
     else
       (b_tree_aux 1 k, true)
   in
   (* adding _a above counted ones *)
   let body' = if counted then
-      Syntax.PApp(Syntax.Name("_a"), [body])
+      MApp(MA, [body])
     else 
       body
   in
   if wrap_fun then
-    Syntax.PApp(Syntax.Fun(vars k [], body'), arg_preterms)
+    MApp(MFun(vars k [], body'), arg_terms)
   else
     body
 
@@ -193,7 +198,8 @@ let b_tree k counted arg_preterms =
     terminals of arity k with a lambda-term with _b-tree (with branches) with all k arguments of
     height log2(k)+1. If k=0, the terminal is replaced with _e instead. If the terminal is
     counted, _a is added above that tree. *)
-let terminals2abc prerules preterminals =
+let prerules2midrules (prerules : Syntax.prerules)
+    (preterminals : Syntax.preterminals) : midrules =
   (* hashmap for fast access, also checking for conflicts *)
   let preterminals_map = Hashtbl.create 1000 in
   List.iter (fun t -> match t with
@@ -204,29 +210,19 @@ let terminals2abc prerules preterminals =
           failwith ("Terminal br is reserved for nondeterministic choice")
         else
           Hashtbl.add preterminals_map name (arity, counted)) preterminals;
-  let terminals2abc_prerule (nt, args_list, preterm) =
-    (* set for fast access, also checking for conflicts *)
-    let args = List.fold_left (fun acc arg ->
-        if SS.mem arg acc then
-          failwith ("Variable "^arg^" defined twice in nonterminal "^nt)
-        else if Hashtbl.mem preterminals_map arg || arg = "br" then
-          failwith ("Variable "^arg^" in nonterminal "^nt^" conflicts with a terminal with "^
-                    "the same name")
-        else
-          SS.add arg acc) SS.empty args_list
-    in
-    let rec terminals2abc_preterm args preterm =
+  let prerule2midrule (nt, args_list, preterm) : midrule =
+    let rec preterm2midterm (vars : SS.t) (preterm : Syntax.preterm) : midterm =
       match preterm with
       | Syntax.PApp(head, a) ->
-        let arg_preterms = List.map (terminals2abc_preterm args) a in
+        let arg_preterms = List.map (preterm2midterm vars) a in
         match head with
         | Syntax.Name(name) ->
-          if SS.mem name args then
-            (* leaving variables and br as they were *)
-            Syntax.PApp(head, arg_preterms)
+          if SS.mem name vars then
+            (* converting variables *)
+            MApp(MVar(name), arg_preterms)
           else if name = "br" then
             (* converting br *)
-            Syntax.PApp(Syntax.Name("_b"), arg_preterms)
+            MApp(MB, arg_preterms)
           else
             (* converting terminals *)
             (try
@@ -239,8 +235,8 @@ let terminals2abc prerules preterminals =
                failwith ("Unbounded name "^name^" in the body of nonterminal "^nt)
             )
         (* leaving nonterminals as they were *)
-        | Syntax.NT(_) -> Syntax.PApp(head, arg_preterms)
-        | Syntax.Fun(vars, preterm) ->
+        | Syntax.NT(name) -> MApp(MNT(name), arg_preterms)
+        | Syntax.Fun(fvars, preterm) ->
           let fun_args = List.fold_left (fun acc arg ->
               if SS.mem arg acc then
                 failwith ("Variable "^arg^" defined twice in function in nonterminal "^nt)
@@ -248,42 +244,56 @@ let terminals2abc prerules preterminals =
                 failwith ("Variable "^arg^" in function in nonterminal "^nt^" conflicts with a "^
                           "terminal with the same name")
               else
-                SS.add arg acc) SS.empty vars
+                SS.add arg acc) SS.empty fvars
           in
-          Syntax.PApp(Syntax.Fun(vars, terminals2abc_preterm (SS.union args fun_args) preterm),
+          MApp(MFun(fvars, preterm2midterm (SS.union vars fun_args) preterm),
                       arg_preterms)
     in
-    (nt, args_list, terminals2abc_preterm args preterm)
+    (* set for fast access, also checking for conflicts *)
+    let args = List.fold_left (fun acc arg ->
+        if SS.mem arg acc then
+          failwith ("Variable "^arg^" defined twice in nonterminal "^nt)
+        else if Hashtbl.mem preterminals_map arg || arg = "br" then
+          failwith ("Variable "^arg^" in nonterminal "^nt^" conflicts with a terminal with "^
+                    "the same name")
+        else
+          SS.add arg acc) SS.empty args_list
+    in
+    (nt, args_list, preterm2midterm args preterm)
   in
-  List.map terminals2abc_prerule prerules
+  List.map prerule2midrule prerules
 
 (** Converts parsed rules into rules with better semantics.
-    Distinguishes between variables and terminals. Adds additional arguments so that body of a
-    rule has kind O. TODO complete docs. *)
-let prerules2gram (prerules, preterminals) : unit =
-  let prerules = terminals2abc prerules preterminals in
+    Distinguishes between variables and terminals. Eliminates lambdas from inside of nonterminal
+    bodies by replacing them with fresh nonterminals.
+    Prerules are rules with terminals as strings. Midrules are rules with terminals converted to
+    a, b, or e. Rules are rules in the final form. *)
+let prerules2gram ((prerules, preterminals) : Syntax.prerules * Syntax.preterminals) : unit =
+  let midrules : midrules = prerules2midrules prerules preterminals in
+  (*
   if !Flags.debugging then
-    print_string ("Input after converting terminals:\n"^(Syntax.string_of_prerules prerules)^"\n");
-  let prerules = elim_fun_from_prerules prerules in
-  let nt_names = List.map (fun (x,_,_) -> x) prerules in
+    print_string ("Input after converting terminals:\n"^(string_of_midrules midrules)^"\n");
+  *)
+  let midrules = elim_fun_from_midrules midrules in
+  let nt_names = List.map (fun (x, _, _) -> x) midrules in
   let num_of_nts = List.length nt_names in
-  let _ = (ntauxid := num_of_nts) in
+  ntauxid := num_of_nts;
   (* map nt id -> nt name, nt kind *)
-  let _ = nt_kinds := Array.make num_of_nts (dummy_ntname, O) in
+  nt_kinds := Array.make num_of_nts (dummy_ntname, O);
   (* assigning a unique number to each nonterminal *)
-  let _ = List.iter register_nt nt_names in
+  List.iter register_nt nt_names;
   (* map nt id -> arity, term *)
   let rules = Array.make num_of_nts (0,dummy_term) in
   let vinfo = Array.make num_of_nts [| |] in
-  let _ = prerules2rules rules vinfo prerules in
+  midrules2rules rules vinfo midrules;
   let (nt', rules') = 
     if !(Flags.normalize) then
       add_auxiliary_rules !nt_kinds rules
-    else (!nt_kinds, rules)
+    else
+      (!nt_kinds, rules)
   in
   let s = 0 in
-  let terminals = List.map (fun a -> (a, -1)) (terminals_in_rules rules) in
-  let g = {nt= nt'; t=terminals; vinfo = vinfo; r=rules'; s=s} in
+  let g = {nt=nt'; vinfo=vinfo; r=rules'; s=s} in
   (* saving grammar in a global variable *)
   Grammar.gram := g;
   if !Flags.debugging then

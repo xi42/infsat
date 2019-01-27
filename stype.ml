@@ -138,15 +138,7 @@ let print_nste nste =
   let _ = print_string "\n" in
   ()
 
-let print_cste cste =
-  let _ = print_string "Sorts of terminals:\n" in
-  let _ = print_string "===================\n" in
-  let _ = List.map print_sortbinding cste in
-  let _ = print_string "\n" in
-  ()
-
 let lookup_stype_nt f nste = nste.(f)
-let lookup_stype_t a cste = List.assoc a cste
 let lookup_stype_var v vste = let (_,i) = v in vste.(i)
 
 (** Produce a type of a term and type variables (unnamed) to unify later.
@@ -155,17 +147,19 @@ let lookup_stype_var v vste = let (_,i) = v in vste.(i)
     All type variables are anonymous, i.e., don't point at anything, however,
     actual pointers are preserved (ocaml objects' addresses), so tvar's physical
     address effectively becomes its id. *)
-let rec tcheck_term t vte cte nte =
+let rec tcheck_term t vte nte =
   match t with
-    NT(f) -> (lookup_stype_nt f nte, [])
-  | T(a) -> (lookup_stype_t a cte, [])
+  | NT(f) -> (lookup_stype_nt f nte, [])
+  | A -> (arity2sty 1, [])
+  | B -> (arity2sty 2, [])
+  | E -> (arity2sty 0, [])
   | Var(v) -> (lookup_stype_var v vte, [])
   | App(t1,t2) ->
-       let (sty1, c1) = tcheck_term t1 vte cte nte in
-       let (sty2, c2) = tcheck_term t2 vte cte nte in
+       let (sty1, c1) = tcheck_term t1 vte nte in
+       let (sty2, c2) = tcheck_term t2 vte nte in
        let sty3 = new_tvar() in
-       let sty4 = STfun(sty2,sty3) in
-          (sty3, (sty1,sty4)::(c2@c1))
+       let sty4 = STfun(sty2, sty3) in
+       (sty3, (sty1, sty4) :: (c2 @ c1))
 
 let rec mk_functy stys sty =
   match stys with
@@ -173,22 +167,22 @@ let rec mk_functy stys sty =
   | sty1::stys' ->
        STfun(sty1, mk_functy stys' sty)
 
-let tcheck_rule f (arity, body) cste nste =
+let tcheck_rule f (arity, body) nste =
   let vste = Array.make arity dummy_type in
   let _ = for i=0 to arity-1 do
       vste.(i) <- new_tvar()
     done
   in (* type var for each rule *)
-  let (sty,c1) = tcheck_term body vste cste nste in
+  let (sty,c1) = tcheck_term body vste nste in
   let fty1 = mk_functy (Array.to_list vste) sty (* STbase*) in
   let fty2 = lookup_stype_nt f nste in
   (*    (sty,STbase):: *) (* add this if we wish to enforce the righthand side has ground type *)
   (fty1,fty2)::c1
 
-let tcheck_rules rules cste nste =
+let tcheck_rules rules nste =
   let cstr = ref [] in
   for i=0 to Array.length rules - 1 do 
-    (cstr := (tcheck_rule i rules.(i) cste nste)@ !cstr)
+    (cstr := (tcheck_rule i rules.(i) nste)@ !cstr)
   done;
   !cstr
 
@@ -229,8 +223,6 @@ let update_arity_of_nt g nste =
     else ()
   done
 
-let cste = [("_a", arity2sty 1);("_b", arity2sty 2);("_e", arity2sty 0)]
-
 let eta_expand() =
   (* creating a new type var for each nonterminal *)
   let g = !Grammar.gram in
@@ -240,11 +232,10 @@ let eta_expand() =
       nste.(i) <- new_tvar()
     done 
   in
-  let _ = if !Flags.debugging then print_cste cste in
   let _ = if !Flags.debugging then print_nste nste in
   (* creating equations for unification *)
   let rules = g.r in
-  let c = tcheck_rules rules cste nste in
+  let c = tcheck_rules rules nste in
   (* computing sorts by unification *)
   let _ =  try
       unify_all c 

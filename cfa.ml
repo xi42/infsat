@@ -10,7 +10,7 @@ open Utilities
     have a unique identifier assigned to them. *)
 type aterms_id = int
 (** Head of a term in head form. *)
-type head = Hnt of nameNT | Hvar of nameV | Ht of nameT
+type head = HNT of nameNT | HVar of nameV | HA | HB | HE
 (** Aterm is a term in head form. It consists of a head and identifiers of sequences of aterms
     that are its arguments. If aterm is (h, [a1;..;aK]) and aX represents a sequence of terms
     [tX1;..;tXl] for some l then the whole aterm represents an application
@@ -312,7 +312,7 @@ let expand_varheadnode term (node: node ref) =
   let aterm = !node in
   let (h,termss) = aterm in
     match h with
-    | Hvar(x) ->
+    | HVar(x) ->
       let (h',terms)=term in
       enqueue_node (h', terms@termss)
     | _ -> assert false
@@ -397,15 +397,17 @@ let size_of_rules r =
 
 let term2head h =
   match h with
-  | Var(x) -> Hvar(x)
-  | NT(f) -> Hnt(f)
-  | T(a) -> Ht(a)
+  | Var(x) -> HVar(x)
+  | NT(f) -> HNT(f)
+  | A -> HA
+  | B -> HB
+  | E -> HE
   | _ -> assert false
   
 let vars_in_aterm ((h, ids) : aterm) : nameV list =
   let vs1 =
     match h with
-    | Hvar(x) -> [x]
+    | HVar(x) -> [x]
     | _ -> []
   in
   List.fold_left (fun vs id -> merge_and_unify compare vs (id2vars id)) vs1 ids
@@ -437,7 +439,7 @@ let init_tab_id_terms g =
   let size = size_of_rules g.r in
   tab_id_terms := Array.make size ([],[],[]); (* for each a-term, i.e., @ x t, where x is not an application *)
   termid_isarg := Array.make size false;
-  let dummy_aterm : aterm = (Hnt(-1), []) in
+  let dummy_aterm : aterm = (HNT(-1), []) in
   normalized_body := Array.make (Array.length g.r) dummy_aterm; (* convert each rule to a normalized form and store in this global array along with its arity (this is ref) *)
   for f=0 to Array.length g.r - 1 do
     let (arity,body)=Grammar.lookup_rule f in
@@ -460,7 +462,7 @@ let init_expansion() =
   for i=0 to num_of_nts-1 do
     (!variable_head_nodes).(i) <- Array.make (arity_of_nt i) [] (* variable_head_nodes[nt_id][arg_id] = [] *)
   done;
-  enqueue_node (Hnt(0), []) (* enqueue first nonterminal with no args and first state *)
+  enqueue_node (HNT(0), []) (* enqueue first nonterminal with no args and first state *)
 
 (** Processing aterms. *)
 let process_node aterm = 
@@ -473,18 +475,18 @@ let process_node aterm =
     let node = register_newnode aterm in
     (* expanding the calls to see what aterms go in what variables *)
     match h with
-    | Ht(_) ->
+    | HA | HB | HE ->
       (* decoding arguments as aterm ids into aterms *)
       let (_, termss) = decompose_aterm aterm in
       (* ignore the terminal and go deeper *)
       expand_terminal termss
-    | Hvar(x) ->
+    | HVar(x) ->
       (* check what aterms flow into x (these can also be variables) *)
       let x_aterms = lookup_binding_var x in
       (* substitute these aterms into x and enqueue resulting application *)
       List.iter (fun (h, x_args) -> enqueue_node (h, x_args@h_args)) x_aterms;
       register_variable_head_node x node
-    | Hnt(f) ->
+    | HNT(f) ->
       (* Remember in binding_array_nt that there was an application f h_args. Also remember
          that h_args were being used as an argument to a nonterminal in termid_isarg. *)
       register_binding f h_args;
@@ -728,21 +730,20 @@ let merge_nts_lin (nts1,nts2) (nts3,nts4) =
     nonterminals on the right. *)
 let rec nt_in_term_with_linearity term =
   match term with
-  | Var(_) -> ([], [])
-  | T(_) ->  ([], [])
+  | Var(_) | A | B | E -> ([], [])
   | NT(f) -> ([f], [])
-  | App(_,_) ->
+  | App(_, _) ->
     let (h,terms) = Grammar.decompose_term term in
     match h with
     | NT(f) -> let nts = nt_in_terms terms in
       if List.mem f nts then ([],nts) (* if head nt used twice *)
       else ([f],nts) (* if head nt used once *)
     | Var(_) -> ([], nt_in_terms terms)
-    | T(a) ->
+    | A | B | E ->
       (* c has no children. a has a single child, so it is linear. b has two children, but only
          one at a time is used. Even if we do b (N ..) (N ..) that yield different types, only
          one N is used as long as there is no other N present. Therefore, b is also linear. *)
-      nt_in_terms_with_linearity terms 0 ([],[])
+      nt_in_terms_with_linearity terms 0 ([], [])
     | _ -> assert false
     
 and nt_in_terms_with_linearity terms i (nts1,nts2) =
@@ -771,15 +772,15 @@ let mk_binding_depgraph() =
   for id'=0 to !next_aterms_id - 1 do (* for each aterm *)
    let id = !next_aterms_id - 1 -id' in
    if (!termid_isarg).(id) then (* that had something applied to it *)
-     let (_,terms,vars) = (!tab_id_terms).(id) in (* and is in applicative form list of terms,
+     let (_, terms, vars) = (!tab_id_terms).(id) in (* and is in applicative form list of terms,
                                                      and has variables vars *)
      let nts = nt_in_terms terms in (* list of used nonterminals *)
      List.iter (fun nt -> register_dep_nt_termid nt id) nts
    else ()
   done;
-  for id=0 to !next_aterms_id - 1 do
+  for id = 0 to !next_aterms_id - 1 do
    if (!termid_isarg).(id) then
-     let (_,_,vars) = (!tab_id_terms).(id) in (* for each term with given id that was an argument
+     let (_, _, vars) = (!tab_id_terms).(id) in (* for each term with given id that was an argument
                                                  to a nonterminal and had free variables vars *)
      mk_binding_depgraph_for_terms id vars
    else ()
@@ -790,7 +791,7 @@ let mk_binding_depgraph() =
   let g = !(Grammar.gram) in
   let n = Array.length g.nt in
     for i=0 to n-1 do
-      let (_,t) = Grammar.lookup_rule i in
+      let (_, t) = Grammar.lookup_rule i in
       let (nts1,nts2) = nt_in_term_with_linearity t in
         List.iter (fun nt-> register_dep_nt_nt nt i) nts2;
         (if !Flags.incremental then
@@ -798,7 +799,9 @@ let mk_binding_depgraph() =
          else 
             List.iter (fun nt-> register_dep_nt_nt nt i) nts1)
     done;
-  if !Flags.debugging then
-   (print_tab_binding_env();
-    print_dep_nt_nt_lin())
-  else ()
+    if !Flags.debugging then
+      begin
+        print_tab_binding_env();
+        print_string "\n";
+        print_dep_nt_nt_lin()
+      end

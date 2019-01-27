@@ -21,17 +21,17 @@ top: $(SOURCE)
 test: $(SOURCE) test.ml
 	ocamlfind ocamlc -o test -package oUnit -linkpkg -g $^
 
-.SUFFIXES:
-	.ml .cmo .mli .cmi
-
-.PHONY:
-	all clean
-
 TAGS: $(SOURCE)
 	ctags -e $(SOURCE)
 
 doc: $(SOURCE)
 	ocamldoc -html -d doc $(SOURCE)
+
+.SUFFIXES:
+	.ml .cmo .mli .cmi
+
+.PHONY:
+	all clean
 
 clean:
 	rm -f *.cmi *.cmx *.o *.cmo *.exe infsat top infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat-debug test oUnit-*

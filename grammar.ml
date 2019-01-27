@@ -5,7 +5,7 @@ exception Fatal of string
 type nameNT = int (** names of non-terminal symbols; they are just integers **)
 type nameT = string  (** names of terminal symbols **)
 type nameV = nameNT * int (* pair of the non-terminal and the variable index *)
-type term = NT of nameNT | T of nameT | Var of nameV | App of term * term
+type term = NT of nameNT | A | B | E | Var of nameV | App of term * term
 type kind = O | Kfun of kind * kind
 
 type nonterminals = (string * kind) array 
@@ -16,10 +16,11 @@ type terminals = (nameT * int) list  (* -1 if the arity is unknown *)
 type rule = (int * term)  (* int: the number of formal parameters *)
 type rules = rule array 
 
-type gram = {nt: nonterminals; t: terminals; vinfo: varinfo; r: rules; s: nameNT}
-let empty_grammar = {nt=[||];t=[];vinfo=[||]; r=[||];s=0}
+type gram = {nt: nonterminals; vinfo: varinfo; r: rules; s: nameNT}
 
-let gram = ref empty_grammar (* stored here once the grammar has been read  *)
+let empty_grammar : gram= {nt=[||]; vinfo=[||]; r=[||]; s=0}
+
+let gram : gram ref = ref empty_grammar (* stored here once the grammar has been read  *)
 
 exception UndefinedNonterminal of string
 exception DuplicatedNonterminal of string
@@ -37,9 +38,9 @@ let nt_count() = Array.length (!gram.r)
 (** change normal tree with app nodes to tree with (head, list-of-arg-terms) nodes *)
 let rec decompose_term t =
   match t with
-  | (NT(_)|T(_)|Var(_)) -> (t, [])
-  | App(t1,t2) ->
-    let (h,ts)=decompose_term t1 in (h,ts@[t2])
+  | NT(_) | A | B | E | Var(_) -> (t, [])
+  | App(t1, t2) ->
+    let (h,ts)=decompose_term t1 in (h, ts @ [t2])
 
 let head term =
   let (h,_) = decompose_term term in h
@@ -57,14 +58,12 @@ let rec mk_app h terms =
 let rec occur_nt_in_term nt term =
   match term with
   | NT(f) -> nt=f
-  | T(_) -> false
-  | Var(_) -> false
+  | A | B | E | Var(_) -> false
   | App(t1,t2) -> (occur_nt_in_term nt t1) ||(occur_nt_in_term nt t2)
 
 let rec vars_in_term term = 
   match term with
-  | NT _ -> []
-  | T _ -> []
+  | NT(_) | A | B | E -> []
   | Var(v) -> [v]
   | App(t1,t2) ->
      merge_and_unify compare (vars_in_term t1)  (vars_in_term t2) 
@@ -78,19 +77,17 @@ let rec vars_in_terms terms =
     a terminal and are applied to something. *)
 let rec headvars_in_term (term : term) : nameV list =
   match term with
-  | NT _ -> []
-  | T _ -> []
+  | NT(_) | A | B | E -> []
   | Var(_) -> []
   | App(Var(x), t2) -> merge_and_unify compare [x] (headvars_in_term t2)
-  | App(t1,t2) -> merge_and_unify compare (headvars_in_term t1)
-                    (headvars_in_term t2)
+  | App(t1, t2) -> merge_and_unify compare (headvars_in_term t1)
+                     (headvars_in_term t2)
 
 (** List of nonterminals used in term. *)
 let rec nt_in_term term = 
   match term with
   | NT(x) -> [x]
-  | T _ -> []
-  | Var _ -> []
+  | A | B | E | Var(_) -> []
   | App(t1,t2) ->
      merge_and_unify compare (nt_in_term t1)  (nt_in_term t2) 
 
@@ -103,20 +100,6 @@ let rec nt_in_rules rules =
   |r::rules' ->
     merge_and_unify compare (nt_in_rule r) (nt_in_rules rules')
 
-let rec terminals_in_term term =
-  match term with
-  | NT(_) -> []
-  | T a -> [a]
-  | Var _ -> []
-  | App(t1,t2) ->
-     merge_and_unify compare (terminals_in_term t1)  (terminals_in_term t2) 
-  
-let rec terminals_in_rules rules =
-  Array.fold_left 
-  (fun terminals (_,body) ->
-          merge_and_unify compare (terminals_in_term body) terminals)
-  [] rules
-
 let rec mk_depend g =
   let n = Array.length g.nt in
   let deptab = Array.make n [] in
@@ -125,7 +108,12 @@ let rec mk_depend g =
    done;
    deptab
 
-let arity_of_t a = List.assoc a (!gram).t
+let arity_of_t (a : term) : int =
+  match a with
+  | A -> 1
+  | B -> 2
+  | E -> 0
+  | _ -> failwith "Expected a terminal"
 
 let arity_of_nt f =
   let (arity,_) = (!gram).r.(f) in arity
@@ -145,7 +133,9 @@ let name_of_var x =
 let rec string_of_term term =
   match term with
   | NT(f) -> name_of_nt f
-  | T(a) -> a
+  | A -> "a"
+  | B -> "b"
+  | E -> "e"
   | Var(x) -> name_of_var x
   | App(t1,t2) -> "("^(string_of_term t1)^" "^(string_of_term t2)^")"
 
@@ -154,21 +144,26 @@ let print_term term =
 
 let rec subst_term s term =
   match term with
-  | (T(_)|NT(_)) -> term
+  | A | B | E |NT(_) -> term
   | Var(x) ->
-     ( try 
+    begin
+      try 
         List.assoc x s
-      with Not_found -> term)
+      with Not_found -> term
+    end
   | App(t1,t2) -> App(subst_term s t1, subst_term s t2)
 
 let rec subst_nt_in_term s term =
   match term with
-  | (Var(_)|T(_)) -> term
+  | Var(_) | A | B | E -> term
   | NT(x) ->
-     ( try 
+    begin
+      try 
         List.assoc x s
-      with Not_found -> term)
-  | App(t1,t2) -> App(subst_nt_in_term s t1, subst_nt_in_term s t2)
+      with Not_found -> term
+    end
+| App(t1,t2) -> App(subst_nt_in_term s t1, subst_nt_in_term s t2)
+    
 
 let print_gram g =
   let n = Array.length g.r in
@@ -188,11 +183,11 @@ let rec arity2kind k =
    
 let rec size_of_term t =
   match t with
-  | (NT _ | T _ | Var _) -> 1
+  | NT(_) | A | B | E | Var(_) -> 1
   | App(t1, t2) -> (size_of_term t1) + (size_of_term t2)
 
 let rec size_of_rule r = 
-  let (_,t) =  r in size_of_term t
+  let (_, t) =  r in size_of_term t
       
 let rec size_of g =
    Array.fold_left (fun n -> fun r -> n+(size_of_rule r)) 0 g.r
@@ -206,4 +201,4 @@ let report_grammar g =
   let s = size_of g in
   print_gram g;  
   print_string ("\nThe number of rewrite rules: "^(string_of_int r)^"\n"^
-                "The size of recursion scheme: "^(string_of_int s)^"\n\n")
+                "The size of recursion scheme: "^(string_of_int s)^"\n")
