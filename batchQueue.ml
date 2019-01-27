@@ -20,3 +20,5 @@ let dequeue ((firsts, seconds) : 'a t) : int * 'a list =
     seconds.(first) <- [];
     (first, sec)
 
+let size ((firsts, seconds) : 'a t) : int =
+  List.length !firsts

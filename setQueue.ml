@@ -54,3 +54,6 @@ let rec iter f queue =
     let x = dequeue queue in
     f(x); iter f queue
   with Empty -> ()
+
+let size ((qref, bitmap) : t) : int =
+  List.length !qref

@@ -1425,6 +1425,24 @@ and saturate_vartypes_wo_overwrite() : unit =
     saturate_vartypes_wo_overwrite()
 *)
 
+let print_queue_sizes() =
+  if !Flags.debugging then
+    begin
+      print_string "Queue sizes:\nworklist_var_ty ";
+      print_int (TwoLayerQueue.size !worklist_var_ty);
+      print_string "\nupdated_nt_ty ";
+      print_int (BatchQueue.size !updated_nt_ty);
+      print_string "\nupdated_nts ";
+      print_int (SetQueue.size !updated_nts);
+      print_string "\nworklist_nt_binding ";
+      print_int (TwoLayerQueue.size !worklist_nt_binding);
+      print_string "\nworklist_nt ";
+      print_int (SetQueue.size !worklist_nt);
+      print_string "\nworklist_var ";
+      print_int (SetQueue.size !worklist_var);
+      print_string "\n\n"
+    end
+
 let init_saturation() =
   (* size of structures will be dependent on number of aterms or nonterminals *)
   let aterms_count = Cfa.aterms_count() in
@@ -1453,10 +1471,10 @@ let init_saturation() =
      terms registered to be flowing into its variables, so it will not be updated later. *)
   worklist_nt :=
     SetQueue.make_fromlist nt_count
-      (List.filter (fun f-> arity_of_nt f=0 || has_noheadvar f)
+      (List.filter (fun f-> arity_of_nt f = 0 || has_noheadvar f)
          (Utilities.fromto 0 nt_count));
   (* worklist_var is initialized with all aterms that are arguments to a nonterminal. *)
-  for id=0 to aterms_count - 1 do 
+  for id = 0 to aterms_count - 1 do 
     if (!Cfa.termid_isarg).(id) then
       SetQueue.enqueue !worklist_var id (* enqueue all aterms that are arguments to nonterminals
                                              with ones with largest id on top (the ones created
@@ -1471,72 +1489,82 @@ let init_saturation() =
   ()
 
 let rec saturation_loop() : bool =
-  (*
-  let proceed = ref false in
-  (
+  let proceed = ref true in
+  print_queue_sizes();
+  begin
     try (* trying to dequeue an aterm : tys (that we have a sequence of asX : tyX) *)
       (* this generally propagates types forward *)
-     let (id,tys) = dequeue_var_ty() in (* dequeue from worklist_var_ty *)
-(*   match dequeue_var_ty() with
-    Some(id,tys) -> 
-*)
-    let _ = if !Flags.debugging then Utilities.debug ("propagating type of id "^(string_of_int id)^" incrementally\n") in
-     let ids = Cfa.lookup_dep_id id in (* ids of aterms that dequeued aterm was applied to
+      let (id,tys) = TwoLayerQueue.dequeue !worklist_var_ty in (* dequeue from worklist_var_ty *)
+      let _ = if !Flags.debugging then Utilities.debug ("propagating type of id "^(string_of_int id)^" incrementally\n") in
+    (*
+    let ids = Cfa.lookup_dep_id id in (* ids of aterms that dequeued aterm was applied to
                                          substituting one or more variables inside (propagating
                                          types forward) *)
-     (* update type of id1 in envs where there is id, forced to id : tys *)
-      List.iter (fun id1 -> update_incremental_ty_of_id id1 (id,tys) true) ids;
-      let bindings = Cfa.lookup_dep_termid_nt id in (* nonterminals and their bindings that were
-                                                      applied to the aterm id *)
-      List.iter (fun binding -> update_incremental_ty_of_nt binding (id,tys)) bindings
-(*  | None -> *)
-    with WorklistVarTyEmpty ->
-   try (* trying nonterminals from updated_nt_ty *)
-     let (f,ty) = dequeue_nt_ty() in (* taking care of all new f : ity at once *)
-    let _ = if !Flags.debugging then 
-            Utilities.debug ("propagating type of nt "^(name_of_nt f)^" incrementally\n") 
-    in
+    (* update type of id1 in envs where there is id, forced to id : tys *)
+    List.iter (fun id1 -> update_incremental_ty_of_id id1 (id,tys) true) ids;
+    let bindings = Cfa.lookup_dep_termid_nt id in (* nonterminals and their bindings that were
+                                                     applied to the aterm id *)
+    List.iter (fun binding -> update_incremental_ty_of_nt binding (id,tys)) bindings
+    *)
+      ()
+    with TwoLayerQueue.Empty ->
+    try (* trying nonterminals from updated_nt_ty *)
+      let (f,ty) = BatchQueue.dequeue !updated_nt_ty in (* taking care of all new f : ity at once *)
+      let _ = if !Flags.debugging then 
+          Utilities.debug ("propagating type of nt "^(name_of_nt f)^" incrementally\n") 
+      in
+    (*
     let nts = Cfa.lookup_dep_nt_nt_lin f in
     List.iter (fun g -> update_ty_of_nt_incremental_for_nt g f ty) nts
-   with WorklistVarTyEmpty ->
-   try (* trying nonterminals from updated_nts *)
-    let f = SetQueue.dequeue !updated_nts in
-    let ids = Cfa.lookup_dep_nt_termid f in
-     List.iter (SetQueue.enqueue !worklist_var) ids;
-     let nts = Cfa.lookup_dep_nt_nt f in
-        remove_worklist_nt_binding nts;
-        List.iter (SetQueue.enqueue !worklist_nt) nts
-   with SetQueue.Empty ->
-   try (* trying nonterminals from worklist_nt_binding *)
-    let (f,binding,qs)=dequeue_worklist_nt_binding() in
-     let _ = Utilities.debug ("processing nt "^(Grammar.name_of_nt f)^"\n") in
-     update_ty_of_nt f binding qs;
-  with WorklistBindingEmpty ->
-  try (* trying to type nonterminals from worklist_nt and enqueue nt and nt : type if type
-         restricted nonterminal further than before *)
-     let f = SetQueue.dequeue !worklist_nt in
+    *)
+      ()
+    with BatchQueue.Empty ->
+    try (* trying nonterminals from updated_nts *)
+      let f = SetQueue.dequeue !updated_nts in
+      let ids = Cfa.lookup_dep_nt_termid f in
+      List.iter (SetQueue.enqueue !worklist_var) ids;
+      let nts = Cfa.lookup_dep_nt_nt f in
+    (*
+    remove_worklist_nt_binding nts;
+    List.iter (SetQueue.enqueue !worklist_nt) nts
+    *)
+      ()
+    with SetQueue.Empty ->
+    try (* trying nonterminals from worklist_nt_binding *)
+      let (f,binding) = TwoLayerQueue.dequeue !worklist_nt_binding in
+      let _ = Utilities.debug ("processing nt "^(Grammar.name_of_nt f)^"\n") in
+    (*
+    update_ty_of_nt f binding qs;
+    *)
+      ()
+    with TwoLayerQueue.Empty ->
+    try (* trying to type nonterminals from worklist_nt and enqueue nt and nt : type if type
+           restricted nonterminal further than before *)
+      let f = SetQueue.dequeue !worklist_nt in
       if has_noheadvar f then
-        update_ty_of_nt_wo_venv f
+        Utilities.debug ("Typing nonterminal "^(Grammar.name_of_nt f)^"\n\n")
+        (* update_ty_of_nt_wo_venv f *)
       else
-        add_worklist_nt_binding f
-  with SetQueue.Empty ->
-  try
-    let id = SetQueue.dequeue !worklist_var (* we take one of enqueued aterms *)
-  in
-  let _ = Utilities.debug ("processing terms "^(string_of_int id)^"\n") in
-  let envs = Cfa.lookup_dep_id_envs id in (* aterms that were (possibly) put into given variables
-                                            in aterms with dequeued id (propagating types
-                                            backwards) *)
-  (* There was an application where aterm id had put some other aterms (env) in given variables
-     in its nonterminal - process it.
-     *)
-  List.iter (fun env-> update_ty_of_id id env true) envs
-  with SetQueue.Empty -> proceed := true
-   );
-   if !proceed then saturate_vartypes_wo_overwrite() 
-   else saturate_vartypes()
-*)
-  false
+        Utilities.debug ("Enqueuing all bindings of nonterminal "^(Grammar.name_of_nt f)^"\n\n")
+        (* add_worklist_nt_binding f *);
+      ()
+    with SetQueue.Empty ->
+    try
+      let id = SetQueue.dequeue !worklist_var (* we take one of enqueued aterms *) in
+      let _ = Utilities.debug ("Typing aterms "^(string_of_int id)^"\n\n") in
+      let envs = Cfa.lookup_dep_id_envs id in (* aterms that were (possibly) put into given variables
+                                                 in aterms with dequeued id (propagating types
+                                                 backwards) *)
+      (* There was an application where aterm id had put some other aterms (env) in given variables
+         in its nonterminal - process it.
+      *)
+    (*
+    List.iter (fun env-> update_ty_of_id id env true) envs
+    *)
+      ()
+    with SetQueue.Empty -> proceed := false
+  end;
+  !proceed
 
 (** Performs saturation and returns whether the language is finite. *)
 let saturate() : bool =

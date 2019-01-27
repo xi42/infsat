@@ -22,3 +22,8 @@ let dequeue ((firsts, seconds) : 'a t) : int * 'a =
       if sec = [] then
         firsts := firsts';
       (first, second)
+
+let size ((firsts, seconds) : 'a t) : int =
+  List.fold_left (fun acc first ->
+      acc + (List.length seconds.(first))
+    ) 0 !firsts
