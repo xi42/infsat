@@ -37,33 +37,33 @@ let nt_count() = Array.length (!gram.r)
 (** change normal tree with app nodes to tree with (head, list-of-arg-terms) nodes *)
 let rec decompose_term t =
   match t with
-   (NT(_)|T(_)|Var(_)) -> (t, [])
- | App(t1,t2) ->
-     let (h,ts)=decompose_term t1 in (h,ts@[t2])
+  | (NT(_)|T(_)|Var(_)) -> (t, [])
+  | App(t1,t2) ->
+    let (h,ts)=decompose_term t1 in (h,ts@[t2])
 
 let head term =
   let (h,_) = decompose_term term in h
 
 let rec compose_term h terms =
   match terms with
-    [] -> h
+  | [] -> h
   | t::terms' -> compose_term (App(h,t)) terms'
 
 let rec mk_app h terms =
   match terms with
-   [] -> h
- | t::terms' -> mk_app (App(h,t)) terms'
+  | [] -> h
+  | t::terms' -> mk_app (App(h,t)) terms'
 
 let rec occur_nt_in_term nt term =
   match term with
-    NT(f) -> nt=f
+  | NT(f) -> nt=f
   | T(_) -> false
   | Var(_) -> false
   | App(t1,t2) -> (occur_nt_in_term nt t1) ||(occur_nt_in_term nt t2)
 
 let rec vars_in_term term = 
   match term with
-    NT _ -> []
+  | NT _ -> []
   | T _ -> []
   | Var(v) -> [v]
   | App(t1,t2) ->
@@ -71,23 +71,24 @@ let rec vars_in_term term =
 
 let rec vars_in_terms terms =
   match terms with
-    [] -> []
+  | [] -> []
   | t::terms' -> merge_and_unify compare (vars_in_term t) (vars_in_terms terms')
 
 (** Returns ascending list of variables in term that are not in an argument of a nonterminal or
     a terminal and are applied to something. *)
 let rec headvars_in_term (term : term) : nameV list =
   match term with
-    NT _ -> []
+  | NT _ -> []
   | T _ -> []
   | Var(_) -> []
-  | App(Var(x),t2) -> merge_and_unify compare [x] (headvars_in_term t2)
+  | App(Var(x), t2) -> merge_and_unify compare [x] (headvars_in_term t2)
   | App(t1,t2) -> merge_and_unify compare (headvars_in_term t1)
-                                          (headvars_in_term t2)
+                    (headvars_in_term t2)
+
 (** List of nonterminals used in term. *)
 let rec nt_in_term term = 
   match term with
-    NT(x) -> [x]
+  | NT(x) -> [x]
   | T _ -> []
   | Var _ -> []
   | App(t1,t2) ->
@@ -97,14 +98,14 @@ let nt_in_rule (f, (vars, term)) =
   nt_in_term term
 
 let rec nt_in_rules rules =
- match rules with
-   [] -> []
+  match rules with
+  | [] -> []
   |r::rules' ->
     merge_and_unify compare (nt_in_rule r) (nt_in_rules rules')
 
 let rec terminals_in_term term =
   match term with
-    NT(_) -> []
+  | NT(_) -> []
   | T a -> [a]
   | Var _ -> []
   | App(t1,t2) ->
@@ -153,7 +154,7 @@ let print_term term =
 
 let rec subst_term s term =
   match term with
-    (T(_)|NT(_)) -> term
+  | (T(_)|NT(_)) -> term
   | Var(x) ->
      ( try 
         List.assoc x s
@@ -162,7 +163,7 @@ let rec subst_term s term =
 
 let rec subst_nt_in_term s term =
   match term with
-    (Var(_)|T(_)) -> term
+  | (Var(_)|T(_)) -> term
   | NT(x) ->
      ( try 
         List.assoc x s
@@ -187,8 +188,8 @@ let rec arity2kind k =
    
 let rec size_of_term t =
   match t with
-    (NT _ | T _ | Var _) -> 1
-  | App(t1,t2) -> (size_of_term t1)+(size_of_term t2)
+  | (NT _ | T _ | Var _) -> 1
+  | App(t1, t2) -> (size_of_term t1) + (size_of_term t2)
 
 let rec size_of_rule r = 
   let (_,t) =  r in size_of_term t

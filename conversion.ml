@@ -169,8 +169,8 @@ let b_tree k counted arg_preterms =
   in
   let (body, wrap_fun) =
     if k = 0 then
-      (* converted terminal with no children as _c *)
-      (Syntax.PApp(Syntax.Name("_c"), []), false)
+      (* converted terminal with no children as _e *)
+      (Syntax.PApp(Syntax.Name("_e"), []), false)
     else if k = 1 && List.length arg_preterms = 1 then
       (* removing identities *)
       (List.hd arg_preterms, false)
@@ -188,10 +188,10 @@ let b_tree k counted arg_preterms =
   else
     body
 
-(** Replaces preterminals with minimal set of standard terminals - _a, _b, _c.
+(** Replaces preterminals with minimal set of standard terminals - _a, _b, _e.
     Checks for name conflicts between variables, terminals, and br. Replacing is done by changing
     terminals of arity k with a lambda-term with _b-tree (with branches) with all k arguments of
-    height log2(k)+1. If k=0, the terminal is replaced with _c instead. If the terminal is
+    height log2(k)+1. If k=0, the terminal is replaced with _e instead. If the terminal is
     counted, _a is added above that tree. *)
 let terminals2abc prerules preterminals =
   (* hashmap for fast access, also checking for conflicts *)

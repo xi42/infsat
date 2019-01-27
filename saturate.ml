@@ -1180,11 +1180,17 @@ let update_ty_of_nt_inc_for_nt_sub_venv g term venv qs f ty =
           register_nte g (mk_funty_with_vte vte (ItyQ(q)) (Grammar.arity_of_nt g))
    with Untypable -> ()) 
   qs
-
+*)
+  (* TODO
 (** Returns types for variables inside assuming that term has codomain ity. *)
-let rec tcheck_wo_venv term ity =
+let rec tcheck_wo_venv term (ty : ty) : (nameV * ity) list list =
   match term with
-    Var(x) -> [[(x,[ity])]]
+  | Var(x) ->
+    if is_productive ty then
+      [] (* variables can't be PR *)
+    else
+      (* NP version and PR version *)
+      [[(x, [ty])]; [(x, [with_productivity ty PR])]]
   | T(a) ->
       let q = codom_of_ity ity in
       let ty = (ty_of_t_q a q) in
@@ -1208,6 +1214,18 @@ let rec tcheck_wo_venv term ity =
        (fun vtes tys ->
          (tcheck_terms_wo_venv terms tys)@vtes) [] tyss (* get typings of variables based on
                                                            known typings of arguments *)
+
+(** Given a term without head variables, it returns a list of pairs (target type, variable
+    types), where target types are types that can be returned by the term, and variable types
+    are possible typings of variables with the given target. *)
+let tcheck_wo_venv_wo_target term =
+  List.filter (function
+      | (_, []) -> false
+      | (_, _) -> true)
+    (List.map (fun target -> (target, tcheck_wo_venv term target)) [NP; PR])
+  *)
+
+(*
 and tcheck_terms_wo_venv terms tys =
   match (terms,tys) with
     ([], []) -> [[]]
@@ -1268,26 +1286,25 @@ and tcheck_term_ty_wo_venv_inc t ty g ty_g =
       let vtes1 = tcheck_wo_venv_inc t ity g ty_g in
       let vtes2 = tcheck_term_ty_wo_venv_inc t ty' g ty_g in
          prod_vte vtes1 vtes2
-
+*)
 (** Computing the type of a nonterminal with no head vars. For each state q under f was applied,
     a type with codomain q is computed for f. *)
 let update_ty_of_nt_wo_venv f =
-  let (_,term)=Grammar.lookup_rule f in (* f's def *)
-  let qs = (!Cfa.array_st_of_nt).(f) in (* overapproximation of states under which f is applied *)
-    List.iter
-     (fun q ->
-       let ity=ItyQ(q) in (* type "q" *)
-       let vtes = tcheck_wo_venv term ity in (* list of lists of pairs (var id, ty);
-                                                inner list represents mappings for different
-                                                variables *)
-       List.iter (fun vte ->
-           register_nte f (* intersect f : t1 -> .. -> tK -> q with nt_tys[f][q], put the result
+  let (_, term)=Grammar.lookup_rule f in (* f's def *)
+  ()
+  (* TODO
+  let vtes = tcheck_wo_venv term ity in (* list of lists of pairs (var id, ty);
+                                           inner list represents mappings for different
+                                           variables *)
+  List.iter (fun vte ->
+      register_nte f (* intersect f : t1 -> .. -> tK -> q with nt_tys[f][q], put the result
                              back, and enqueue f and f : type if intersection changed anything. *)
-	  (mk_funty_with_vte vte ity (Grammar.arity_of_nt f))) (* this line changes variable type
+	(mk_funty_with_vte vte ity (Grammar.arity_of_nt f))) (* this line changes variable type
                                                                   bindings to type of nonterminal
                                                                   where they are defined *)
-       vtes) qs
-       
+    vtes
+  *)
+(*
 let update_ty_of_nt_inc_wo_venv f g ty = 
   let _ = Utilities.debug
           ("updating the type of "^(name_of_nt f)^" incrementally\n") in
@@ -1312,6 +1329,7 @@ let update_ty_of_nt_inc_for_nt_sub g term binding qs f ty =
 *)
 let has_noheadvar f =
   (!Cfa.array_headvars).(f)=[] && !Flags.eager
+
 (*
 let update_ty_of_nt_incremental_for_nt g f ty =
   if has_noheadvar g then
@@ -1322,36 +1340,6 @@ let update_ty_of_nt_incremental_for_nt g f ty =
     List.iter (fun (binding,qsref) ->
        update_ty_of_nt_inc_for_nt_sub
           g term binding !qsref f ty) bindings
-*)
-
-(*
-let init_worklist_nt_binding maxnt =
-  worklist_nt_binding := ([], Array.make maxnt []);
-  updated_nt_ty := ([], Array.make maxnt [])
-  
-let enqueue_worklist_nt_binding (f,binding) =
-  let (nts, a) = !worklist_nt_binding in
-  let x = a.(f) in
-  if List.mem binding x then ()
-  else
-    a.(f) <- binding::x;
-    if x=[] then worklist_nt_binding := (f::nts, a)
-    else ()
-*)
-exception WorklistBindingEmpty
-(*
-let rec dequeue_worklist_nt_binding () =
-  let (nts, a) = !worklist_nt_binding in
-   match nts with
-     [] -> raise WorklistBindingEmpty
-   | f::nts' ->
-       match a.(f) with
-          [] -> (worklist_nt_binding := (nts',a);
-	         dequeue_worklist_nt_binding ())
-	| binding::l ->
-	    a.(f) <- l;
-	    (if l=[] then worklist_nt_binding := (nts',a));
-	    (f,binding)
 
 let remove_worklist_nt_binding nts =
   let (_, a) = !worklist_nt_binding in
@@ -1542,12 +1530,15 @@ let rec saturation_loop() : bool =
            restricted nonterminal further than before *)
       let f = SetQueue.dequeue !worklist_nt in
       if has_noheadvar f then
-        Utilities.debug ("Typing nonterminal "^(Grammar.name_of_nt f)^"\n\n")
-        (* update_ty_of_nt_wo_venv f *)
+        begin
+          Utilities.debug ("Typing nonterminal "^(Grammar.name_of_nt f)^"\n\n");
+          (*update_ty_of_nt_wo_venv f TODO*)
+        end
       else
-        Utilities.debug ("Enqueuing all bindings of nonterminal "^(Grammar.name_of_nt f)^"\n\n")
-        (* add_worklist_nt_binding f *);
-      ()
+        begin
+          Utilities.debug ("Enqueuing all bindings of nonterminal "^(Grammar.name_of_nt f)^"\n\n")
+          (* add_worklist_nt_binding f *)
+        end
     with SetQueue.Empty ->
     try
       let id = SetQueue.dequeue !worklist_var (* we take one of enqueued aterms *) in

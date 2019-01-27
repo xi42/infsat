@@ -229,7 +229,7 @@ let update_arity_of_nt g nste =
     else ()
   done
 
-let cste = [("_a", arity2sty 1);("_b", arity2sty 2);("_c", arity2sty 0)]
+let cste = [("_a", arity2sty 1);("_b", arity2sty 2);("_e", arity2sty 0)]
 
 let eta_expand() =
   (* creating a new type var for each nonterminal *)

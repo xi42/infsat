@@ -45,10 +45,21 @@ let mk_fun_ty (arg_ity : ity) (res_ty : ty) : ty =
    ty
 
 (** Given a single type /\_i t_1i -> ... -> /\_i t_ki -> t, it returns t. *)
-let rec codom_of_ty ty =
+let rec codom_of_ty (ty : ty) : ty =
   match ty with
   | Fun(_, _, ty) -> codom_of_ty ty
   | _ -> ty
+
+let rec is_productive (ty : ty) : bool =
+  match codom_of_ty ty with
+  | PR -> true
+  | NP -> false
+  | _ -> failwith "Expected PR or NP"
+
+let rec with_productivity (orig : ty) (p : ty) : ty =
+  match orig with
+  | PR | NP -> p
+  | Fun(id, ity, ty) -> mk_fun_ty ity (with_productivity ty p)
 
 (* TODO design subtyping where NP args may be added/removed
 let tab_subtype = Hashtbl.create 100000
