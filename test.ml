@@ -3,21 +3,22 @@ open OUnit2
 open Type
 
 let examples_test : test =
-  let filenames_in_dir = Array.to_list (Sys.readdir "examples") in
+  let filenames_in_dir = List.filter (fun f -> String.length f > 8)
+      (Array.to_list (Sys.readdir "examples")) in
   let inf_filenames = List.filter (fun f ->
-      String.length f > 4 && String.sub f (String.length f - 4) 4 = ".inf") filenames_in_dir in
-  let (negative_filenames, positive_filenames) = List.partition (fun f ->
-      String.length f > 8 && String.sub f (String.length f - 8) 8 = "_neg.inf") inf_filenames in
+      String.sub f (String.length f - 8) 8 = "_inf.inf") filenames_in_dir in
+  let fin_filenames = List.filter (fun f ->
+      String.sub f (String.length f - 8) 8 = "_fin.inf") filenames_in_dir in
   let path filename = Some (String.concat "" ["examples/"; filename]) in
   "Examples" >::: [
-    "Positive examples" >::: List.map (fun filename ->
-        filename >:: (fun _ ->
-            assert_equal (Main.parse_and_report_finiteness (path filename)) true))
-      positive_filenames;
-    "Negative examples" >::: List.map (fun filename ->
+    "Infinite examples" >::: List.map (fun filename ->
         filename >:: (fun _ ->
             assert_equal (Main.parse_and_report_finiteness (path filename)) false))
-      negative_filenames]
+      inf_filenames;
+    "Finite examples" >::: List.map (fun filename ->
+        filename >:: (fun _ ->
+            assert_equal (Main.parse_and_report_finiteness (path filename)) true))
+      fin_filenames]
 
 let _ =
   Flags.debugging := true;

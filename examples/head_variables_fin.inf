@@ -1,0 +1,12 @@
+Grammar.
+S -> NoStopOrInf K.
+NoStopOrInf f -> f (NoStopOrInf f) Inf.
+Inf -> br c (a Inf).
+K x y -> x.
+End.
+
+(* a, br, c terminals correspond directly to _a, _b, _c terminals. *)
+Terminals.
+a -> 1 $.
+c -> 0.
+End.
