@@ -10,7 +10,7 @@ open Utilities
     have a unique identifier assigned to them. *)
 type aterms_id = int
 (** Head of a term in head form. *)
-type head = HNT of nameNT | HVar of nameV | HA | HB | HE
+type head = HNT of nt_id | HVar of var_id | HA | HB | HE
 (** Aterm is a term in head form. It consists of a head and identifiers of sequences of aterms
     that are its arguments. If aterm is (h, [a1;..;aK]) and aX represents a sequence of terms
     [tX1;..;tXl] for some l then the whole aterm represents an application
@@ -60,7 +60,7 @@ let normalized_body : aterm array ref = ref [||]
     Note that two terms with variables that are used in two different nonterminal definitions will
     have different ids, because variables are tuples (nt_id, var_id) that are disjoint for
     different nonterminal bodies. *)
-let tab_id_terms : (aterm list * Grammar.term list * nameV list) array ref = ref [||]
+let tab_id_terms : (aterm list * Grammar.term list * var_id list) array ref = ref [||]
 
 (** termid_isarg[i] contains a boolean whether tab_id_terms[i] was ever used as an argument when
     expanding terms in expand, i.e., if it was a used argument to a nonterminal. Filled during
@@ -110,7 +110,7 @@ let nodequeue : node list ref = ref []
 
 (** array_headvars[f] is a list of head variables in nonterminal's definition, i.e., variables
     that are applied to something. *)
-let array_headvars : nameV list array ref = ref [||]
+let array_headvars : var_id list array ref = ref [||]
 
 (* identifier of [t1;...;tk] --> identifiers of [s1;...;sl] 
    that depend on the value of [t1;...;tk];
@@ -208,7 +208,7 @@ let id2aterms (id : aterms_id) : aterm list =
 let id2terms (id : aterms_id) : Grammar.term list =
   let (_,terms,_)=(!tab_id_terms).(id) in terms
     
-let id2vars (id : aterms_id) : nameV list  =
+let id2vars (id : aterms_id) : var_id list  =
   let (_,_,vars)=(!tab_id_terms).(id) in vars
 
 
@@ -349,7 +349,7 @@ let rec register_var_bindings f rho i =
     [] -> ()
   | termsid::rho' ->
     let aterms = id2aterms termsid in (* convert args_id back to a list of (H, [ID..]) *)
-    let aterms' = indexlist aterms in (* numbering these terms *)
+    let aterms' = index_list aterms in (* numbering these terms *)
     List.iter (* for each term register_binding_singlevar f global-numbering-id aterm *)
       (fun (j,aterm)-> register_binding_singlevar f (i+j) aterm)
       aterms';
@@ -404,7 +404,7 @@ let term2head h =
   | E -> HE
   | _ -> assert false
   
-let vars_in_aterm ((h, ids) : aterm) : nameV list =
+let vars_in_aterm ((h, ids) : aterm) : var_id list =
   let vs1 =
     match h with
     | HVar(x) -> [x]

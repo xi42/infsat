@@ -192,7 +192,7 @@ let rec order_of_sty sty =
   | _ -> 0
 
 let order_of_nste nste =
-  let nste' = indexlist (Array.to_list nste) in
+  let nste' = index_list (Array.to_list nste) in
   let ordmap = List.map (fun (nt, sty) -> (nt, order_of_sty sty)) nste' in
   let x = list_max (fun (nt1,ord1) ->fun (nt2,ord2) -> compare ord1 ord2) ordmap in
     x

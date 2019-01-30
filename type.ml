@@ -22,7 +22,7 @@ let id_of_ty ty =
   match ty with
   | PR -> 0
   | NP -> 1
-  | Fun(id, _, _) -> id
+  | Fun (id, _, _) -> id
 
 let compare_ty ty1 ty2 =
   compare (id_of_ty ty1) (id_of_ty ty2)
@@ -47,7 +47,7 @@ let mk_fun_ty (arg_ity : ity) (res_ty : ty) : ty =
 (** Given a single type /\_i t_1i -> ... -> /\_i t_ki -> t, it returns t. *)
 let rec codom_of_ty (ty : ty) : ty =
   match ty with
-  | Fun(_, _, ty) -> codom_of_ty ty
+  | Fun (_, _, ty) -> codom_of_ty ty
   | _ -> ty
 
 let rec is_productive (ty : ty) : bool =
@@ -56,10 +56,44 @@ let rec is_productive (ty : ty) : bool =
   | NP -> false
   | _ -> failwith "Expected PR or NP"
 
-let rec with_productivity (orig : ty) (p : ty) : ty =
+let rec with_productivity (orig : ty) (f : ty) : ty =
   match orig with
-  | PR | NP -> p
-  | Fun(id, ity, ty) -> mk_fun_ty ity (with_productivity ty p)
+  | PR | NP -> f
+  | Fun (_, ity, ty) -> mk_fun_ty ity (with_productivity ty f)
+
+let rec flip_productivity (orig : ty) : ty =
+  match orig with
+  | PR -> NP
+  | NP -> PR
+  | Fun (_, ity, ty) -> mk_fun_ty ity (flip_productivity ty)
+
+(** Changes t1 -> .. -> tK -> t into ([t1; ..; tK], t). If a non-negative limit is supplied, it
+    only splits up to K=limit, otherwise uses maximum K. *)
+let ty2list (f : ty) (limit : int) : ity list * ty =
+  let rec ty2list_aux (f : ty) (acc : ity list) (count : int) : ity list * ty =
+    match f, count with
+    | _, 0 -> (List.rev acc, f)
+    | Fun (_, ity, ty), _ ->
+      ty2list_aux ty (ity :: acc) (count - 1)
+    | _, _ ->
+      if count < 0 then
+        (List.rev acc, f)
+      else
+        failwith "Limit greater than arity"
+  in
+  ty2list_aux f [] limit
+        
+let rec ty2array (f : ty) : ity array * ty =
+  let args, res = ty2list f (-1) in
+  (Array.of_list args, res)
+
+(** Returns functional type ty with first count arguments removed *)
+let rec remove_args (count : int) (ty : ty) : ty =
+  match count with
+  | 0 -> ty
+  | _ -> match ty with
+    | Fun (_, _, ty) -> remove_args (count - 1) ty
+    | _ -> failwith "Tried to remove more arguments than the function has"
 
 (* TODO design subtyping where NP args may be added/removed
 let tab_subtype = Hashtbl.create 100000
@@ -127,3 +161,8 @@ let ty_of_t a =
 let ty_of_t_q a q = 
   (lookup_cte a).(q)
 *)
+
+module TypeM = struct
+  let compare = compare_ty
+  type t = ty
+end

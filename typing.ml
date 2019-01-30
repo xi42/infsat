@@ -2,8 +2,8 @@ open Utilities;;
 open Grammar;;
 open Automaton;;
 
-type te = (nameNT * ty) list  (*** type environment for non-terminals ***)
-type vte = (nameNT * ty) list  (*** type environment for variables ***)
+type te = (nt_id * ty) list  (*** type environment for non-terminals ***)
+type vte = (nt_id * ty) list  (*** type environment for variables ***)
 type cte = (nameT * ty) list (*** type environment for constants ***)
 
 let mode_gfp = ref true

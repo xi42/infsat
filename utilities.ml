@@ -82,17 +82,19 @@ let rec list_take_nth l n =
      if n=0 then (a, l')
      else 
        let (x, l'') = list_take_nth l' (n-1) in
-         (x, a::l'')
+       (x, a::l'')
+       
 (** Merge two asc-sorted list idempodently, resulting in asc-sorted list with unique values. *)
 let rec merge_and_unify comp l1 l2 =
   match (l1, l2) with
-    (_,[]) -> l1
+  | (_, []) -> l1
   | ([], _)->l2
-  | (x::l1',y::l2') -> 
-        let c = comp x y in
-         if c=0 then x::(merge_and_unify comp l1' l2')
-         else if c<0 then x::(merge_and_unify comp l1' l2)
-         else y::(merge_and_unify comp l1 l2');;
+  | (x :: l1', y :: l2') -> 
+    let c = comp x y in
+    if c=0 then x::(merge_and_unify comp l1' l2')
+    else if c<0 then x::(merge_and_unify comp l1' l2)
+    else y::(merge_and_unify comp l1 l2');;
+
 let rec merge_and_unify_list comp ll =
   List.fold_left
   (fun l1 l2 -> merge_and_unify comp l1 l2)
@@ -324,15 +326,15 @@ let rec assoc_eq eq x l =
      if eq x y then z
      else assoc_eq eq x l'
 
-let indexlist l =
+let index_list l =
   let len = List.length l in
   let indices = fromto 0 len in
-    List.combine indices l
+  List.combine indices l
 
-let indexlistr l =
+let index_list_r l =
   let len = List.length l in
   let indices = fromto 0 len in
-    List.combine l indices
+  List.combine l indices
 
 type 'a queue = ('a list * 'a list) ref
 let enqueue item queue =

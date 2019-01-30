@@ -39,26 +39,6 @@ let parse_stdin() =
   in
     result
 
-(*
-let rec report_input g m =
-  let _ = if !(Flags.debugging) then print_gram g in
-  let _ = print_string ("The number of rewrite rules: "^(string_of_int (Array.length g.r))^"\n") in
-  let _ = print_string ("The size of recursion scheme: "^(string_of_int (Grammar.size_of g))^"\n") in
-  let _ = print_string ("The number of states: "^(string_of_int (Automaton.size_st m))^"\n") in
-    ()
-
-let report_input_ata g m = 
-  let r = Array.length g.r in
-  let s = Grammar.size_of g in
-  let q = List.length m.AlternatingAutomaton.st in
-  let _ = if !(Flags.debugging) then print_gram g in
-  let str = 
-    "The number of rewrite rules: "^(string_of_int r)^"\n" ^
-    "The size of recursion scheme: "^(string_of_int s)^"\n" ^
-    "The number of states: "^(string_of_int q)^"\n" in
-  print_string str
-*)
-
 (** Main part of InfSat. Takes parsed input, computes if the language contains
     arbitrarily many counted letters. Prints the result. *)
 let report_finiteness input : bool =

@@ -21,7 +21,7 @@ let new_ntaux() =
 let tab_ntname2id = Hashtbl.create 1000
 
 let register_nt ntname =
-  if Hashtbl.mem tab_ntname2id ntname then raise (DuplicatedNonterminal ntname)
+  if Hashtbl.mem tab_ntname2id ntname then failwith ("Duplicated nonterminal " ^ ntname)
   else 
     let nt = new_nt() in 
      (Hashtbl.add tab_ntname2id ntname nt;
@@ -29,7 +29,7 @@ let register_nt ntname =
       )
 let lookup_ntid ntname =
   try Hashtbl.find tab_ntname2id ntname
-  with Not_found -> raise (UndefinedNonterminal ntname)
+  with Not_found -> failwith ("Undefined nonterminal " ^ ntname)
 
 let aux_rules = ref []
 let register_new_rule f arity body =
@@ -86,7 +86,7 @@ let dummy_term = NT(0)
 let dummy_ntname = "DummyNT"
 
 let midrule2rule rules vinfo (f, (_, ss, pterm)) =
-  let ss' = indexlist ss in
+  let ss' = index_list ss in
   let arity = List.length ss in
   let vmap = List.map (fun (i,v) -> (v, (f,i))) ss' in (* [(arg name, (nonterm ix, arg ix)) *)
   let _ = vinfo.(f) <- Array.make arity dummy_vname in
@@ -95,7 +95,7 @@ let midrule2rule rules vinfo (f, (_, ss, pterm)) =
   rules.(f) <- (arity, term) (* F x_1 .. x_n = t => rules[F] = (n, potentially normalized term with names changed either to var or to terminal) *)
 
 let midrules2rules rules vinfo (midrules : midrules) =
-  let midrules_indexed = indexlist midrules in
+  let midrules_indexed = index_list midrules in
   List.iter (midrule2rule rules vinfo) midrules_indexed
 
 
