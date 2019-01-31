@@ -1,5 +1,5 @@
 #SOURCE = flags.ml utilities.ml setqueue.ml obdd.mli obdd.ml pobdd.mli pobdd.ml syntax.ml parser.mli parser.ml lexer.ml grammar.ml automaton.ml alternatingAutomaton.mli alternatingAutomaton.ml conversion.ml stype.ml ai.ml type.ml cegen.ml saturate.ml main.ml
-SOURCE = flags.ml profiling.ml utilities.ml setQueue.ml twoLayerQueue.ml batchQueue.ml syntax.ml infSatParser.mli infSatParser.ml infSatLexer.ml grammar.ml conversion.ml stype.ml cfa.ml type.ml saturate.ml main.ml
+SOURCE = flags.ml profiling.ml utilities.ml sortedList.ml setQueue.ml twoLayerQueue.ml batchQueue.ml syntax.ml infSatParser.mli infSatParser.ml infSatLexer.ml grammar.ml conversion.ml stype.ml cfa.ml type.ml saturate.ml main.ml
 
 all: infsat-debug TAGS
 

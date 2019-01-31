@@ -1,9 +1,6 @@
 open Flags
 exception Fatal of string
 
-let times = ref []
-let check_point() = 
-  let t = Sys.time() in times := t::!times
 let table_create n = Hashtbl.create n;;
 let table_find tab x = Hashtbl.find tab x 
 let table_add tab a b = Hashtbl.add tab a b
@@ -25,16 +22,6 @@ let debug s =
   else 
     ()
 
-
-let timer = ref (Sys.time());;
-let reset_timer () = timer := Sys.time();;
-let log_timer () = 
-  if !debugging then begin
-    Printf.printf "%f sec\n" (Sys.time() -. !timer);
-    flush stdout
-  end;;
-
-
 let rec take_some l =
   match l with
     [] -> []
@@ -43,7 +30,10 @@ let rec take_some l =
 
 (*** returns a list of integers [m;...;n-1] ***)
 let rec fromto m n =
-  if m>=n then [] else m::(fromto (m+1) n);;
+  if m >= n then
+    []
+  else
+    m :: (fromto (m + 1) n)
 
 let rec list_repl n a l =
   match l with
@@ -77,13 +67,14 @@ let rec list_rem_n l n =
 
 let rec list_take_nth l n =
   match l with
-    [] -> raise (Fatal "list_take_nth: position is wrong")
+  | [] -> raise (Fatal "list_take_nth: position is wrong")
   | a::l' ->
-     if n=0 then (a, l')
-     else 
-       let (x, l'') = list_take_nth l' (n-1) in
-       (x, a::l'')
-       
+    if n=0 then (a, l')
+    else
+      let (x, l'') = list_take_nth l' (n-1) in
+      (x, a::l'')
+
+(*
 (** Merge two asc-sorted list idempodently, resulting in asc-sorted list with unique values. *)
 let rec merge_and_unify comp l1 l2 =
   match (l1, l2) with
@@ -105,7 +96,7 @@ let merge_and_unify_safe comp l1 l2 =
       merge_and_unify comp l1 l2
   else
      assert false
-
+*)
 let rec is_sorted l =
   match l with
     [] -> true

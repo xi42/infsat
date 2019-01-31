@@ -24,6 +24,11 @@ type binding = (int * int * aterms_id) list
 module HType = struct type t=aterm;; let equal i j = i=j;; let hash = Hashtbl.hash_param 100 100 end
 module ATermHashtbl = Hashtbl.Make(HType)
 
+module SortedAtermsIds = SortedList.Make(struct
+    type t = aterms_id
+    let compare = compare
+  end)
+
 (* --- registers --- *)
 
 (** After the nonterminals are numbered, this is a map from nonterminals' ids to their bodies in
@@ -60,7 +65,7 @@ let normalized_body : aterm array ref = ref [||]
     Note that two terms with variables that are used in two different nonterminal definitions will
     have different ids, because variables are tuples (nt_id, var_id) that are disjoint for
     different nonterminal bodies. *)
-let tab_id_terms : (aterm list * Grammar.term list * var_id list) array ref = ref [||]
+let tab_id_terms : (aterm list * Grammar.term list * SortedVars.t) array ref = ref [||]
 
 (** termid_isarg[i] contains a boolean whether tab_id_terms[i] was ever used as an argument when
     expanding terms in expand, i.e., if it was a used argument to a nonterminal. Filled during
@@ -110,7 +115,7 @@ let nodequeue : node list ref = ref []
 
 (** array_headvars[f] is a list of head variables in nonterminal's definition, i.e., variables
     that are applied to something. *)
-let array_headvars : var_id list array ref = ref [||]
+let array_headvars : SortedVars.t array ref = ref [||]
 
 (* identifier of [t1;...;tk] --> identifiers of [s1;...;sl] 
    that depend on the value of [t1;...;tk];
@@ -149,12 +154,12 @@ let array_dep_nt_termid = ref [| |]
 
 (** array_dep_nt_nt[f] contains all nonterminals (int) that have f present in their body except
     for ones present in array_dep_nt_nt_lin[f]. *)
-let array_dep_nt_nt = ref [| |]
+let array_dep_nt_nt : SortedNTs.t array ref = ref [| |]
 
 (** If Flags.incremental is false then array_dep_nt_nt_lin[f] contains list of nonterminals g that
     have f present in their body exactly once at root or applied a number of times to a terminal,
     i.e., t1 .. (t2 .. (tN (f arg1 .. argK) ..) ..) .. for some terminals tX and terms argY. *)
-let array_dep_nt_nt_lin = ref [| |]
+let array_dep_nt_nt_lin : SortedNTs.t array ref = ref [| |]
 
 (* --- logic --- *)
 
@@ -208,8 +213,9 @@ let id2aterms (id : aterms_id) : aterm list =
 let id2terms (id : aterms_id) : Grammar.term list =
   let (_,terms,_)=(!tab_id_terms).(id) in terms
     
-let id2vars (id : aterms_id) : var_id list  =
-  let (_,_,vars)=(!tab_id_terms).(id) in vars
+let id2vars (id : aterms_id) : SortedVars.t =
+  let (_, _, vars) = (!tab_id_terms).(id) in
+  vars
 
 
 let print_tab_id_terms() =
@@ -404,23 +410,24 @@ let term2head h =
   | E -> HE
   | _ -> assert false
   
-let vars_in_aterm ((h, ids) : aterm) : var_id list =
+let vars_in_aterm ((h, ids) : aterm) : SortedVars.t =
   let vs1 =
     match h with
-    | HVar(x) -> [x]
-    | _ -> []
+    | HVar(x) -> SortedVars.singleton x
+    | _ -> SortedVars.empty
   in
-  List.fold_left (fun vs id -> merge_and_unify compare vs (id2vars id)) vs1 ids
+  List.fold_left (fun vs id -> SortedVars.merge vs (id2vars id)) vs1 ids
 
 let vars_in_aterms aterms =
- List.fold_left
- (fun vars aterm ->
-    merge_and_unify compare vars (vars_in_aterm aterm))
-  [] aterms
+  List.fold_left
+    (fun vars aterm ->
+       SortedVars.merge vars (vars_in_aterm aterm))
+    SortedVars.empty aterms
 
 let rec convert_term t =
-  let (h,terms)=Grammar.decompose_term t in
-  if terms=[] then (term2head h, []) (* term2head just replaces Xxx with Hxxx constructor with same arg, but only for var, nt, and t *)
+  let h, terms = Grammar.decompose_term t in
+  if terms = [] then
+    (term2head h, []) (* term2head just replaces Xxx with Hxxx constructor with same arg, but only for var, nt, and t *)
    else
      let aterms = List.map convert_term terms in (* recursively in arg terms *)
      let vars = vars_in_aterms aterms in (* get ascending list of var ids *)
@@ -437,7 +444,7 @@ let rec convert_term t =
 
 let init_tab_id_terms g =
   let size = size_of_rules g.r in
-  tab_id_terms := Array.make size ([],[],[]); (* for each a-term, i.e., @ x t, where x is not an application *)
+  tab_id_terms := Array.make size ([], [], SortedVars.empty); (* for each a-term, i.e., @ x t, where x is not an application *)
   termid_isarg := Array.make size false;
   let dummy_aterm : aterm = (HNT(-1), []) in
   normalized_body := Array.make (Array.length g.r) dummy_aterm; (* convert each rule to a normalized form and store in this global array along with its arity (this is ref) *)
@@ -601,12 +608,12 @@ let ids_in_bindings bindings =
 (** Called for each term with term_id equal to id, that has free variables var, such that this
     term was an argument to a nonterminal. *)
 let mk_binding_depgraph_for_terms id vars =
-  if vars = [] then
+  if vars = SortedVars.empty then
      register_dep_binding_env id [[]]
   else
-    let f = fst(List.hd vars) in (* figure out in which nonterminal the term is defined using
+    let f, _ = SortedVars.hd vars in (* figure out in which nonterminal the term is defined using
                                     variable id *)
-    let vars' = List.map snd vars in (* get indexes of variables in term f *)
+    let vars' = SortedVars.map snd vars in (* get indexes of variables in term f *)
    let bindings = (!binding_array_nt).(f) in
    let bindings' =
      delete_duplication_unsorted (* sorts and removes duplicates *)
@@ -653,7 +660,7 @@ let mk_binding_depgraph_for_termss (f : int) (termss : binding) =
 
 let mk_binding_depgraph_for_nt (f : int) (termsss : binding list) =
   (* when no vars are only in arguments of nonterminals and terminals *)
-  if (!array_headvars).(f)=[] && !Flags.eager then
+  if (!array_headvars).(f) = SortedVars.empty && !Flags.eager then
     ()
     (* if no variable occurs in the head position,
        we do not use binding information to compute the type of f *)
@@ -661,14 +668,14 @@ let mk_binding_depgraph_for_nt (f : int) (termsss : binding list) =
     List.iter (mk_binding_depgraph_for_termss f) termsss
 
 let print_dep_nt_nt_lin() =
- for i=0 to Array.length (!array_dep_nt_nt_lin)-1 do
-   let nts = (!array_dep_nt_nt_lin).(i) in
-   if nts=[] then ()
-   else
-     (print_string ((name_of_nt i)^" linearly occurs in ");
-      List.iter (fun j-> print_string ((name_of_nt j)^",")) nts;
-      print_string "\n")
- done
+  for i = 0 to Array.length (!array_dep_nt_nt_lin) - 1 do
+    let nts = (!array_dep_nt_nt_lin).(i) in
+    if nts = SortedNTs.empty then ()
+    else
+      (print_string ((name_of_nt i)^" linearly occurs in ");
+       SortedNTs.iter (fun j-> print_string ((name_of_nt j)^",")) nts;
+       print_string "\n")
+  done
 
 let init_array_dep_nt_termid() =
   let n = Array.length (!binding_array_nt) in (* number of nonterminals *)
@@ -676,8 +683,8 @@ let init_array_dep_nt_termid() =
 
 let init_array_dep_nt_nt() =
   let n = Array.length (!binding_array_nt) in
-     array_dep_nt_nt := Array.make n [];
-     array_dep_nt_nt_lin := Array.make n []
+     array_dep_nt_nt := Array.make n SortedNTs.empty;
+     array_dep_nt_nt_lin := Array.make n SortedNTs.empty
 
 (* nt occurs in the term id *)
 let register_dep_nt_termid nt id =
@@ -688,12 +695,12 @@ let register_dep_nt_termid nt id =
 
 let register_dep_nt_nt nt1 nt2 =
   let nts = (!array_dep_nt_nt).(nt1) in
-  let nts' = merge_and_unify compare [nt2] nts in
+  let nts' = SortedNTs.merge (SortedNTs.singleton nt2) nts in
    (!array_dep_nt_nt).(nt1) <- nts'
 
 let register_dep_nt_nt_lin nt1 nt2 =
   let nts = (!array_dep_nt_nt_lin).(nt1) in
-  let nts' = merge_and_unify compare [nt2] nts in
+  let nts' = SortedNTs.merge (SortedNTs.singleton nt2) nts in
    (!array_dep_nt_nt_lin).(nt1) <- nts'
 
       
@@ -706,20 +713,20 @@ let lookup_dep_nt_nt_lin nt =
   (!array_dep_nt_nt_lin).(nt)
 
 (** List of all nonterminals in terms without duplicates. *)
-let rec nt_in_terms terms =
+let rec nt_in_terms (terms : term list) : SortedNTs.t =
   match terms with
-   [] -> []
- | t::terms' -> merge_and_unify compare (Grammar.nt_in_term t) (nt_in_terms terms')
+  | [] -> SortedNTs.empty
+  | t :: terms' -> SortedNTs.merge (Grammar.nt_in_term t) (nt_in_terms terms')
 
-let merge_nts_lin (nts1,nts2) (nts3,nts4) =
- let (nts11,nts12) =
-    List.partition (fun f->List.mem f nts3 || List.mem f nts4) nts1 in
- let (nts31,nts32) =
-    List.partition (fun f->List.mem f nts1 || List.mem f nts2) nts3 in
-   (merge_and_unify compare nts12 nts32,
-    merge_and_unify compare nts11
-      (merge_and_unify compare nts31 
-      (merge_and_unify compare nts2 nts4)))
+let merge_nts_lin (nts1, nts2) (nts3, nts4) =
+  let nts11, nts12 =
+    SortedNTs.partition (fun f -> SortedNTs.mem f nts3 || SortedNTs.mem f nts4) nts1 in
+  let nts31, nts32 =
+    SortedNTs.partition (fun f -> SortedNTs.mem f nts1 || SortedNTs.mem f nts2) nts3 in
+  (SortedNTs.merge nts12 nts32,
+   SortedNTs.merge nts11
+     (SortedNTs.merge nts31 
+        (SortedNTs.merge nts2 nts4)))
 
 (** Takes all nonterminals L in position at either term = L1, L1 arg1 .. argK, or
     t1 (.. (tN (L1 ..) ..) .., where tX are terminals, where L additionally satisfy the condition
@@ -728,80 +735,77 @@ let merge_nts_lin (nts1,nts2) (nts3,nts4) =
     Intuitively, it returns on the left all nonterminals that have have a sequence (possibly
     empty) of terminals applied to them and appear exactly once in the term, and the rest of
     nonterminals on the right. *)
-let rec nt_in_term_with_linearity term =
+let rec nt_in_term_with_linearity (term : term) : SortedNTs.t * SortedNTs.t =
   match term with
-  | Var(_) | A | B | E -> ([], [])
-  | NT(f) -> ([f], [])
-  | App(_, _) ->
+  | Var _ | A | B | E -> (SortedNTs.empty, SortedNTs.empty)
+  | NT f -> (SortedNTs.singleton f, SortedNTs.empty)
+  | App _ ->
     let (h,terms) = Grammar.decompose_term term in
     match h with
     | NT(f) -> let nts = nt_in_terms terms in
-      if List.mem f nts then ([],nts) (* if head nt used twice *)
-      else ([f],nts) (* if head nt used once *)
-    | Var(_) -> ([], nt_in_terms terms)
+      if SortedNTs.mem f nts then
+        (SortedNTs.empty, nts) (* if head nt used twice *)
+      else
+        (SortedNTs.singleton f, nts) (* if head nt used once *)
+    | Var _ -> (SortedNTs.empty, nt_in_terms terms)
     | A | B | E ->
       (* c has no children. a has a single child, so it is linear. b has two children, but only
          one at a time is used. Even if we do b (N ..) (N ..) that yield different types, only
          one N is used as long as there is no other N present. Therefore, b is also linear. *)
-      nt_in_terms_with_linearity terms 0 ([], [])
+      nt_in_terms_with_linearity terms 0 (SortedNTs.empty, SortedNTs.empty)
     | _ -> assert false
-    
-and nt_in_terms_with_linearity terms i (nts1,nts2) =
+and nt_in_terms_with_linearity terms i (nts1, nts2) : SortedNTs.t * SortedNTs.t =
   match terms with (* iteration over terms and linearity info simultaneously *)
-   [] -> (nts1,nts2) 
- | t::terms' ->
-     let (nts1',nts2') = nt_in_term_with_linearity t (* recursively *) in
-     let (nts1'',nts2'') = merge_nts_lin (nts1',nts2') (nts1,nts2) in
-       nt_in_terms_with_linearity terms' (i+1) (nts1'',nts2'')
+  | [] -> (nts1, nts2) 
+  | t :: terms' ->
+    let (nts1', nts2') = nt_in_term_with_linearity t (* recursively *) in
+    let (nts1'', nts2'') = merge_nts_lin (nts1', nts2') (nts1, nts2) in
+    nt_in_terms_with_linearity terms' (i + 1) (nts1'', nts2'')
 
 
-let mk_binding_depgraph() =
+let mk_binding_depgraph () =
   tab_termid_nt := Array.make !next_aterms_id []; (* array of lists for each head term (aterm) *)
   tab_binding_env := Array.make !next_aterms_id [];
   tab_penv_binding := Array.make !next_aterms_id [];
   let n = Array.length (!binding_array_nt) in (* number of nonterminals *)
-  array_headvars := Array.make n []; (* array of lists for each nonterminal *)
-  for f=0 to n-1 do
+  array_headvars := Array.make n SortedVars.empty; (* array of lists for each nonterminal *)
+  for f = 0 to n - 1 do
     (!array_headvars).(f) <- (let (_,t)=Grammar.lookup_rule f in (* applicative rule definition *)
                               headvars_in_term t);
-      mk_binding_depgraph_for_nt f (!binding_array_nt).(f)
+    mk_binding_depgraph_for_nt f (!binding_array_nt).(f)
   done;
   (* make dependency nt --> id (which means "id depends on nt") *)
-  check_point();
   init_array_dep_nt_termid();
   for id'=0 to !next_aterms_id - 1 do (* for each aterm *)
-   let id = !next_aterms_id - 1 -id' in
-   if (!termid_isarg).(id) then (* that had something applied to it *)
-     let (_, terms, vars) = (!tab_id_terms).(id) in (* and is in applicative form list of terms,
-                                                     and has variables vars *)
-     let nts = nt_in_terms terms in (* list of used nonterminals *)
-     List.iter (fun nt -> register_dep_nt_termid nt id) nts
-   else ()
+    let id = !next_aterms_id - 1 -id' in
+    if (!termid_isarg).(id) then (* that had something applied to it *)
+      let (_, terms, vars) = (!tab_id_terms).(id) in (* and is in applicative form list of terms,
+                                                        and has variables vars *)
+      let nts = nt_in_terms terms in (* list of used nonterminals *)
+      SortedNTs.iter (fun nt -> register_dep_nt_termid nt id) nts
   done;
   for id = 0 to !next_aterms_id - 1 do
-   if (!termid_isarg).(id) then
-     let (_, _, vars) = (!tab_id_terms).(id) in (* for each term with given id that was an argument
-                                                 to a nonterminal and had free variables vars *)
-     mk_binding_depgraph_for_terms id vars
-   else ()
+    if (!termid_isarg).(id) then
+      let (_, _, vars) = (!tab_id_terms).(id) in (* for each term with given id that was an argument
+                                                    to a nonterminal and had free variables vars *)
+      mk_binding_depgraph_for_terms id vars
   done;
-  check_point();
   (* make dependency nt1 --> nt2 (which means "nt2 depends on nt1") *)
   init_array_dep_nt_nt();
   let g = !(Grammar.gram) in
   let n = Array.length g.nt in
-    for i=0 to n-1 do
-      let (_, t) = Grammar.lookup_rule i in
-      let (nts1,nts2) = nt_in_term_with_linearity t in
-        List.iter (fun nt-> register_dep_nt_nt nt i) nts2;
-        (if !Flags.incremental then
-            List.iter (fun nt-> register_dep_nt_nt_lin nt i) nts1
-         else 
-            List.iter (fun nt-> register_dep_nt_nt nt i) nts1)
-    done;
-    if !Flags.debugging then
-      begin
-        print_tab_binding_env();
-        print_string "\n";
-        print_dep_nt_nt_lin()
-      end
+  for i = 0 to n - 1 do
+    let (_, t) = Grammar.lookup_rule i in
+    let (nts1,nts2) = nt_in_term_with_linearity t in
+    SortedNTs.iter (fun nt-> register_dep_nt_nt nt i) nts2;
+    if !Flags.incremental then
+      SortedNTs.iter (fun nt-> register_dep_nt_nt_lin nt i) nts1
+    else 
+      SortedNTs.iter (fun nt-> register_dep_nt_nt nt i) nts1
+  done;
+  if !Flags.debugging then
+    begin
+      print_tab_binding_env();
+      print_string "\n";
+      print_dep_nt_nt_lin()
+    end

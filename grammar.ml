@@ -13,7 +13,17 @@ type varinfo = string array array (* store the original name of each variable *)
 (*type terminals = (nameT * int) list  (* -1 if the arity is unknown *)*)
 
 type rule = (int * term)  (* int: the number of formal parameters *)
-type rules = rule array 
+type rules = rule array
+
+module SortedVars = SortedList.Make(struct
+    type t = var_id
+    let compare = compare
+  end)
+
+module SortedNTs = SortedList.Make(struct
+    type t = nt_id
+    let compare = compare
+  end)
 
 type gram = {nt: nonterminals; vinfo: varinfo; r: rules; s: nt_id}
 
@@ -63,48 +73,53 @@ let rec contains_vars_in_term (term : term) : bool =
     contains_vars_in_term t1 || contains_vars_in_term t2
   | _ -> false
 
-let rec vars_in_term (term : term) : var_id list = 
+let rec vars_in_term (term : term) : SortedVars.t = 
   match term with
-  | NT _ | A | B | E -> []
-  | Var v -> [v]
+  | NT _ | A | B | E -> SortedVars.empty
+  | Var v -> SortedVars.singleton v
   | App (t1, t2) ->
-     merge_and_unify compare (vars_in_term t1)  (vars_in_term t2) 
+    SortedVars.merge (vars_in_term t1) (vars_in_term t2) 
 
-let rec vars_in_terms terms =
+let rec vars_in_terms (terms : term list) : SortedVars.t =
   match terms with
-  | [] -> []
-  | t :: terms' -> merge_and_unify compare (vars_in_term t) (vars_in_terms terms')
+  | [] -> SortedVars.empty
+  | t :: terms' ->
+    SortedVars.merge (vars_in_term t) (vars_in_terms terms')
 
 (** Returns ascending list of variables in term that are not in an argument of a nonterminal or
     a terminal and are applied to something. *)
-let rec headvars_in_term (term : term) : var_id list =
+let rec headvars_in_term (term : term) : SortedVars.t =
   match term with
-  | NT _ | A | B | E -> []
-  | Var _ -> []
-  | App (Var x, t2) -> merge_and_unify compare [x] (headvars_in_term t2)
-  | App (t1, t2) -> merge_and_unify compare (headvars_in_term t1)
-                     (headvars_in_term t2)
+  | NT _ | A | B | E -> SortedVars.empty
+  | Var _ -> SortedVars.empty
+  | App (Var x, t2) ->
+    SortedVars.merge (SortedVars.singleton x) (headvars_in_term t2)
+  | App (t1, t2) ->
+    SortedVars.merge (headvars_in_term t1) (headvars_in_term t2)
 
 (** List of nonterminals used in term. *)
-let rec nt_in_term term = 
+let rec nt_in_term (term : term) : SortedNTs.t =
   match term with
-  | NT x -> [x]
-  | A | B | E | Var _ -> []
+  | NT x -> SortedNTs.singleton x
+  | A | B | E | Var _ -> SortedNTs.empty
   | App (t1, t2) ->
-     merge_and_unify compare (nt_in_term t1)  (nt_in_term t2) 
+    SortedNTs.merge (nt_in_term t1)  (nt_in_term t2) 
 
-let nt_in_rule (f, (vars, term)) =
+(* TODO Unused *)
+let nt_in_rule (_, (_, term)) =
   nt_in_term term
 
-let rec nt_in_rules rules =
+(* TODO Unused *)
+let rec nt_in_rules rules : SortedNTs.t =
   match rules with
-  | [] -> []
+  | [] -> SortedNTs.empty
   | r :: rules' ->
-    merge_and_unify compare (nt_in_rule r) (nt_in_rules rules')
+    SortedNTs.merge (nt_in_rule r) (nt_in_rules rules')
 
+(* TODO Unused *)
 let rec mk_depend g =
   let n = Array.length g.nt in
-  let deptab = Array.make n [] in
+  let deptab = Array.make n SortedNTs.empty in
   for i = 0 to n - 1 do
     deptab.(i) <- nt_in_term (snd (get_def i g))
   done;

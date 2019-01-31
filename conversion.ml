@@ -70,10 +70,10 @@ and normalize_term term =
   match term with
     App(_,_) -> (* reduces outer applications *)
         if depth_of_term term > !(Flags.normalization_depth) then
-           let vars = vars_in_term term in
+           let vars = SortedVars.to_list (vars_in_term term) in
            let arity = List.length vars in
            let nt = new_ntaux() in
-           let subst = List.combine vars 
+           let subst = List.combine vars
                           (List.map (fun i->Var(nt,i)) (fromto 0 arity)) in
            let term' = Grammar.subst_term subst term in
              (register_new_rule nt arity term';
