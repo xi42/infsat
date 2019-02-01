@@ -17,12 +17,12 @@ type rules = rule array
 
 module SortedVars = SortedList.Make(struct
     type t = var_id
-    let compare = compare
+    let compare = Pervasives.compare
   end)
 
 module SortedNTs = SortedList.Make(struct
     type t = nt_id
-    let compare = compare
+    let compare = Pervasives.compare
   end)
 
 type gram = {nt: nonterminals; vinfo: varinfo; r: rules; s: nt_id}

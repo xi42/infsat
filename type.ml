@@ -1,11 +1,37 @@
 (** Unique identifier of a single type *)
 type ty_id = int
 
-(** A single type, i.e. base productive/nonproductive type or part of an intersection type
-    /\_i t_i -> t. *)
-type ty = PR | NP | Fun of ty_id * ity * ty
-(** Intersection type of a function - /\_j (/\ t_ji -> t_j) *)
-and ity = ty list
+module rec
+  Ty :
+sig
+  type t = PR | NP | Fun of ty_id * TyList.t * t
+  val compare : t -> t -> int
+end =
+struct
+  (** A single type, i.e. base productive/nonproductive type or part of an intersection type
+      /\_i t_i -> t. *)
+  type t = PR | NP | Fun of ty_id * TyList.t * t
+  let compare ty1 ty2 =
+    match ty1, ty2 with
+    | Fun (id1, _, _), Fun (id2, _, _) -> Pervasives.compare id1 id2
+    | _, Fun _ -> -1
+    | Fun _, _ -> 1
+    | PR, PR -> 0
+    | PR, NP -> -1
+    | NP, PR -> 1
+    | NP, NP -> 0
+end
+
+and
+
+  (** Intersection type of a function - /\_j (/\ t_ji -> t_j) *)
+  TyList : SortedList.SL with type elt = Ty.t = SortedList.Make(struct
+    type t = Ty.t
+    let compare = Ty.compare
+  end)
+
+type ty = Ty.t = PR | NP | Fun of ty_id * TyList.t * Ty.t
+type ity = TyList.t
 
 let next_ty_id : ty_id ref = ref 2
 let new_ty_id() =
@@ -24,9 +50,6 @@ let id_of_ty ty =
   | NP -> 1
   | Fun (id, _, _) -> id
 
-let compare_ty ty1 ty2 =
-  compare (id_of_ty ty1) (id_of_ty ty2)
-
 let eq_ty ty1 ty2 =
   (id_of_ty ty1) = (id_of_ty ty2)
 
@@ -34,7 +57,7 @@ let eq_ty ty1 ty2 =
     return the type with that identifier built in. If such a type was not assigned a unique
     identifier yet, it assigns it. *)
 let mk_fun_ty (arg_ity : ity) (res_ty : ty) : ty =
-  let arg_ids = List.map id_of_ty arg_ity in
+  let arg_ids = TyList.map id_of_ty arg_ity in
   let res_id = id_of_ty res_ty in
   try
     Hashtbl.find fun_ty_ids (arg_ids, res_id)
@@ -161,8 +184,3 @@ let ty_of_t a =
 let ty_of_t_q a q = 
   (lookup_cte a).(q)
 *)
-
-module TypeM = struct
-  let compare = compare_ty
-  type t = ty
-end

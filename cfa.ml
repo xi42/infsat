@@ -26,7 +26,7 @@ module ATermHashtbl = Hashtbl.Make(HType)
 
 module SortedAtermsIds = SortedList.Make(struct
     type t = aterms_id
-    let compare = compare
+    let compare = Pervasives.compare
   end)
 
 (* --- registers --- *)

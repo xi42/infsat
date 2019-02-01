@@ -14,13 +14,14 @@ open Utilities
 type tyseq = TySeq of (ity * (tyseq ref)) list | TySeqNil
 type tyseqref = tyseq ref
 
-module TypeSet = Set.Make(TypeM)
-
+(** A single possible typing of variables mapping variables to their types, treated as if there
+    was AND as the delimiter. *)
 type venv = (var_id * ity) list
 
-(* TODO name this somehow *)
-type tyset = TypeSet.t
-let x : tyset = TypeSet.empty
+(** List of possible typings of variables, treated as if there was OR as the delimiter. *)
+type venvl = venv list
+
+module TySet = Set.Make(Ty)
 
 (* --- queues --- *)
 
@@ -61,7 +62,7 @@ let terms_tyss : ity array list option array ref = ref (Array.make 0 (None))
 (* --- utility --- *)
 
 let nt_ty_exists (nt : nt_id) (ty : ty) : bool =
-  List.exists (fun nt_ty -> nt_ty = ty) !nt_ity.(nt)
+  TyList.exists (fun nt_ty -> nt_ty = ty) !nt_ity.(nt)
 
 (* --- logic --- *)
 
@@ -70,9 +71,6 @@ type tstate = ity * Stype.st
 type delta = (tstate * tr) list
 and tr = TrNT of nt_id | TrT of nameT
        | TrApp of tstate * tstate list
-
-let merge_ty ty1 ty2 =
-  merge_and_unify compare_ity ty1 ty2
 
 let add_ity ity ty =
   if List.exists (fun ity1 -> subtype ity1 ity) ty
@@ -208,21 +206,25 @@ let rec print_ty (ty : ty) =
     print_string "->";
     print_ty ty;
     print_string ")"
-and print_ity (ity : ity) =
+and print_ity_l (ity : ty list) =
   match ity with
   | [] -> print_string "top"
   | [ty] -> print_ty ty
   | ty::ity' ->
     print_ty ty;
     print_string "^";
-    print_ity ity'
+    print_ity_l ity'
+and print_ity (ity : ity) =
+  print_ity_l (TyList.to_list ity)
 
 let print_itys (itys : ity array) =
    Array.iter (fun ity-> print_ity ity; print_string " * ") itys
 
 let print_itylist (ity : ity) =
-  List.iter (fun ty ->
-      print_ty ty; print_string "\n") ity
+  TyList.iter (fun ty ->
+      print_ty ty;
+      print_string "\n"
+    ) ity
 
 let print_nt_ity () =
   print_string "Types of nt:\n============\n";
@@ -358,7 +360,7 @@ let rec tyseq_merge_tys tys tyseqref =
 
 let rec tyseq2tyss (tyseq : tyseq) (len : int) : ity array list =
   match tyseq with
-  | TySeqNil -> [Array.make len []]
+  | TySeqNil -> [Array.make len TyList.empty]
   | TySeq(tyseqlist) ->
     List.fold_left
       (fun tyss (ty,tyseqref) ->
@@ -606,25 +608,6 @@ let pick_vte ity ity_vte_list =
   let ity_vte_list' = List.filter (fun (ity',vte)-> subtype ity' ity) ity_vte_list in
     pick_smallest_vte ity_vte_list'
 *)
-
-let rec merge_vtes vtes =
-  match vtes with
-    [] -> []
- | vte::vtes' ->
-   merge_two_vtes vte (merge_vtes vtes')
-(** Merges vtes (variable types) by combining the list of type bindings in order, and combining
-    types when a binding for the same variable is present in both lists. The resulting binding
-    is ordered ascendingly lexicographically by variable ids. Combining types is also idempodently
-    merging list of types (i.e., there are sets of types). *)
-and merge_two_vtes vte1 vte2 =
-  match (vte1,vte2) with
-    ([], _) -> vte2
-  | (_,[]) -> vte1
-  | ((v1,ty1)::vte1', (v2,ty2)::vte2') ->
-     let n = compare v1 v2 in
-      if n<0 then (v1,ty1)::(merge_two_vtes vte1' vte2)
-      else if n>0 then (v2,ty2)::(merge_two_vtes vte1 vte2')
-      else (v1,merge_ty ty1 ty2)::(merge_two_vtes vte1' vte2')
 
 let rec insert_ty_with_vte (ity,vte) ty =
   match ty with
@@ -1091,20 +1074,6 @@ else
 )
   venvs
 
-let prod_vte vtes1 vtes2 =
-  match (vtes1,vtes2) with
-     (_,[]) -> []
-   | ([],_)-> []
-   | (_,[[]]) -> vtes1
-   | ([[]], _) -> vtes2
-   | _ ->
-     List.fold_left
-     (fun vtes vte1 ->
-        let vtes2' = List.rev_map (fun vte2->merge_two_vtes vte1 vte2) vtes2 in
-(*        let vtes2' = List.rev_append vtes2' [] in *)
-     List.rev_append vtes2' vtes)
-     [] vtes1
-
 let rec tcheck_w_venv venv term ity =
   match term with
     Var(x) -> [[(x,[ity])]]
@@ -1189,19 +1158,19 @@ let update_ty_of_nt_inc_for_nt_sub_venv g term venv qs f ty =
 *)
 
 let terminal_ity : term -> ity =
-  let a_ity = List.sort compare_ty [
-    mk_fun_ty [NP] PR;
-    mk_fun_ty [PR] PR
+  let np = TyList.singleton NP in
+  let pr = TyList.singleton PR in
+  let a_ity = TyList.of_list [
+    mk_fun_ty np PR;
+    mk_fun_ty pr PR
   ] in
-  let b_ity = List.sort compare_ty [
-    mk_fun_ty [NP] (mk_fun_ty [] NP);
-    mk_fun_ty [PR] (mk_fun_ty [] NP);
-    mk_fun_ty [] (mk_fun_ty [NP] NP);
-    mk_fun_ty [] (mk_fun_ty [PR] NP)
+  let b_ity = TyList.of_list [
+    mk_fun_ty np (mk_fun_ty TyList.empty NP);
+    mk_fun_ty pr (mk_fun_ty TyList.empty NP);
+    mk_fun_ty TyList.empty (mk_fun_ty np NP);
+    mk_fun_ty TyList.empty (mk_fun_ty pr NP)
   ] in
-  let e_ity = [
-    NP
-  ] in
+  let e_ity = TyList.singleton NP in
   function
   | A -> a_ity
   | B -> b_ity
@@ -1220,29 +1189,87 @@ let infer_head_ity (h : term) : ity =
 let filter_compatible_head (ity : ity) (arity : int) (target : ty) : ity * ity =
   (* left side of a nonproductive application must have nonproductive arguments and codomain *)
   let np_ity =
-    List.filter (fun ty ->
+    TyList.filter (fun ty ->
         let front_itys, ty_wo_front = ty2list ty arity in
-        not (List.exists (fun ity -> List.exists is_productive ity) front_itys) &&
+        not (List.exists (fun ity -> TyList.exists is_productive ity) front_itys) &&
         eq_ty ty_wo_front target
       ) ity
   in
   if is_productive target then
     (* left side and codomain of productive application can have any types *)
     let pr_ity =
-      List.filter (fun ty ->
+      TyList.filter (fun ty ->
           let front_itys, ty_wo_front = ty2list ty arity in
           (eq_ty ty_wo_front target &&
-           List.exists (fun ity -> List.exists is_productive ity) front_itys)
+           List.exists (fun ity -> TyList.exists is_productive ity) front_itys)
           ||
           eq_ty ty_wo_front (flip_productivity target)
         ) ity
     in
     (pr_ity, np_ity)
   else
-    ([], np_ity)
+    (TyList.empty, np_ity)
+
+let merge_ty ty1 ty2 =
+  []
+
+let rec merge_vtes vtes =
+  match vtes with
+  | [] -> []
+  | vte::vtes' ->
+    merge_two_vtes vte (merge_vtes vtes')
+(** Merges vtes (variable types) by combining the list of type bindings in order, and combining
+    types when a binding for the same variable is present in both lists. The resulting binding
+    is ordered ascendingly lexicographically by variable ids. Combining types is also idempodently
+    merging list of types (i.e., there are sets of types). *)
+and merge_two_vtes vte1 vte2 =
+  match (vte1,vte2) with
+  | ([], _) -> vte2
+  | (_,[]) -> vte1
+  | ((v1,ty1)::vte1', (v2,ty2)::vte2') ->
+    let n = compare v1 v2 in
+    if n<0 then (v1,ty1)::(merge_two_vtes vte1' vte2)
+    else if n>0 then (v2,ty2)::(merge_two_vtes vte1 vte2')
+    else (v1, merge_ty ty1 ty2)::(merge_two_vtes vte1' vte2')
+
+let rec intersect_two_venvs (venv1 : venv) (venv2 : venv) : venv =
+  match venv1, venv2 with
+  | [], _ -> venv2
+  | _, [] -> venv1
+  | ((v1, ity1) :: venv1', (v2, ity2) :: venv2') ->
+    let n = compare v1 v2 in
+    if n < 0 then (v1, ity1) :: (intersect_two_venvs venv1' venv2)
+    else if n > 0 then (v2, ity2) :: (intersect_two_venvs venv1 venv2')
+    else (v1, TyList.merge ity1 ity2) :: (intersect_two_venvs venv1' venv2')
+
+(** Flatten an intersection of variable environment lists, which are OR-separated lists of
+    AND-separated lists of typings of unique in inner list variables. Flattening means moving
+    outer intersection (AND) inside. *)
+let intersect_two_venvls (venvl1 : venvl) (venvl2 : venvl) : venvl =
+  match venvl1, venvl2 with
+  | _, [] -> [] (* second typing is invalid *)
+  | [], _-> [] (* first typing is invalid *)
+  | _, [[]] -> venvl1 (* no variables in second typing *)
+  | [[]], _ -> venvl2 (* no variables in first typing *)
+  | _ ->
+    List.fold_left
+      (fun acc venv1 ->
+         let venvl2' = List.rev_map (fun venv2 ->
+             intersect_two_venvs venv1 venv2
+           ) venvl2
+         in
+         List.rev_append venvl2' acc)
+      [] venvl1
+
+let rec intersect_venvls (venvls : venvl list) : venvl =
+  match venvls with
+  | [] -> [[]]
+  | [venvl] -> venvl
+  | venvl :: venvs' ->
+    intersect_two_venvls venvl (intersect_venvls venvs')
 
 (* TODO this should be done on aterm, not term *)
-let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool): venv list =
+let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool) : venvl =
   match term with
   | Var x ->
     (* x : NP : s, any s *)
@@ -1250,11 +1277,11 @@ let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool): venv list
       [] (* variables are only NP *)
     else
       (* both NP and PR versions are possible *)
-      let res = [[(x, [target])]] in
+      let res = [[(x, TyList.singleton target)]] in
       if no_pr_vars then
         res
       else
-        [(x, [with_productivity target PR])] :: res
+        [(x, TyList.singleton (with_productivity target PR))] :: res
   | A ->
     (* a : f -> PR : O -> O, f = PR or NP *)
     begin
@@ -1266,8 +1293,8 @@ let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool): venv list
     (* b : f -> T -> NP, T -> f -> NP : O -> O -> O, f = PR or NP *)
     begin
       match target with
-      | Fun(_, [_], Fun(_, [], NP))
-      | Fun(_, [], Fun(_, [_], NP)) -> [[]]
+      | Fun(_, TyList.L [_], Fun(_, TyList.L [], NP))
+      | Fun(_, TyList.L [], Fun(_, TyList.L [_], NP)) -> [[]]
       | _ -> []
     end
   | E ->
@@ -1312,14 +1339,14 @@ let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool): venv list
     let filtered_pr_h_ity, filtered_np_h_ity = filter_compatible_head all_h_ity h_arity target in
     (* TODO type of a sorted list *)
     let annotate : ity -> (ty * (int * ity) list) list =
-      List.map (fun h_ty -> (h_ty, index_list (fst (ty2list h_ty h_arity)))) in
+      TyList.map (fun h_ty -> (h_ty, index_list (fst (ty2list h_ty h_arity)))) in
     let pr_h_ity = annotate filtered_pr_h_ity in
     let np_h_ity = annotate filtered_np_h_ity in
-    let arg_itys_sums : TypeSet.t array = Array.make h_arity TypeSet.empty in
+    let arg_itys_sums : TySet.t array = Array.make h_arity TySet.empty in
     List.iter (fun h_ity ->
         List.iter (fun (_, h_arg_itys) ->
             List.iter (fun (i, ity) ->
-                arg_itys_sums.(i) <- List.fold_right TypeSet.add ity arg_itys_sums.(i)
+                arg_itys_sums.(i) <- TyList.fold_right TySet.add ity arg_itys_sums.(i)
               ) h_arg_itys
           ) h_ity
       ) [pr_h_ity; np_h_ity];
@@ -1335,7 +1362,7 @@ let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool): venv list
     in
     List.iter (fun i ->
         let term = terms.(i) in
-        arg_itys_sums.(i) <- TypeSet.filter (fun ty ->
+        arg_itys_sums.(i) <- TySet.filter (fun ty ->
             (* the no_pr_vars flag does not matter where there are no variables *)
             infer_wo_venv term ty true = [[]]
           ) arg_itys_sums.(i)
@@ -1344,7 +1371,7 @@ let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool): venv list
     let filter_h_ity h_ity =
       List.filter (fun (_, h_arg_itys) ->
           List.for_all (fun (i, h_arg_ity) ->
-              List.for_all (fun ty -> TypeSet.mem ty arg_itys_sums.(i)) h_arg_ity
+              TyList.for_all (fun ty -> TySet.mem ty arg_itys_sums.(i)) h_arg_ity
             ) h_arg_itys
         ) h_ity in
     let pr_h_ity = filter_h_ity pr_h_ity in
@@ -1368,13 +1395,12 @@ let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool): venv list
         List.map (fun (_, h_arg_itys) ->
             List.map (fun (i, ity) ->
                 (* under intersection of this list of venvs the typing holds *)
-                let arg_venvs = List.map (fun ty ->
+                let arg_venvs : venvl list = TyList.map (fun ty ->
                     (* venvs for one type of the arg *)
                     infer_wo_venv terms.(i) ty true
                   ) ity
                 in
-                () (*
-                intersect arg_venvs*)
+                intersect_venvls arg_venvs
               ) h_arg_itys
           ) np_h_ity
       end;
@@ -1694,7 +1720,7 @@ let init_saturation() =
     if (!Cfa.termid_isarg).(id) then (* that is an argument to a nonterminal *)
       (!aterms_atys).(id) <- ref (TySeq []) (* initialize it with TySeq [] instead of TySeqNil *)
   done;
-  nt_ity := Array.make nt_count [];
+  nt_ity := Array.make nt_count TyList.empty;
 
   (* creating task queues *)
   worklist_var_ty := TwoLayerQueue.make aterms_count;
