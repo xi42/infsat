@@ -1185,53 +1185,32 @@ let infer_head_ity (h : term) : ity =
   | Var x -> failwith "TODO"
   | App _ -> failwith "Expected a head term"
 
-(* TODO split into prod and nprod *)
-let filter_compatible_head (ity : ity) (arity : int) (target : ty) : ity * ity =
-  (* left side of a nonproductive application must have nonproductive arguments and codomain *)
-  let np_ity =
-    TyList.filter (fun ty ->
-        let front_itys, ty_wo_front = ty2list ty arity in
-        not (List.exists (fun ity -> TyList.exists is_productive ity) front_itys) &&
-        eq_ty ty_wo_front target
-      ) ity
-  in
+let is_nonproductive_app_head_ty (ty : ty) (arity : int) : bool =
+  let arg_itys, res_ty = ty2list ty arity in
+  not (is_productive res_ty) &&
+  not (List.exists (fun ity -> TyList.exists is_productive ity) arg_itys)
+
+let filter_compatible_head (ity : ity) (arity : int) (target : ty) : ity =
   if is_productive target then
     (* left side and codomain of productive application can have any types *)
-    let pr_ity =
-      TyList.filter (fun ty ->
-          let front_itys, ty_wo_front = ty2list ty arity in
-          (eq_ty ty_wo_front target &&
-           List.exists (fun ity -> TyList.exists is_productive ity) front_itys)
-          ||
-          eq_ty ty_wo_front (flip_productivity target)
-        ) ity
-    in
-    (pr_ity, np_ity)
+    let flipped_target = flip_productivity target in
+    TyList.filter (fun ty ->
+        let res_ty = remove_args arity ty in
+        eq_ty res_ty target ||
+        eq_ty res_ty flipped_target
+      ) ity
   else
-    (TyList.empty, np_ity)
+    (* left side of a nonproductive application must have nonproductive arguments and codomain *)
+    TyList.filter (fun ty ->
+        let arg_itys, res_ty = ty2list ty arity in
+        eq_ty res_ty target &&
+        not (List.exists (fun ity -> TyList.exists is_productive ity) arg_itys)
+      ) ity
 
-let merge_ty ty1 ty2 =
-  []
-
-let rec merge_vtes vtes =
-  match vtes with
-  | [] -> []
-  | vte::vtes' ->
-    merge_two_vtes vte (merge_vtes vtes')
 (** Merges vtes (variable types) by combining the list of type bindings in order, and combining
     types when a binding for the same variable is present in both lists. The resulting binding
     is ordered ascendingly lexicographically by variable ids. Combining types is also idempodently
-    merging list of types (i.e., there are sets of types). *)
-and merge_two_vtes vte1 vte2 =
-  match (vte1,vte2) with
-  | ([], _) -> vte2
-  | (_,[]) -> vte1
-  | ((v1,ty1)::vte1', (v2,ty2)::vte2') ->
-    let n = compare v1 v2 in
-    if n<0 then (v1,ty1)::(merge_two_vtes vte1' vte2)
-    else if n>0 then (v2,ty2)::(merge_two_vtes vte1 vte2')
-    else (v1, merge_ty ty1 ty2)::(merge_two_vtes vte1' vte2')
-
+    merging list of types (i.e., there are sets of types). TODO redo docs from old ones *)
 let rec intersect_two_venvs (venv1 : venv) (venv2 : venv) : venv =
   match venv1, venv2 with
   | [], _ -> venv2
@@ -1310,6 +1289,10 @@ let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool) : venvl =
     else
       []
   | App _ ->
+    let h, terms = Grammar.decompose_term term in
+    infer_app_wo_env h terms target no_pr_vars
+
+and infer_app_wo_env (h : term) (terms : term list) (target : ty) (no_pr_vars : bool) : venvl =
     (* target is PR <=>
        - lhs is PR or some arg is PR or there is duplication but all possibilities have to be
          checked
@@ -1324,87 +1307,98 @@ let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool) : venvl =
        targeting lhs PR means brute or optimizing checking for duplications
        targeting rhs PR means brute or optimizing checking for PR variables
     *)
-    let h, terms_list = Grammar.decompose_term term in
-    let terms = Array.of_list terms_list in
-    let h_arity = Array.length terms in
-    (* Get all h typings *)
-    let all_h_ity = infer_head_ity h in
-    (* Assume that the target is
-       /\_i t_1i -> .. -> /\_i t_ki -> t
-       with t = pr or np. Typings of h that could make the application have the target type are
-       * -> .. -> * -> /\_i t_1i -> .. -> /\_i t_ki -> *,
-       where if t = PR then * is any type and if t = NP then * is any nonproductive type. Still,
-       even for t = PR, case where all * are nonproductive is treated specially, so these types
-       have to be distinguished. We filter the list of h typings accordingly. *)
-    let filtered_pr_h_ity, filtered_np_h_ity = filter_compatible_head all_h_ity h_arity target in
-    (* TODO type of a sorted list *)
-    let annotate : ity -> (ty * (int * ity) list) list =
-      TyList.map (fun h_ty -> (h_ty, index_list (fst (ty2list h_ty h_arity)))) in
-    let pr_h_ity = annotate filtered_pr_h_ity in
-    let np_h_ity = annotate filtered_np_h_ity in
-    let arg_itys_sums : TySet.t array = Array.make h_arity TySet.empty in
-    List.iter (fun h_ity ->
-        List.iter (fun (_, h_arg_itys) ->
-            List.iter (fun (i, ity) ->
-                arg_itys_sums.(i) <- TyList.fold_right TySet.add ity arg_itys_sums.(i)
-              ) h_arg_itys
-          ) h_ity
-      ) [pr_h_ity; np_h_ity];
-    (* then type arguments without variables to remove all impossible typings *)
-    (* TODO use aterms which have free contains_vars_in_term info *)
-    let terms_wo_vars_ixs = List.filter (fun i -> i >= 0)
-        (List.mapi (fun i term ->
-             if contains_vars_in_term terms.(i) then
-               -1
-             else
-               i
-           ) terms_list)
-    in
-    List.iter (fun i ->
-        let term = terms.(i) in
-        arg_itys_sums.(i) <- TySet.filter (fun ty ->
-            (* the no_pr_vars flag does not matter where there are no variables *)
-            infer_wo_venv term ty true = [[]]
-          ) arg_itys_sums.(i)
-      ) terms_wo_vars_ixs;
-    (* removing impossible typings *)
-    let filter_h_ity h_ity =
-      List.filter (fun (_, h_arg_itys) ->
-          List.for_all (fun (i, h_arg_ity) ->
-              TyList.for_all (fun ty -> TySet.mem ty arg_itys_sums.(i)) h_arg_ity
+  let terms = Array.of_list terms_list in
+  let h_arity = Array.length terms in
+  (* Get all h typings *)
+  let all_h_ity = infer_head_ity h in
+  (* Assume that the target is
+     /\_i t_1i -> .. -> /\_i t_ki -> t
+     with t = pr or np. Typings of h that could make the application have the target type are
+     * -> .. -> * -> /\_i t_1i -> .. -> /\_i t_ki -> *,
+     where if t = PR then * is any type and if t = NP then * is any nonproductive type. Still,
+     even for t = PR, case where all * are nonproductive is treated specially, so these types
+     have to be distinguished. We filter the list of h typings accordingly. *)
+  let filtered_pr_h_ity, filtered_np_h_ity = filter_compatible_head all_h_ity h_arity target in
+  (* TODO type of a sorted list *)
+  let annotate : ity -> (ty * (int * ity) list) list =
+    TyList.map (fun h_ty -> (h_ty, index_list (fst (ty2list h_ty h_arity)))) in
+  let pr_h_ity = annotate filtered_pr_h_ity in
+  let np_h_ity = annotate filtered_np_h_ity in
+  let arg_itys_sums : TySet.t array = Array.make h_arity TySet.empty in
+  List.iter (fun h_ity ->
+      List.iter (fun (_, h_arg_itys) ->
+          List.iter (fun (i, ity) ->
+              arg_itys_sums.(i) <- TyList.fold_right TySet.add ity arg_itys_sums.(i)
             ) h_arg_itys
-        ) h_ity in
-    let pr_h_ity = filter_h_ity pr_h_ity in
-    let np_h_ity = filter_h_ity np_h_ity in
-    (* head has empty variable environment, since there are no head variables - proceeding to
-       computing variable environments and typings of arguments *)
-    let pr_app = is_productive target in
-    if pr_app then
-      begin
-        []
-        (* TODO type args as np or pr, all from pr_h_ity with no restrictions *)
-        (* type np_h_ity with restriction that there has to be a duplication - skip all cases where
-           everything is not duplicating and term with last variable appearing 2+ times is analyzed
-           in particular, it is good to leave terms with variables present only in them for last -
-           maybe sort the order of checking by the amount of duplicated variables? *)
-        (* cache typing for each term *)
-      end
-    else
-      begin
-        (* no variables nor arguments can be productive when the application is nonproductive *)
-        List.map (fun (_, h_arg_itys) ->
-            List.map (fun (i, ity) ->
-                (* under intersection of this list of venvs the typing holds *)
-                let arg_venvs : venvl list = TyList.map (fun ty ->
-                    (* venvs for one type of the arg *)
-                    infer_wo_venv terms.(i) ty true
-                  ) ity
-                in
-                intersect_venvls arg_venvs
-              ) h_arg_itys
-          ) np_h_ity
-      end;
-    []
+        ) h_ity
+    ) [pr_h_ity; np_h_ity];
+  (* then type arguments without variables to remove all impossible typings *)
+  (* TODO use aterms which have free contains_vars_in_term info *)
+  let terms_wo_vars_ixs = List.filter (fun i -> i >= 0)
+      (List.mapi (fun i term ->
+           if contains_vars_in_term terms.(i) then
+             -1
+           else
+             i
+         ) terms_list)
+  in
+  List.iter (fun i ->
+      let term = terms.(i) in
+      arg_itys_sums.(i) <- TySet.filter (fun ty ->
+          (* the no_pr_vars flag does not matter where there are no variables *)
+          infer_wo_venv term ty true = [[]]
+        ) arg_itys_sums.(i)
+    ) terms_wo_vars_ixs;
+  (* removing impossible typings *)
+  let filter_h_ity h_ity =
+    List.filter (fun (_, h_arg_itys) ->
+        List.for_all (fun (i, h_arg_ity) ->
+            TyList.for_all (fun ty -> TySet.mem ty arg_itys_sums.(i)) h_arg_ity
+          ) h_arg_itys
+      ) h_ity in
+  let pr_h_ity = filter_h_ity pr_h_ity in
+  let np_h_ity = filter_h_ity np_h_ity in
+  (* head has empty variable environment, since there are no head variables - proceeding to
+     computing variable environments and typings of arguments *)
+  let pr_app = is_productive target in
+  if pr_app then
+    begin
+      []
+      (* TODO type args as np or pr, all from pr_h_ity with no restrictions *)
+      (* type np_h_ity with restriction that there has to be a duplication - skip all cases where
+         everything is not duplicating and term with last variable appearing 2+ times is analyzed
+         in particular, it is good to leave terms with variables present only in them for last -
+         maybe sort the order of checking by the amount of duplicated variables? *)
+      (* cache typing for each term *)
+    end
+  else
+    (* cache arg_ix * ty -> venvl or better aterm_id *)
+    begin
+      (* No variables nor arguments can be productive when the application is nonproductive. *)
+      (* Each element of the list contains possible environments for one typing of the head.
+         A sum of these environments is all possible environments for given target. *)
+      let h_venvls = List.map (fun (_, h_arg_itys) ->
+          (* Each element of the list contains possible environments for one of the arguments.
+             For the whole application to work, one environment from each one has to be
+             intersected with the rest in all possible combinations. *)
+          let app_venvls = List.map (fun (i, ity) ->
+              (* Each element of the list contains possible environments for one of the
+                 typings in the intersection type, so exactly one possibility from each has
+                 to be taken and intersected. *)
+              let arg_venvls : venvl list = TyList.map (fun ty ->
+                  (* venvs for one type of the arg *)
+                  infer_wo_venv terms.(i) ty true
+                ) ity
+              in
+              arg_venvls
+            ) h_arg_itys
+          in
+          let venvls_to_intersect = List.flatten app_venvls in
+          intersect_venvls venvls_to_intersect
+        ) np_h_ity
+      in
+      List.flatten h_venvls
+    end
 (*
       for i = 0 to Array.length terms - 1 do
         (* TODO type args as forced np *)
@@ -1412,23 +1406,8 @@ let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool) : venvl =
         (* sum the result from different arg itys *)
       done;
 *)
-    (* type all nonproductive arguments first, since it has more restrictions and is faster *)
-    (* then type all productive arguments *)
-    (*
-    let tyss = match_head_ity h [] (List.length terms) ty in (* all found types of arguments
-                                                                 to this head grouped by
-                                                                 application (i.e., not
-                                                                 flattened) *)
-    match target with
-    | Fun (_, ity, ty) -> ()
-    | _ -> failwith "Unexpected target type"
-    *)
-    (*
-    List.fold_left
-      (fun vtes tys ->
-         (tcheck_terms_wo_venv terms tys)@vtes) [] tyss (* get typings of variables based on
-                                                           known typings of arguments *)
-    *)
+(* type all nonproductive arguments first, since it has more restrictions and is faster *)
+(* then type all productive arguments *)
 
 (*
 (** Returns types for variables inside assuming that term has codomain ity. *)
