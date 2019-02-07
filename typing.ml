@@ -1,5 +1,6 @@
-open Type
 open Grammar
+open GrammarCommon
+open Type
 
 (** A single possible typing of variables mapping variables to their types, treated as if there
     was AND as the delimiter. *)
@@ -13,7 +14,7 @@ module TySet = Set.Make(Ty)
 class typing (grammar : grammar) = object(self)
   (* --- registers --- *)
                      
-  (** nt_ity[n] has all typings of nonterminal n. *)
+  (** nt_ity[nt] has all typings of nonterminal nt. *)
   val nt_ity : ity array = [||]
 
   (* --- utility --- *)

@@ -1,8 +1,9 @@
 (** Control flow analysis module implementing 0CFA. *)
 
 open Grammar
-open Utilities
+open GrammarCommon
 open HGrammar
+open Utilities
 
 (* --- types --- *)
 
@@ -10,7 +11,12 @@ type node = hterm
 type binding = (int * int * hterms_id) list
 
 (* hterm -> ref (hterm, qs) *)
-module HType = struct type t = hterm;; let equal i j = i=j;; let hash = Hashtbl.hash_param 100 100 end
+module HType = struct
+  type t = hterm
+  let equal i j = i=j
+  let hash = Hashtbl.hash_param 100 100
+end
+
 module HTermHashtbl = Hashtbl.Make(HType)
 
 module SortedHTermsIds = SortedList.Make(struct
@@ -18,6 +24,7 @@ module SortedHTermsIds = SortedList.Make(struct
     let compare = Pervasives.compare
   end)
 
+(* TODO remove dependency on grammar *)
 class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
   (* --- registers --- *)
 
@@ -139,7 +146,7 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
   method print_binding_array =
     print_string "bindings (nt --> bindings list)\n\n";
     for nt = 0 to Array.length binding_array_nt - 1 do (* TODO iter *)
-      print_string ((grammar#name_of_nt nt)^":\n");
+      print_string ((hgrammar#nt_name nt)^":\n");
       List.iter self#print_binding (binding_array_nt).(nt)
     done
 
@@ -195,19 +202,8 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
     if List.mem term terms then (terms,false)
     else (term::terms,true)
 
-  method print_hterm (term,termss) =
-    grammar#print_term term;
-    List.iter (fun terms -> 
-        print_string "[";
-        List.iter (fun t ->
-            print_string "(";
-            grammar#print_term t;
-            print_string ") ") terms;
-        print_string "]";
-      ) termss
-
   method print_node hterm =
-    self#print_hterm hterm
+    hgrammar#print_hterm hterm
 
   method clear_nodequeue =
     nodequeue <- []
@@ -300,6 +296,7 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
   method expand_terminal termss =
     List.iter (fun hterm -> self#enqueue_node hterm) termss
 
+  (* TODO unused
   (** Returns size of term as number of non-application terms on left-hand size of application (not number of terminals/nonterminals) *)
   method size_of_appterm t =
     match t with
@@ -309,7 +306,6 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
         | _ -> 1 + self#size_of_appterm t2)
     | _ -> 0
 
-  (* TODO unused
   method size_of_rules r =
     Array.fold_left (fun s (_, t) -> s + self#size_of_appterm t) 0 r
   *)
@@ -510,8 +506,8 @@ else b::bindmasks)
     for i = 0 to Array.length array_dep_nt_nt_lin - 1 do
       let nts = array_dep_nt_nt_lin.(i) in
       if not (nts = SortedNTs.empty) then
-        (print_string ((grammar#name_of_nt i)^" linearly occurs in ");
-         SortedNTs.iter (fun j-> print_string ((grammar#name_of_nt j)^",")) nts;
+        (print_string ((hgrammar#nt_name i)^" linearly occurs in ");
+         SortedNTs.iter (fun j-> print_string ((hgrammar#nt_name j)^",")) nts;
          print_string "\n")
     done
 
@@ -630,10 +626,10 @@ else b::bindmasks)
     done;
     (* make dependency nt1 --> nt2 (which means "nt2 depends on nt1") *)
     self#init_array_dep_nt_nt;
-    let n = grammar#nt_count in
+    let n = hgrammar#nt_count in
     for i = 0 to n - 1 do
       let (_, t) = grammar#rule i in
-      let (nts1,nts2) = self#nt_in_term_with_linearity t in
+      let (nts1, nts2) = self#nt_in_term_with_linearity t in
       SortedNTs.iter (fun nt-> self#register_dep_nt_nt nt i) nts2;
       if !Flags.incremental then
         SortedNTs.iter (fun nt-> self#register_dep_nt_nt_lin nt i) nts1
@@ -655,11 +651,11 @@ else b::bindmasks)
     binding_array_nt <- Array.make num_of_nts []; (* binding_array_nt[nt_id] = [] *)
     binding_array_var <- Array.make num_of_nts [||]; (* binding_array_var[nt_id][arg_id] = [] *)
     for i = 0 to num_of_nts - 1 do
-      binding_array_var.(i) <- Array.make (hgrammar#arity_of_nt i) []
+      binding_array_var.(i) <- Array.make (hgrammar#nt_arity i) []
     done;
     variable_head_nodes <- Array.make num_of_nts [||];
     for i = 0 to num_of_nts - 1 do
-      variable_head_nodes.(i) <- Array.make (hgrammar#arity_of_nt i) [] (* variable_head_nodes[nt_id][arg_id] = [] *)
+      variable_head_nodes.(i) <- Array.make (hgrammar#nt_arity i) [] (* variable_head_nodes[nt_id][arg_id] = [] *)
     done;
     self#enqueue_node (HNT(0), []) (* enqueue first nonterminal with no args and first state *)
 end

@@ -1,9 +1,6 @@
+open GrammarCommon
 open Utilities
 
-exception Fatal of string
-
-type nt_id = int (** names of non-terminal symbols; they are just integers **)
-type var_id = nt_id * int (* pair of the non-terminal and the variable index *)
 type term = A | B | E | NT of nt_id | Var of var_id | App of term * term
 type kind = O | Kfun of kind * kind
 
@@ -14,16 +11,6 @@ type var_names = string array array (* store the original name of each variable 
 
 (** The total number of formal parameters and nonterminal body *)
 type rule = int * term
-
-module SortedVars = SortedList.Make(struct
-    type t = var_id
-    let compare = Pervasives.compare
-  end)
-
-module SortedNTs = SortedList.Make(struct
-    type t = nt_id
-    let compare = Pervasives.compare
-  end)
 
 let arity_of_t (a : term) : int =
   match a with

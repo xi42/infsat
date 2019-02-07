@@ -1,4 +1,5 @@
 open Grammar
+open GrammarCommon
 
 (** All sequences of terms converted into head form and having the same environment
     TODO describe what environment
@@ -41,14 +42,16 @@ class hgrammar (grammar : grammar) = object(self)
   (** Increasing counter for fresh identifiers for hterms (all terms and subterms in head form). *)
   val mutable next_hterms_id : int = 0
 
-  method hterms_count : int = next_hterms_id
-
   method nt_count : int = Array.length normalized_body
 
-  method arity_of_nt (nt : nt_id) : int = grammar#arity_of_nt nt
-  
-  method nt_body nt = normalized_body.(nt)
+  method nt_arity (nt : nt_id) : int = grammar#arity_of_nt nt
 
+  method nt_name (nt : nt_id) : string = grammar#name_of_nt nt
+  
+  method nt_body (nt : nt_id) = normalized_body.(nt)
+
+  method hterms_count : int = next_hterms_id
+  
   method lookup_id_terms aid = tab_id_terms.(aid)
 
   (** Changes (H, [ID]) into (H, [arg 1, arg 2, ...]) and (H, [ID1, ID2, ...]) into (H, [arg 1-1, arg 1-2, ..., arg 2-1, arg 2-2, ...]), i.e., looks up one layer and combines applications *)
@@ -131,6 +134,28 @@ class hgrammar (grammar : grammar) = object(self)
       in
       (self#term2head h, [id]) (* return just the head and id of list of args, note that this fun will only return [] or [id] in snd *)
 
+  (* --- printing --- *)
+
+  method print_head = function
+    | HNT nt -> print_string (grammar#name_of_nt nt)
+    | HVar v -> print_string (grammar#name_of_var v)
+    | HA -> print_string "a"
+    | HB -> print_string "b"
+    | HE -> print_string "e"
+
+  method print_hterm (h, hids : hterm) =
+    self#print_head h;
+    List.iter (fun hid ->
+        print_string "[";
+        let hterms = self#id2hterms hid in
+        List.iter (fun t ->
+            print_string "(";
+            self#print_hterm t;
+            print_string ") "
+          ) hterms;
+        print_string "]";
+      ) hids
+  
   method print_tab_id_terms =
     print_string "hterms id --> terms\n\n";
     for id = 0 to next_hterms_id - 1 do

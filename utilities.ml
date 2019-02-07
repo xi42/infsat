@@ -1,5 +1,4 @@
 open Flags
-exception Fatal of string
 
 let table_create n = Hashtbl.create n;;
 let table_find tab x = Hashtbl.find tab x 
@@ -37,7 +36,7 @@ let rec fromto m n =
 
 let rec list_repl n a l =
   match l with
-    [] -> raise (Fatal "list_repl: position is wrong")
+    [] -> failwith "list_repl: position is wrong"
   | x::l' ->
      if n=0 then a::(List.tl l)
      else x::(list_repl (n-1) a l')
@@ -67,7 +66,7 @@ let rec list_rem_n l n =
 
 let rec list_take_nth l n =
   match l with
-  | [] -> raise (Fatal "list_take_nth: position is wrong")
+  | [] -> failwith "list_take_nth: position is wrong"
   | a::l' ->
     if n=0 then (a, l')
     else

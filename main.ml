@@ -46,7 +46,7 @@ let report_finiteness input : bool =
   profile "eta-expansion" (fun () -> Stype.eta_expand grammar);
   let hgrammar = profile "head conversion" (fun () -> new HGrammar.hgrammar grammar) in
   let cfa = profile "0CFA" (fun () ->
-      let cfa = new Cfa.cfa grammar hgrammar (* TODO Cfa.init_expansion () *) in
+      let cfa = new Cfa.cfa grammar hgrammar in
       cfa#expand;
       cfa#mk_binding_depgraph;
       cfa)
