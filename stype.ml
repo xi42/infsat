@@ -128,11 +128,11 @@ let print_sortbinding (f, sty) =
    print_sty sty;
    print_string "\n")
 
-let print_nste nste =
+let print_nste gram nste =
   let _ = print_string "Sorts of non-terminals:\n" in
   let _ = print_string "=======================\n" in
   let _ = for i=0 to (Array.length nste - 1) do
-      print_sortbinding ((name_of_nt i), nste.(i))
+      print_sortbinding ((gram#name_of_nt i), nste.(i))
     done
   in
   let _ = print_string "\n" in
@@ -181,7 +181,7 @@ let tcheck_rule f (arity, body) nste =
 
 let tcheck_rules rules nste =
   let cstr = ref [] in
-  for i=0 to Array.length rules - 1 do 
+  for i = 0 to Array.length rules - 1 do 
     (cstr := (tcheck_rule i rules.(i) nste)@ !cstr)
   done;
   !cstr
@@ -197,10 +197,9 @@ let order_of_nste nste =
   let x = list_max (fun (nt1,ord1) ->fun (nt2,ord2) -> compare ord1 ord2) ordmap in
     x
 
-let print_order (f,ord) =
-  let _ = print_string ("Order of recursion scheme: "^(string_of_int ord)^"\n") in
-  let _ = print_string ("Non-terminal of highest order: "^(name_of_nt f)^"\n") in
-    ()
+let print_order gram nt ord =
+  print_string ("Order of recursion scheme: "^(string_of_int ord)^"\n");
+  print_string ("Non-terminal of highest order: "^(gram#name_of_nt nt)^"\n")
 
 let rec mk_vste i vste arity sty =
   if i>=arity then ()
@@ -211,31 +210,28 @@ let rec mk_vste i vste arity sty =
      | _ -> assert false (* arity and sty contradict *)
    )
 
-let update_arity_of_nt g nste =
-  for f=0 to Array.length g.r - 1 do
-    let sty = nste.(f) in
+let update_arity_of_nt gram nste =
+  for nt = 0 to gram#nt_count - 1 do
+    let sty = nste.(nt) in
     let arity = sty2arity sty in
-    let (arity',body) = g.r.(f) in
-    if arity>arity' then (* add dummy argument *)
-      let vars = List.map (fun i->Var(f,i)) (fromto arity' arity) in
+    let arity', body = gram#rule nt in
+    if arity > arity' then (* add dummy argument *)
+      let vars = List.map (fun i-> Var (nt, i)) (fromto arity' arity) in
       let body' = Grammar.mk_app body vars in (* add explicit arguments to rules so that the kind of the term inside is o *)
-      g.r.(f) <- (arity,body')
-    else ()
+      gram#replace_rule nt (arity, body')
   done
 
-let eta_expand() =
+let eta_expand (gram : grammar) =
   (* creating a new type var for each nonterminal *)
-  let g = !Grammar.gram in
-  let num_of_nts = Array.length g.nt in
+  let num_of_nts = gram#nt_count in
   let nste = Array.make num_of_nts dummy_type in
   let _ = for i=0 to num_of_nts-1 do
       nste.(i) <- new_tvar()
     done 
   in
-  let _ = if !Flags.debugging then print_nste nste in
+  let _ = if !Flags.debugging then print_nste gram nste in
   (* creating equations for unification *)
-  let rules = g.r in
-  let c = tcheck_rules rules nste in
+  let c = tcheck_rules gram#rules nste in
   (* computing sorts by unification *)
   let _ =  try
       unify_all c 
@@ -249,9 +245,9 @@ let eta_expand() =
   in
   let (f,ord) = order_of_nste nste in
   (* eta-expanding bodies of non-terminals so that their bodies are of sort O *)
-  update_arity_of_nt g nste;
+  update_arity_of_nt gram nste;
   if !Flags.debugging then
     begin
-      print_nste nste;
-      print_order (f, ord)
+      print_nste gram nste;
+      print_order gram f ord
     end

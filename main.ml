@@ -42,11 +42,22 @@ let parse_stdin() =
 (** Main part of InfSat. Takes parsed input, computes if the language contains
     arbitrarily many counted letters. Prints the result. *)
 let report_finiteness input : bool =
-  profile "conversion" (fun () -> Conversion.prerules2gram input);
-  profile "eta-expansion" (fun () -> Stype.eta_expand());
-  profile "0CFA" (fun () -> Cfa.init_expansion(); Cfa.expand());
-  profile "computing dependencies" (fun () -> Cfa.mk_binding_depgraph());
-  Saturate.saturate()
+  let grammar = profile "conversion" (fun () -> Conversion.prerules2gram input) in
+  profile "eta-expansion" (fun () -> Stype.eta_expand grammar);
+  let hgrammar = profile "head conversion" (fun () -> new HGrammar.hgrammar grammar) in
+  let cfa = profile "0CFA" (fun () ->
+      let cfa = new Cfa.cfa grammar hgrammar (* TODO Cfa.init_expansion () *) in
+      cfa#expand;
+      cfa#mk_binding_depgraph;
+      cfa)
+  in
+  profile "saturation" (fun () ->
+      true
+        (*
+      let saturation = new Saturation.saturation cfa hgrammar in
+      saturation#saturate
+*)
+    )
 
 let string_of_input (prerules, tr) =
   (Syntax.string_of_prerules prerules)^"\n"^(Syntax.string_of_preterminals tr)

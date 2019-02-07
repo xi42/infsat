@@ -1,323 +1,338 @@
-open Utilities;;
-open Grammar;;
-open Automaton;;
+open Type
+open Grammar
 
-type te = (nt_id * ty) list  (*** type environment for non-terminals ***)
-type vte = (nt_id * ty) list  (*** type environment for variables ***)
-type cte = (nameT * ty) list (*** type environment for constants ***)
+(** A single possible typing of variables mapping variables to their types, treated as if there
+    was AND as the delimiter. *)
+type venv = (var_id * ity) list
 
-let mode_gfp = ref true
-let transduce = ref false
-let empty_te = []
-let outputml = ref false
+(** List of possible typings of variables, treated as if there was OR as the delimiter. *)
+type venvl = venv list
 
-let init_te nt =
-  Utilities.list2hash (List.map (fun (x,_) -> (x, [])) nt)
+module TySet = Set.Make(Ty)
 
-let rec string_of_ty ty =
-  match ty with
-    [] -> "Top"
-  | [aty] -> 
-         (match aty with
-           ItyQ(q) -> q
-         | _ -> ("("^(string_of_aty aty)^")")
-         )
-  | aty::ty' -> 
-      ((string_of_ty [aty])^"/\\"^(string_of_ty ty'))
-and string_of_aty_parens aty =
-  match aty with
-     ItyQ(q) -> string_of_aty aty
-   | _ -> ("("^(string_of_aty aty)^")")
-and string_of_aty aty =
-  match aty with
-    ItyQ(q) -> q
-  | ItyFun(ty, aty) ->
-       (string_of_ty ty)^" -> "^(string_of_aty aty)
+class typing (grammar : grammar) = object(self)
+  (* --- registers --- *)
+                     
+  (** nt_ity[n] has all typings of nonterminal n. *)
+  val nt_ity : ity array = [||]
 
-let rec name_of_aty aty = 
-  match aty with
-    ItyQ(q) -> q
-  | ItyFun(ty, aty) ->
-       (string_of_ty ty)^"_"^(string_of_aty aty)
+  (* --- utility --- *)
 
-let rec print_ty ty =
-  match ty with
-    [] -> print_string "Top"
-  | [aty] -> 
-         (match aty with
-           ItyQ(q) -> print_string q
-         | _ -> (print_string "("; print_aty aty; print_string ")")
-         )
-  | aty::ty' -> 
-      match aty with
-       | _ -> (print_ty [aty]; print_string "/\\"; print_ty ty' )
-and print_aty_parens aty =
-  match aty with
-     ItyQ(q) -> print_aty aty
-   | _ -> (print_string "("; print_aty aty; print_string ")")
-and print_aty aty =
-  match aty with
-    ItyQ(q) -> print_string q
-  | ItyFun(ty, aty) ->
-       (print_ty ty; print_string " -> "; print_aty aty)
+  method nt_ty_exists (nt : nt_id) (ty : ty) : bool =
+    TyList.exists (fun nt_ty -> nt_ty = ty) nt_ity.(nt)
 
-let rec output_ty fp ty =
-  match ty with
-    [] -> output_string fp "Top"
-  | [aty] -> 
-         (match aty with
-           ItyQ(q) -> output_string fp q
-         | _ -> (output_string fp "("; output_aty fp aty; output_string fp ")")
-         )
-  | aty::ty' -> 
-      match aty with
-       | _ -> (output_ty fp [aty]; output_string fp "/\\"; output_ty fp ty' )
-and output_aty_parens fp aty =
-  match aty with
-     ItyQ(q) -> output_aty fp aty
-   | _ -> (output_string fp "("; output_aty fp aty; output_string fp ")")
-and output_aty fp aty =
-  match aty with
-    ItyQ(q) -> output_string fp q
-  | ItyFun(ty, aty) ->
-       (output_ty fp ty; output_string fp " -> "; output_aty fp aty)
-
-let print_tbinding (f, ty) =
-  (print_string (f^" : \n  ");
-   List.iter (fun aty -> (print_aty aty; print_string "\n  ")) ty;
-   print_string "\n")
+  (* --- typing --- *)
   
-let print_te te =
-  List.iter print_tbinding te
+  method terminal_ity : term -> ity =
+    let np = TyList.singleton NP in
+    let pr = TyList.singleton PR in
+    let a_ity = TyList.of_list [
+        mk_fun_ty np PR;
+        mk_fun_ty pr PR
+      ] in
+    let b_ity = TyList.of_list [
+        mk_fun_ty np (mk_fun_ty TyList.empty NP);
+        mk_fun_ty pr (mk_fun_ty TyList.empty NP);
+        mk_fun_ty TyList.empty (mk_fun_ty np NP);
+        mk_fun_ty TyList.empty (mk_fun_ty pr NP)
+      ] in
+    let e_ity = TyList.singleton NP in
+    function
+    | A -> a_ity
+    | B -> b_ity
+    | E -> e_ity
+    | _ -> failwith "Expected a terminal"
 
-let lookup_te f te =
-  try Hashtbl.find te f with Not_found -> raise (Grammar.UndefinedNonterminal f)
-let update_te f ty te =
-  (Hashtbl.replace te f ty; te)
+  (** Returns sorted list of typings available for given head term. *)
+  method infer_head_ity (h : term) : ity =
+    match h with
+    | A | B | E -> self#terminal_ity h
+    | NT nt -> nt_ity.(nt)
+    | Var x -> failwith "TODO"
+    | App _ -> failwith "Expected a head term"
 
-let size_of_te te =
-  List.fold_left 
-   (fun n -> fun (_,ty) -> (n+List.length(ty)))
-   0
-   te
+  method is_nonproductive_app_head_ty (ty : ty) (arity : int) : bool =
+    let arg_itys, res_ty = ty2list ty arity in
+    not (is_productive res_ty) &&
+    not (List.exists (fun ity -> TyList.exists is_productive ity) arg_itys)
 
-let rec tsize_of_te te =
-  List.fold_left 
-   (fun n -> fun (_,ty) -> (n+size_of_ty(ty)))
-   0
-   te
-and size_of_ty ty =
-  List.fold_left 
-   (fun n -> fun aty -> (n+size_of_aty(aty)))
-   0
-   ty
-and size_of_aty aty =
-  match aty with
-    ItyQ _ -> 1
-  | ItyFun(ty1,aty2) -> size_of_ty(ty1) + size_of_aty(aty2)
-
-let size_of_judgment te aty =
-  (tsize_of_te te) + (size_of_aty aty)
-
-let singletontype_of_value n = ItyQ(string_of_int n)
-let value_of_singletontype aty = 
-  match aty with
-     ItyQ(q) -> int_of_string q
-   | _ -> raise (Fatal "value_of_singletontype")
-
-let rec subtype aty1 aty2 =
-  match (aty1,aty2) with
-    (ItyQ(q1), ItyQ(q2)) -> q1=q2
-  | (ItyFun(ty1,aty11), ItyFun(ty2, aty21)) ->
-      (subtype aty11 aty21) 
-      && (List.for_all (fun aty12 -> List.exists (fun aty22 -> subtype aty22 aty12) ty2) ty1)
-  | _ -> false
-
-let rec filter_suptype ty result =
- match ty with
-   [] -> result
- | aty::ty' ->
-     if (List.exists (fun aty2 -> subtype aty2 aty) result)
-        ||
-        (List.exists (fun aty2 -> subtype aty2 aty) ty')
-     then filter_suptype ty' result
-     else filter_suptype ty' (aty::result)
-
-let rec subtype_normalize_aty aty =
-  match aty with
-    ItyFun(ty1,aty2) ->
-       let aty2' = subtype_normalize_aty aty2 in
-       let ty1' = List.map subtype_normalize_aty ty1 in
-       let ty1'' = filter_suptype ty1' [] in
-       let ty1''' = List.sort compare ty1'' in
-         ItyFun(ty1''', aty2')
-  | _ -> aty
-
-let add_te te telist =
-  let _ =
-    List.iter
-      (fun (f, atys) ->
-        let atys1 = lookup_te f te in
-        let atys1' = List.filter (fun aty1 -> not(List.exists
-                           (fun aty -> subtype aty aty1) atys)) atys1 in
-        let atys1'' = merge_and_unify compare atys atys1' in 
-        let _ = update_te f atys1'' te in
-         ())
-    telist
-  in
-    te
-
-let filter_valid_types te nte =
-  Hashtbl.iter
-   (fun f atys -> 
-     let atys1 = lookup_te f nte in
-      Hashtbl.replace te f
-       (List.filter (fun aty -> not(List.exists 
-                           (fun aty1 -> subtype aty1 aty) atys1)) atys))
-    te
-
-let rec get_rty n aty =
-  if n=0 then aty
-  else
-    match aty with
-      ItyFun(_,aty') -> get_rty (n-1) aty'
-    | _ -> assert false
-
-let rec eqrty n rty aty =
-  if n=0 then subtype aty rty
-  else 
-    match aty with
-      ItyFun(_,aty') -> eqrty (n-1) rty aty'
-    | _ -> false
-
-let ret_of_funty aty =
-  match aty with
-    ItyFun(_,aty')->aty'
-  | _ -> assert false
-
-let type_of_head head n rty te nte vte cte =
-  match head with
-    NT(f) -> 
-          ( try
-             let ty1 = List.filter (eqrty n rty) (lookup_te f nte) in
-             let ty2 = List.filter (eqrty n rty) (lookup_te f te) in
-               List.rev_append ty1 ty2
-           with Not_found -> assert false)
-  | T(a) -> 
-         (try List.filter (eqrty n rty) (List.assoc a cte) 
-         with Not_found -> assert false)
-  | Var(v) -> 
-        ( try List.filter (eqrty n rty) (List.assoc v vte) 
-         with Not_found -> (print_string (v^" not found in: \n");
-                            print_te vte; assert false))
-  | App(t1,t2) -> assert false
-
-let typetab = Hashtbl.create 1000
-(**
-let register_typetab term rty vte b =
-  Hashtbl.add typetab (term,rty,vte) b
-let lookup_typetab term rty vte = (* raise Not_found *)
-  Hashtbl.find typetab (term,rty,vte) 
-**)
-let register_typetab term rty b =
-  Hashtbl.add typetab (term,rty) b
-let lookup_typetab term rty = (* raise Not_found *)
-  Hashtbl.find typetab (term,rty) 
-
-let reset_typetab() = Hashtbl.clear typetab
-
-let rec has_type term rty te nte vte cte =
-  let (h,terms) = decompose_term term in
-  if terms = [] then has_type_sub h terms rty te nte vte cte 
-  else
-   try 
-     lookup_typetab term rty 
-   with
-    Not_found ->
-      let b = has_type_sub h terms rty te nte vte cte in
-        (register_typetab term rty b; b)
-
-and has_type_sub h terms rty te nte vte cte = 
-  let ty = type_of_head h (List.length terms) rty te nte vte cte in
-    List.exists (fun aty -> check_args terms aty te nte vte cte) ty
-
-and check_args terms aty te nte vte cte =
-  match terms with
-    [] -> true
-  | t::terms' ->
-     match aty with
-       ItyFun(ty1,aty2) ->
-         (List.for_all (fun aty1->has_type t aty1 te nte vte cte) ty1)
-         && check_args terms' aty2 te nte vte cte
-     | _ -> false
-
-let merge_ty ty1 ty2 = merge_and_unify compare ty1 ty2
-let rec merge_te te1 te2 = 
-  match (te1,te2) with
-    ([], _) -> te2
-  | (_, []) -> te1
-  | ((x,ty1)::te1', (y,ty2)::te2') ->
-      let c = compare x y in
-      if c=0 then (x,merge_ty ty1 ty2)::(merge_te te1' te2')
-      else if c<0 then (x,ty1)::(merge_te te1' te2)
-      else (y,ty2)::(merge_te te1 te2')
-
-
-(*** checks whether the body of f has type at ***)
-let rec check_aty (f: nameNT) at te nte cte g =
-  let _ = reset_typetab() in
-  let (vars, body) = get_def f g in
-  let (vte, rang_ty) =  mk_vte vars at in
-  try
-    has_type body rang_ty te nte vte cte 
-  with Not_found -> assert false
-
-let rec gfp te cte nte unchecked dmap g =
-  match unchecked with
-    [] -> ()
-  | f::unchecked' ->
-     let fty = 
-      try
-        lookup_te f te 
-        with Not_found -> assert false
-     in
-     let fty' = List.filter (fun aty -> check_aty f aty te nte cte g) fty in
-       if List.length fty=List.length fty' then
-         gfp te cte nte unchecked' dmap g
-       else
-         let to_be_checked = List.assoc f dmap in
-         let te' = update_te f fty' te in
-           gfp te' cte nte (merge_and_unify compare unchecked' to_be_checked) dmap g
-
-let rec lfp new_te te cte nte unchecked dmap g =
-  match unchecked with
-    [] -> ()
-  | f::unchecked' ->
-     let fty = lookup_te f te in
-     let (fty',fty3) = list_filter2 (fun aty -> check_aty f aty new_te nte cte g) fty in
-       if fty'=[] then
-         lfp new_te te cte nte unchecked' dmap g
-       else
-         let to_be_checked = List.assoc f dmap in
-         let fty1 = lookup_te f new_te in
-         let fty2 = merge_and_unify compare fty1 fty' in
-         let te' = update_te f fty3 te in
-         let new_te' = update_te f fty2 new_te in
-           lfp new_te' te' cte nte (merge_and_unify compare unchecked' to_be_checked) dmap g
-
-let compute_te te cte nte dmap g =
-  let unchecked = List.map fst (g.nt) in
-    if !mode_gfp then
-      (gfp te cte nte unchecked dmap g; te)
+  method filter_compatible_head (ity : ity) (arity : int) (target : ty) : ity =
+    if is_productive target then
+      (* left side and codomain of productive application can have any types *)
+      let flipped_target = flip_productivity target in
+      TyList.filter (fun ty ->
+          let res_ty = remove_args arity ty in
+          eq_ty res_ty target ||
+          eq_ty res_ty flipped_target
+        ) ity
     else
-      let new_te = init_te (g.nt ) in
-        (lfp new_te te cte nte unchecked dmap g; new_te)
+      (* left side of a nonproductive application must have nonproductive arguments and codomain *)
+      TyList.filter (fun ty ->
+          let arg_itys, res_ty = ty2list ty arity in
+          eq_ty res_ty target &&
+          not (List.exists (fun ity -> TyList.exists is_productive ity) arg_itys)
+        ) ity
 
+  (** Creates a list of arrays of pairs (term, ity) with ity being intersection type for given
+      argument, and each element of outer list corresponds to one of provided types.
+      Combines that in a tuple with a boolean whether the whole type is productive. *)
+  method annotate_args (terms : term list) (ity : ity) : ((term * ity) array * bool) list =
+    let rec annotate_args_ty terms ty acc =
+      match terms, ty with
+      | term :: terms', Fun (_, ity, ty') ->
+        annotate_args_ty terms' ty' ((term, ity) :: acc)
+      | [], _ ->
+        (Array.of_list (List.rev acc), is_productive ty)
+      | _ -> failwith "List of terms longer than list of arguments"
+    in
+    TyList.map (fun ty ->
+        annotate_args_ty terms ty []
+      ) ity
 
+  (** Merges vtes (variable types) by combining the list of type bindings in order, and combining
+      types when a binding for the same variable is present in both lists. The resulting binding
+      is ordered ascendingly lexicographically by variable ids. Combining types is also idempodently
+      merging list of types (i.e., there are sets of types). TODO redo docs from old ones *)
+  method intersect_two_venvs (venv1 : venv) (venv2 : venv) : venv =
+    match venv1, venv2 with
+    | [], _ -> venv2
+    | _, [] -> venv1
+    | ((v1, ity1) :: venv1', (v2, ity2) :: venv2') ->
+      let n = compare v1 v2 in
+      if n < 0 then
+        (v1, ity1) :: (self#intersect_two_venvs venv1' venv2)
+      else if n > 0 then
+        (v2, ity2) :: (self#intersect_two_venvs venv1 venv2')
+      else
+        (v1, TyList.merge ity1 ity2) :: (self#intersect_two_venvs venv1' venv2')
 
-let rec decompose_ity ity =
-  match ity with
-    ItyQ(_) -> ([], ity)
- | ItyFun(ty1,ity2) -> 
-     let (tys,rty) = decompose_ity ity2 in
-       (ty1::tys, rty)
+  (** Flatten an intersection of variable environment lists, which are OR-separated lists of
+      AND-separated lists of typings of unique in inner list variables. Flattening means moving
+      outer intersection (AND) inside. *)
+  method intersect_two_venvls (venvl1 : venvl) (venvl2 : venvl) : venvl =
+    match venvl1, venvl2 with
+    | _, [] -> [] (* second typing is invalid *)
+    | [], _-> [] (* first typing is invalid *)
+    | _, [[]] -> venvl1 (* no variables in second typing *)
+    | [[]], _ -> venvl2 (* no variables in first typing *)
+    | _ ->
+      List.fold_left
+        (fun acc venv1 ->
+           let venvl2' = List.rev_map (fun venv2 ->
+               self#intersect_two_venvs venv1 venv2
+             ) venvl2
+           in
+           List.rev_append venvl2' acc)
+        [] venvl1
+
+  method intersect_venvls (venvls : venvl list) : venvl =
+    match venvls with
+    | [] -> [[]]
+    | [venvl] -> venvl
+    | venvl :: venvs' ->
+      self#intersect_two_venvls venvl (self#intersect_venvls venvs')
+
+  (* TODO this should be done on hterm, not term *)
+  method infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool) : venvl =
+    match term with
+    | Var x ->
+      (* x : NP : s, any s *)
+      if is_productive target then
+        [] (* variables are only NP *)
+      else
+        (* both NP and PR versions are possible *)
+        let res = [[(x, TyList.singleton target)]] in
+        if no_pr_vars then
+          res
+        else
+          [(x, TyList.singleton (with_productivity target PR))] :: res
+    | A ->
+      (* a : f -> PR : O -> O, f = PR or NP *)
+      begin
+        match target with
+        | Fun(_, _, PR) -> [[]]
+        | _ -> []
+      end
+    | B ->
+      (* b : f -> T -> NP, T -> f -> NP : O -> O -> O, f = PR or NP *)
+      begin
+        match target with
+        | Fun(_, TyList.L [_], Fun(_, TyList.L [], NP))
+        | Fun(_, TyList.L [], Fun(_, TyList.L [_], NP)) -> [[]]
+        | _ -> []
+      end
+    | E ->
+      (* e : NP : O *)
+      begin
+        match target with
+        | NP -> [[]]
+        | _ -> []
+      end
+    | NT nt ->
+      if self#nt_ty_exists nt target then
+        [[]]
+      else
+        []
+    | App _ ->
+      let h, terms = Grammar.decompose_term term in
+      self#infer_app_wo_env h terms target no_pr_vars
+
+  method infer_app_wo_env (h : term) (terms : term list) (target : ty) (no_pr_vars : bool) : venvl =
+    (* target is PR <=>
+       - lhs is PR or some arg is PR or there is duplication but all possibilities have to be
+         checked
+       lhs arg is PR <=>
+       - rhs arg is PR or has PR variable
+
+       first compute lhs, then rhs.
+
+       targeting lhs PR:
+       - lhs target=*->PR - need to be able to describe * without usual subtyping
+       - lhs target=NP
+       targeting lhs PR means brute or optimizing checking for duplications
+       targeting rhs PR means brute or optimizing checking for PR variables
+    *)
+    let h_arity = List.length terms in
+    (* Get all h typings *)
+    let all_h_ity = self#infer_head_ity h in
+    (* Assume that the target is
+       /\_i t_1i -> .. -> /\_i t_ki -> t
+       with t = pr or np. Typings of h that could make the application have the target type are
+       * -> .. -> * -> /\_i t_1i -> .. -> /\_i t_ki -> *,
+       where if t = PR then * is any type and if t = NP then * is any nonproductive type. Still,
+       even for t = PR, case where all * are nonproductive is treated specially, so these types
+       have to be distinguished. We filter the list of h typings accordingly. *)
+    let h_ity = self#filter_compatible_head all_h_ity h_arity target in
+    let h_ity = self#annotate_args terms h_ity in
+    let arg_itys_sums : TySet.t array = Array.make h_arity TySet.empty in
+    []
+    (*
+    List.iter (fun h_ity ->
+        List.iter (fun (_, h_arg_itys) ->
+            List.iter (fun (i, ity) ->
+                arg_itys_sums.(i) <- TyList.fold_right TySet.add ity arg_itys_sums.(i)
+              ) h_arg_itys
+          ) h_ity
+      ) [pr_h_ity; np_h_ity];
+    (* then type arguments without variables to remove all impossible typings *)
+    (* TODO use hterms which have free contains_vars_in_term info *)
+    let terms_wo_vars_ixs = List.filter (fun i -> i >= 0)
+        (List.mapi (fun i term ->
+             if contains_vars_in_term terms.(i) then
+               -1
+             else
+               i
+           ) terms_list)
+    in
+    List.iter (fun i ->
+        let term = terms.(i) in
+        arg_itys_sums.(i) <- TySet.filter (fun ty ->
+            (* the no_pr_vars flag does not matter where there are no variables *)
+            infer_wo_venv term ty true = [[]]
+          ) arg_itys_sums.(i)
+      ) terms_wo_vars_ixs;
+    (* removing impossible typings *)
+    let filter_h_ity h_ity =
+      List.filter (fun (_, h_arg_itys) ->
+          List.for_all (fun (i, h_arg_ity) ->
+              TyList.for_all (fun ty -> TySet.mem ty arg_itys_sums.(i)) h_arg_ity
+            ) h_arg_itys
+        ) h_ity in
+    let pr_h_ity = filter_h_ity pr_h_ity in
+    let np_h_ity = filter_h_ity np_h_ity in
+    (* head has empty variable environment, since there are no head variables - proceeding to
+       computing variable environments and typings of arguments *)
+    let pr_app = is_productive target in
+    if pr_app then
+      begin
+        []
+        (* TODO type args as np or pr, all from pr_h_ity with no restrictions *)
+        (* type np_h_ity with restriction that there has to be a duplication - skip all cases where
+           everything is not duplicating and term with last variable appearing 2+ times is analyzed
+           in particular, it is good to leave terms with variables present only in them for last -
+           maybe sort the order of checking by the amount of duplicated variables? *)
+        (* cache typing for each term *)
+      end
+    else
+      (* cache arg_ix * ty -> venvl or better hterm_id *)
+      begin
+        (* No variables nor arguments can be productive when the application is nonproductive. *)
+        (* Each element of the list contains possible environments for one typing of the head.
+           A sum of these environments is all possible environments for given target. *)
+        let h_venvls = List.map (fun (_, h_arg_itys) ->
+            (* Each element of the list contains possible environments for one of the arguments.
+               For the whole application to work, one environment from each one has to be
+               intersected with the rest in all possible combinations. *)
+            let app_venvls = List.map (fun (i, ity) ->
+                (* Each element of the list contains possible environments for one of the
+                   typings in the intersection type, so exactly one possibility from each has
+                   to be taken and intersected. *)
+                let arg_venvls : venvl list = TyList.map (fun ty ->
+                    (* venvs for one type of the arg *)
+                    self#infer_wo_venv terms.(i) ty true
+                  ) ity
+                in
+                arg_venvls
+              ) h_arg_itys
+            in
+            let venvls_to_intersect = List.flatten app_venvls in
+            self#intersect_venvls venvls_to_intersect
+          ) np_h_ity
+        in
+        List.flatten h_venvls
+      end
+(*
+      for i = 0 to Array.length terms - 1 do
+        (* TODO type args as forced np *)
+        (* make product of variables for each arg ity *)
+        (* sum the result from different arg itys *)
+      done;
+*)
+      (* type all nonproductive arguments first, since it has more restrictions and is faster *)
+      (* then type all productive arguments *)
+*)
+
+  (* --- printing --- *)
+
+  method print_ty (ty : ty) =
+    match ty with
+    | PR -> print_string "pr"
+    | NP -> print_string "np"
+    | Fun (_, ity, ty) ->
+      print_string "(";
+      self#print_ity ity;
+      print_string "->";
+      self#print_ty ty;
+      print_string ")"
+        
+  method print_ity_l (ity : ty list) =
+    match ity with
+    | [] -> print_string "top"
+    | [ty] -> self#print_ty ty
+    | ty::ity' ->
+      self#print_ty ty;
+      print_string "^";
+      self#print_ity_l ity'
+
+  method print_ity (ity : ity) =
+    self#print_ity_l (TyList.to_list ity)
+      
+  method print_itys (itys : ity array) =
+    Array.iter (fun ity ->
+        self#print_ity ity;
+        print_string " * "
+      ) itys
+
+  method print_itylist (ity : ity) =
+    TyList.iter (fun ty ->
+        self#print_ty ty;
+        print_string "\n"
+      ) ity
+
+  method print_nt_ity =
+    print_string "Types of nt:\n============\n";
+    for nt = 0 to (Array.length nt_ity) - 1 do
+      print_string ((grammar#name_of_nt nt)^":\n");
+      self#print_itylist nt_ity.(nt)
+    done
+end

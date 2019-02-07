@@ -268,7 +268,7 @@ let prerules2midrules (prerules : Syntax.prerules)
     bodies by replacing them with fresh nonterminals.
     Prerules are rules with terminals as strings. Midrules are rules with terminals converted to
     a, b, or e. Rules are rules in the final form. *)
-let prerules2gram ((prerules, preterminals) : Syntax.prerules * Syntax.preterminals) : unit =
+let prerules2gram (prerules, preterminals : Syntax.prerules * Syntax.preterminals) : Grammar.grammar =
   let midrules : midrules = prerules2midrules prerules preterminals in
   (*
   if !Flags.debugging then
@@ -292,12 +292,11 @@ let prerules2gram ((prerules, preterminals) : Syntax.prerules * Syntax.pretermin
     else
       (!nt_kinds, rules)
   in
-  let s = 0 in
-  let g = {nt=nt'; vinfo=vinfo; r=rules'; s=s} in
+  let g = new Grammar.grammar nt' vinfo rules' in
   (* saving grammar in a global variable *)
-  Grammar.gram := g;
   if !Flags.debugging then
     begin
       print_string "Grammar after conversion from prerules:\n";
-      Grammar.report_grammar g
-    end
+      g#report_grammar
+    end;
+  g

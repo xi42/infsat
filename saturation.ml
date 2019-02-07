@@ -4,24 +4,16 @@ open Profiling
 open Stype
 open Syntax
 open Type
+open Typing
 open Utilities
 
 (* --- types --- *)
 
 (** Typed pointers to lists of intersections of functional types in the form of
     /\_i (/\_a q_ia -> /\_b q_ib -> ... -> q_i)
-    used to type aterms. *)
+    used to type hterms. *)
 type tyseq = TySeq of (ity * (tyseq ref)) list | TySeqNil
 type tyseqref = tyseq ref
-
-(** A single possible typing of variables mapping variables to their types, treated as if there
-    was AND as the delimiter. *)
-type venv = (var_id * ity) list
-
-(** List of possible typings of variables, treated as if there was OR as the delimiter. *)
-type venvl = venv list
-
-module TySet = Set.Make(Ty)
 
 (* --- queues --- *)
 
@@ -50,19 +42,11 @@ let worklist_nt_binding : Cfa.binding TwoLayerQueue.t ref = ref (TwoLayerQueue.m
 
 (* --- registers --- *)
 
-(** nt_ity[n] has all typings of nonterminal n. *)
-let nt_ity : ity array ref = ref [||]
+(** Different typings of hterms, changed in tyseq_*. *)
+let hterms_atys : (tyseqref array ref) = ref (Array.make 0 (ref TySeqNil))
 
-(** Different typings of aterms, changed in tyseq_*. *)
-let aterms_atys : (tyseqref array ref) = ref (Array.make 0 (ref TySeqNil))
-
-(** Typings of aterms, assigned in enqueue_var_*. *)
+(** Typings of hterms, assigned in enqueue_var_*. *)
 let terms_tyss : ity array list option array ref = ref (Array.make 0 (None))
-
-(* --- utility --- *)
-
-let nt_ty_exists (nt : nt_id) (ty : ty) : bool =
-  TyList.exists (fun nt_ty -> nt_ty = ty) !nt_ity.(nt)
 
 (* --- logic --- *)
 
@@ -194,46 +178,7 @@ let automaton2cte m =
                   qs
         in register_cte_ty (a, List.map (fun q->add_topty (arity_of a m) (ItyQ(Cfa.state2id q))) qs1)) (* register in cte functions [] -> ... -> [] -> q for all q in qs *)
      terminals
-*)
 
-let rec print_ty (ty : ty) =
-  match ty with
-  | PR -> print_string "pr"
-  | NP -> print_string "np"
-  | Fun (_, ity, ty) ->
-    print_string "(";
-    print_ity ity;
-    print_string "->";
-    print_ty ty;
-    print_string ")"
-and print_ity_l (ity : ty list) =
-  match ity with
-  | [] -> print_string "top"
-  | [ty] -> print_ty ty
-  | ty::ity' ->
-    print_ty ty;
-    print_string "^";
-    print_ity_l ity'
-and print_ity (ity : ity) =
-  print_ity_l (TyList.to_list ity)
-
-let print_itys (itys : ity array) =
-   Array.iter (fun ity-> print_ity ity; print_string " * ") itys
-
-let print_itylist (ity : ity) =
-  TyList.iter (fun ty ->
-      print_ty ty;
-      print_string "\n"
-    ) ity
-
-let print_nt_ity () =
-  print_string "Types of nt:\n============\n";
-  for nt = 0 to (Array.length (!nt_ity)) - 1 do
-    print_string ((Grammar.name_of_nt nt)^":\n");
-    print_itylist (!nt_ity).(nt)
-  done
-
-(*
 let rec tys2tyseq_singleton tys =
   match tys with
    [] -> TySeqNil
@@ -369,17 +314,17 @@ let rec tyseq2tyss (tyseq : tyseq) (len : int) : ity array list =
          List.rev_append tyss1 tyss)
       [] tyseqlist
 
-let lookup_aterms_atys (id : Cfa.aterms_id) : ity array list =
+let lookup_hterms_atys (id : Cfa.hterms_id) : ity array list =
   match (!terms_tyss).(id) with
   | Some(tyss) -> tyss
   | None ->
-    let tyss = tyseq2tyss(!((!aterms_atys).(id))) 0 in
+    let tyss = tyseq2tyss(!((!hterms_atys).(id))) 0 in
     (!terms_tyss).(id) <- Some(tyss);
     tyss
 
-let print_aterms_atys() =
-  print_string "Types of aterms:\n================\n";
-  for id = 0 to (Array.length !aterms_atys) - 1 do
+let print_hterms_atys() =
+  print_string "Types of hterms:\n================\n";
+  for id = 0 to (Array.length !hterms_atys) - 1 do
     if (!Cfa.termid_isarg).(id) then
       begin
         print_int id;
@@ -387,7 +332,7 @@ let print_aterms_atys() =
         let terms = Cfa.id2terms id in
         print_string (String.concat ", " (List.map string_of_term terms));
         print_string "):\n";
-        let ityss = lookup_aterms_atys id in
+        let ityss = lookup_hterms_atys id in
         List.iter (fun itys ->
             print_itys itys;
             print_string "\n") ityss
@@ -406,11 +351,11 @@ let rec subtype_tys tys1 tys2 =
 *)
 
 (*
-(** Called to save that aterm with given id was computed to have an intersection type ty. *)
-let register_aterms_atys id ty overwrite_flag =
+(** Called to save that hterm with given id was computed to have an intersection type ty. *)
+let register_hterms_atys id ty overwrite_flag =
 (*  assert (not(ty=[]));*)
  if !Flags.merge_vte then
-   let tyseqref = (!aterms_atys).(id) in
+   let tyseqref = (!hterms_atys).(id) in
    (merged_vte_updated := false;
      tyseq_merge_tys ty tyseqref;
      if !merged_vte_updated then
@@ -419,14 +364,14 @@ let register_aterms_atys id ty overwrite_flag =
        enqueue_var_ty id tys)
      else ())
  else
-  let tyseqref = (!aterms_atys).(id) in
+  let tyseqref = (!hterms_atys).(id) in
   if overwrite_flag && !Flags.overwrite then
-    if tyseq_mem ty tyseqref then () (* if aterms_atys[id] already has the computed type *)
-    else if tyseq_subsumed ty tyseqref (* if aterms_atys[id] has has a type not less restrictive than
+    if tyseq_mem ty tyseqref then () (* if hterms_atys[id] already has the computed type *)
+    else if tyseq_subsumed ty tyseqref (* if hterms_atys[id] has has a type not less restrictive than
                                           ty, on each argument, we delegate it *)
     then ((*flag_overwritten := true; *)
           SetQueue.enqueue !worklist_var_overwritten id) (* enqueue for replacing *)
-    else  (* we can't compare ty with aterms_atys[id] *)
+    else  (* we can't compare ty with hterms_atys[id] *)
      (let overwritten = tyseq_add_with_subtyping ty tyseqref in (* more or less remove subtyped
                                                                    stuff from tyseqref and add ty
                                                                    to it *)
@@ -466,10 +411,10 @@ let rec mk_prod_venvs (i,j,tys) venvs acc =
 let rec mk_venvs env =
   match env with
     [] -> [[]]
-  | [(i,j,id)] -> let tys = lookup_aterms_atys(id) in 
+  | [(i,j,id)] -> let tys = lookup_hterms_atys(id) in 
        List.map (fun ty -> [(i,j,ty)]) tys
   | (i,j,id)::env' ->
-     let tys = lookup_aterms_atys(id) in
+     let tys = lookup_hterms_atys(id) in
      if tys=[] then []
      else 
       let venvs = mk_venvs env' in
@@ -486,7 +431,7 @@ let rec mk_venvs_incremental env (id,tys) =
       let venvs = mk_venvs env' in
         List.map (fun venv-> (i,j,tys)::venv) venvs
      else
-       let tyss = lookup_aterms_atys(id1) in
+       let tyss = lookup_hterms_atys(id1) in
        if tyss=[] then []
        else 
         let venvs = mk_venvs_incremental env' (id,tys) in
@@ -517,19 +462,19 @@ let rec mask_tys i mask tys r =
        else
            mask_tys i mask tys' (ty::r)
 
-(** There was an application where in some aterm the bindings for variables were as in env.
+(** There was an application where in some hterm the bindings for variables were as in env.
     This function computes what kind of types each variable in given lists of variables had.
     TODO improve desc *)
 let rec mk_venvs_mask env =
   match env with
     [] -> [[]]
   | [(i,j,mask,id)] -> 
-       let tys = lookup_aterms_atys(id) in 
+       let tys = lookup_hterms_atys(id) in 
        let tys' = if List.length mask=j+1-i then tys
                   else mask_tys i mask tys []
        in  List.map (fun ty -> [(i,j,ty)]) tys'
   | (i,j,mask,id)::env' ->
-     let tys = lookup_aterms_atys(id) in
+     let tys = lookup_hterms_atys(id) in
      if tys=[] then []
      else 
       let venvs = mk_venvs_mask env' in
@@ -541,14 +486,14 @@ let rec mk_venvs_mask env =
        in mk_prod_venvs (i,j,tys') venvs []
 
 (** Given a list of bindings env with (i,j,vs,asX) of length l, it makes environments venvs of
-    size l where each venvs[i] corresponds to one of all possible typings of aterms asX, but where
+    size l where each venvs[i] corresponds to one of all possible typings of hterms asX, but where
     asX=id, it is replaced with tys. So, it is a cartesian product making all possible typing
-    combinations for aterms but with a forced single typing for asX=id. *)
+    combinations for hterms but with a forced single typing for asX=id. *)
 let rec mk_venvs_mask_incremental env (id,tys) =
   match env with
     [] -> [[]]
   | (i,j,mask,id1)::env' ->
-     let tyss = if id=id1 then  [tys] else lookup_aterms_atys(id1) in (* get the type or replaced
+     let tyss = if id=id1 then  [tys] else lookup_hterms_atys(id1) in (* get the type or replaced
                                                                       for id type tys *)
      if tyss=[] then []
      else 
@@ -960,12 +905,12 @@ let update_ty_of_id_aux id venvs overwrite_flag =
                                            based on automata typings (cte) for terminals,
                                            computed nonterminal types (nt_ity) for nonterminals,
                                            and given environment for vars *)
-     register_aterms_atys id ty overwrite_flag)
+     register_hterms_atys id ty overwrite_flag)
    venvs
 
 (* update the set of types for each term list [t1;...;tk] *)
-(** id represents a sequence of terms (aterms). env represents which variables inside them were
-    replaced with which other aterms in a single application of nonterminal in which aterms with
+(** id represents a sequence of terms (hterms). env represents which variables inside them were
+    replaced with which other hterms in a single application of nonterminal in which hterms with
     id are present. TODO what this does? *)
 let update_ty_of_id id env overwrite_flag =
 (*  (if !Flags.debugging then
@@ -1033,7 +978,7 @@ let register_nte nt ity =
      end
 *)
 (*
-(** Compute and update the type of aterm termid for all environments that contain id and that have
+(** Compute and update the type of hterm termid for all environments that contain id and that have
     the type of this id updated to tys. *)
 let update_incremental_ty_of_id termid (id,tys) overwrite_flag = 
   let envs = Cfa.lookup_dep_id_envs termid in
@@ -1156,258 +1101,6 @@ let update_ty_of_nt_inc_for_nt_sub_venv g term venv qs f ty =
    with Untypable -> ()) 
   qs
 *)
-
-let terminal_ity : term -> ity =
-  let np = TyList.singleton NP in
-  let pr = TyList.singleton PR in
-  let a_ity = TyList.of_list [
-    mk_fun_ty np PR;
-    mk_fun_ty pr PR
-  ] in
-  let b_ity = TyList.of_list [
-    mk_fun_ty np (mk_fun_ty TyList.empty NP);
-    mk_fun_ty pr (mk_fun_ty TyList.empty NP);
-    mk_fun_ty TyList.empty (mk_fun_ty np NP);
-    mk_fun_ty TyList.empty (mk_fun_ty pr NP)
-  ] in
-  let e_ity = TyList.singleton NP in
-  function
-  | A -> a_ity
-  | B -> b_ity
-  | E -> e_ity
-  | _ -> failwith "Expected a terminal"
-
-(** Returns sorted list of typings available for given head term. *)
-let infer_head_ity (h : term) : ity =
-  match h with
-  | A | B | E -> terminal_ity h
-  | NT nt -> !nt_ity.(nt)
-  | Var x -> failwith "TODO"
-  | App _ -> failwith "Expected a head term"
-
-let is_nonproductive_app_head_ty (ty : ty) (arity : int) : bool =
-  let arg_itys, res_ty = ty2list ty arity in
-  not (is_productive res_ty) &&
-  not (List.exists (fun ity -> TyList.exists is_productive ity) arg_itys)
-
-let filter_compatible_head (ity : ity) (arity : int) (target : ty) : ity =
-  if is_productive target then
-    (* left side and codomain of productive application can have any types *)
-    let flipped_target = flip_productivity target in
-    TyList.filter (fun ty ->
-        let res_ty = remove_args arity ty in
-        eq_ty res_ty target ||
-        eq_ty res_ty flipped_target
-      ) ity
-  else
-    (* left side of a nonproductive application must have nonproductive arguments and codomain *)
-    TyList.filter (fun ty ->
-        let arg_itys, res_ty = ty2list ty arity in
-        eq_ty res_ty target &&
-        not (List.exists (fun ity -> TyList.exists is_productive ity) arg_itys)
-      ) ity
-
-(** Merges vtes (variable types) by combining the list of type bindings in order, and combining
-    types when a binding for the same variable is present in both lists. The resulting binding
-    is ordered ascendingly lexicographically by variable ids. Combining types is also idempodently
-    merging list of types (i.e., there are sets of types). TODO redo docs from old ones *)
-let rec intersect_two_venvs (venv1 : venv) (venv2 : venv) : venv =
-  match venv1, venv2 with
-  | [], _ -> venv2
-  | _, [] -> venv1
-  | ((v1, ity1) :: venv1', (v2, ity2) :: venv2') ->
-    let n = compare v1 v2 in
-    if n < 0 then (v1, ity1) :: (intersect_two_venvs venv1' venv2)
-    else if n > 0 then (v2, ity2) :: (intersect_two_venvs venv1 venv2')
-    else (v1, TyList.merge ity1 ity2) :: (intersect_two_venvs venv1' venv2')
-
-(** Flatten an intersection of variable environment lists, which are OR-separated lists of
-    AND-separated lists of typings of unique in inner list variables. Flattening means moving
-    outer intersection (AND) inside. *)
-let intersect_two_venvls (venvl1 : venvl) (venvl2 : venvl) : venvl =
-  match venvl1, venvl2 with
-  | _, [] -> [] (* second typing is invalid *)
-  | [], _-> [] (* first typing is invalid *)
-  | _, [[]] -> venvl1 (* no variables in second typing *)
-  | [[]], _ -> venvl2 (* no variables in first typing *)
-  | _ ->
-    List.fold_left
-      (fun acc venv1 ->
-         let venvl2' = List.rev_map (fun venv2 ->
-             intersect_two_venvs venv1 venv2
-           ) venvl2
-         in
-         List.rev_append venvl2' acc)
-      [] venvl1
-
-let rec intersect_venvls (venvls : venvl list) : venvl =
-  match venvls with
-  | [] -> [[]]
-  | [venvl] -> venvl
-  | venvl :: venvs' ->
-    intersect_two_venvls venvl (intersect_venvls venvs')
-
-(* TODO this should be done on aterm, not term *)
-let rec infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool) : venvl =
-  match term with
-  | Var x ->
-    (* x : NP : s, any s *)
-    if is_productive target then
-      [] (* variables are only NP *)
-    else
-      (* both NP and PR versions are possible *)
-      let res = [[(x, TyList.singleton target)]] in
-      if no_pr_vars then
-        res
-      else
-        [(x, TyList.singleton (with_productivity target PR))] :: res
-  | A ->
-    (* a : f -> PR : O -> O, f = PR or NP *)
-    begin
-      match target with
-      | Fun(_, _, PR) -> [[]]
-      | _ -> []
-    end
-  | B ->
-    (* b : f -> T -> NP, T -> f -> NP : O -> O -> O, f = PR or NP *)
-    begin
-      match target with
-      | Fun(_, TyList.L [_], Fun(_, TyList.L [], NP))
-      | Fun(_, TyList.L [], Fun(_, TyList.L [_], NP)) -> [[]]
-      | _ -> []
-    end
-  | E ->
-    (* e : NP : O *)
-    begin
-      match target with
-      | NP -> [[]]
-      | _ -> []
-    end
-  | NT nt ->
-    if nt_ty_exists nt target then
-      [[]]
-    else
-      []
-  | App _ ->
-    let h, terms = Grammar.decompose_term term in
-    infer_app_wo_env h terms target no_pr_vars
-
-and infer_app_wo_env (h : term) (terms : term list) (target : ty) (no_pr_vars : bool) : venvl =
-    (* target is PR <=>
-       - lhs is PR or some arg is PR or there is duplication but all possibilities have to be
-         checked
-       lhs arg is PR <=>
-       - rhs arg is PR or has PR variable
-
-       first compute lhs, then rhs.
-
-       targeting lhs PR:
-       - lhs target=*->PR - need to be able to describe * without usual subtyping
-       - lhs target=NP
-       targeting lhs PR means brute or optimizing checking for duplications
-       targeting rhs PR means brute or optimizing checking for PR variables
-    *)
-  let terms = Array.of_list terms_list in
-  let h_arity = Array.length terms in
-  (* Get all h typings *)
-  let all_h_ity = infer_head_ity h in
-  (* Assume that the target is
-     /\_i t_1i -> .. -> /\_i t_ki -> t
-     with t = pr or np. Typings of h that could make the application have the target type are
-     * -> .. -> * -> /\_i t_1i -> .. -> /\_i t_ki -> *,
-     where if t = PR then * is any type and if t = NP then * is any nonproductive type. Still,
-     even for t = PR, case where all * are nonproductive is treated specially, so these types
-     have to be distinguished. We filter the list of h typings accordingly. *)
-  let filtered_pr_h_ity, filtered_np_h_ity = filter_compatible_head all_h_ity h_arity target in
-  (* TODO type of a sorted list *)
-  let annotate : ity -> (ty * (int * ity) list) list =
-    TyList.map (fun h_ty -> (h_ty, index_list (fst (ty2list h_ty h_arity)))) in
-  let pr_h_ity = annotate filtered_pr_h_ity in
-  let np_h_ity = annotate filtered_np_h_ity in
-  let arg_itys_sums : TySet.t array = Array.make h_arity TySet.empty in
-  List.iter (fun h_ity ->
-      List.iter (fun (_, h_arg_itys) ->
-          List.iter (fun (i, ity) ->
-              arg_itys_sums.(i) <- TyList.fold_right TySet.add ity arg_itys_sums.(i)
-            ) h_arg_itys
-        ) h_ity
-    ) [pr_h_ity; np_h_ity];
-  (* then type arguments without variables to remove all impossible typings *)
-  (* TODO use aterms which have free contains_vars_in_term info *)
-  let terms_wo_vars_ixs = List.filter (fun i -> i >= 0)
-      (List.mapi (fun i term ->
-           if contains_vars_in_term terms.(i) then
-             -1
-           else
-             i
-         ) terms_list)
-  in
-  List.iter (fun i ->
-      let term = terms.(i) in
-      arg_itys_sums.(i) <- TySet.filter (fun ty ->
-          (* the no_pr_vars flag does not matter where there are no variables *)
-          infer_wo_venv term ty true = [[]]
-        ) arg_itys_sums.(i)
-    ) terms_wo_vars_ixs;
-  (* removing impossible typings *)
-  let filter_h_ity h_ity =
-    List.filter (fun (_, h_arg_itys) ->
-        List.for_all (fun (i, h_arg_ity) ->
-            TyList.for_all (fun ty -> TySet.mem ty arg_itys_sums.(i)) h_arg_ity
-          ) h_arg_itys
-      ) h_ity in
-  let pr_h_ity = filter_h_ity pr_h_ity in
-  let np_h_ity = filter_h_ity np_h_ity in
-  (* head has empty variable environment, since there are no head variables - proceeding to
-     computing variable environments and typings of arguments *)
-  let pr_app = is_productive target in
-  if pr_app then
-    begin
-      []
-      (* TODO type args as np or pr, all from pr_h_ity with no restrictions *)
-      (* type np_h_ity with restriction that there has to be a duplication - skip all cases where
-         everything is not duplicating and term with last variable appearing 2+ times is analyzed
-         in particular, it is good to leave terms with variables present only in them for last -
-         maybe sort the order of checking by the amount of duplicated variables? *)
-      (* cache typing for each term *)
-    end
-  else
-    (* cache arg_ix * ty -> venvl or better aterm_id *)
-    begin
-      (* No variables nor arguments can be productive when the application is nonproductive. *)
-      (* Each element of the list contains possible environments for one typing of the head.
-         A sum of these environments is all possible environments for given target. *)
-      let h_venvls = List.map (fun (_, h_arg_itys) ->
-          (* Each element of the list contains possible environments for one of the arguments.
-             For the whole application to work, one environment from each one has to be
-             intersected with the rest in all possible combinations. *)
-          let app_venvls = List.map (fun (i, ity) ->
-              (* Each element of the list contains possible environments for one of the
-                 typings in the intersection type, so exactly one possibility from each has
-                 to be taken and intersected. *)
-              let arg_venvls : venvl list = TyList.map (fun ty ->
-                  (* venvs for one type of the arg *)
-                  infer_wo_venv terms.(i) ty true
-                ) ity
-              in
-              arg_venvls
-            ) h_arg_itys
-          in
-          let venvls_to_intersect = List.flatten app_venvls in
-          intersect_venvls venvls_to_intersect
-        ) np_h_ity
-      in
-      List.flatten h_venvls
-    end
-(*
-      for i = 0 to Array.length terms - 1 do
-        (* TODO type args as forced np *)
-        (* make product of variables for each arg ity *)
-        (* sum the result from different arg itys *)
-      done;
-*)
-(* type all nonproductive arguments first, since it has more restrictions and is faster *)
-(* then type all productive arguments *)
 
 (*
 (** Returns types for variables inside assuming that term has codomain ity. *)
@@ -1689,22 +1382,22 @@ let print_queue_sizes() =
     end
 
 let init_saturation() =
-  (* size of structures will be dependent on number of aterms or nonterminals *)
-  let aterms_count = Cfa.aterms_count() in
+  (* size of structures will be dependent on number of hterms or nonterminals *)
+  let hterms_count = Cfa.hterms_count() in
   let nt_count = Grammar.nt_count() in
 
-  aterms_atys := Array.make aterms_count (ref TySeqNil); (* aterms_atys[aterm_id] = ref TySeqNil *)
-  terms_tyss := Array.make aterms_count (Some []); (* terms_tyss[aterm_id] = Some [] *)
-  for id = 0 to aterms_count - 1 do (* for each aterm *)
+  hterms_atys := Array.make hterms_count (ref TySeqNil); (* hterms_atys[hterm_id] = ref TySeqNil *)
+  terms_tyss := Array.make hterms_count (Some []); (* terms_tyss[hterm_id] = Some [] *)
+  for id = 0 to hterms_count - 1 do (* for each hterm *)
     if (!Cfa.termid_isarg).(id) then (* that is an argument to a nonterminal *)
-      (!aterms_atys).(id) <- ref (TySeq []) (* initialize it with TySeq [] instead of TySeqNil *)
+      (!hterms_atys).(id) <- ref (TySeq []) (* initialize it with TySeq [] instead of TySeqNil *)
   done;
   nt_ity := Array.make nt_count TyList.empty;
 
   (* creating task queues *)
-  worklist_var_ty := TwoLayerQueue.make aterms_count;
+  worklist_var_ty := TwoLayerQueue.make hterms_count;
   worklist_nt_binding := TwoLayerQueue.make nt_count;
-  worklist_var := SetQueue.make aterms_count;
+  worklist_var := SetQueue.make hterms_count;
   updated_nt_ty := BatchQueue.make nt_count;
   updated_nts := SetQueue.make nt_count;
   (* worklist_nt is initialized with all nonterminals that have arity 0 or, if Flags.eager is
@@ -1715,10 +1408,10 @@ let init_saturation() =
     SetQueue.make_fromlist nt_count
       (List.filter (fun f-> arity_of_nt f = 0 || has_noheadvar f)
          (Utilities.fromto 0 nt_count));
-  (* worklist_var is initialized with all aterms that are arguments to a nonterminal. *)
-  for id = 0 to aterms_count - 1 do 
+  (* worklist_var is initialized with all hterms that are arguments to a nonterminal. *)
+  for id = 0 to hterms_count - 1 do 
     if (!Cfa.termid_isarg).(id) then
-      SetQueue.enqueue !worklist_var id (* enqueue all aterms that are arguments to nonterminals
+      SetQueue.enqueue !worklist_var id (* enqueue all hterms that are arguments to nonterminals
                                              with ones with largest id on top (the ones created
                                              last when following the first nonterminal) *)
   done;
@@ -1726,7 +1419,7 @@ let init_saturation() =
     begin
       print_nt_ity ();
       print_string "\n";
-      print_aterms_atys ()
+      print_hterms_atys ()
     end;
   ()
 
@@ -1734,18 +1427,18 @@ let rec saturation_loop () : bool =
   let proceed = ref true in
   print_queue_sizes();
   begin
-    try (* trying to dequeue an aterm : tys (that we have a sequence of asX : tyX) *)
+    try (* trying to dequeue an hterm : tys (that we have a sequence of asX : tyX) *)
       (* this generally propagates types forward *)
       let (id,tys) = TwoLayerQueue.dequeue !worklist_var_ty in (* dequeue from worklist_var_ty *)
       let _ = if !Flags.debugging then Utilities.debug ("propagating type of id "^(string_of_int id)^" incrementally\n") in
     (*
-    let ids = Cfa.lookup_dep_id id in (* ids of aterms that dequeued aterm was applied to
+    let ids = Cfa.lookup_dep_id id in (* ids of hterms that dequeued hterm was applied to
                                          substituting one or more variables inside (propagating
                                          types forward) *)
     (* update type of id1 in envs where there is id, forced to id : tys *)
     List.iter (fun id1 -> update_incremental_ty_of_id id1 (id,tys) true) ids;
     let bindings = Cfa.lookup_dep_termid_nt id in (* nonterminals and their bindings that were
-                                                     applied to the aterm id *)
+                                                     applied to the hterm id *)
     List.iter (fun binding -> update_incremental_ty_of_nt binding (id,tys)) bindings
     *)
       ()
@@ -1795,12 +1488,12 @@ let rec saturation_loop () : bool =
         end
     with SetQueue.Empty ->
     try
-      let id = SetQueue.dequeue !worklist_var (* we take one of enqueued aterms *) in
-      let _ = Utilities.debug ("Typing aterms "^(string_of_int id)^"\n\n") in
-      let envs = Cfa.lookup_dep_id_envs id in (* aterms that were (possibly) put into given variables
-                                                 in aterms with dequeued id (propagating types
+      let id = SetQueue.dequeue !worklist_var (* we take one of enqueued hterms *) in
+      let _ = Utilities.debug ("Typing hterms "^(string_of_int id)^"\n\n") in
+      let envs = Cfa.lookup_dep_id_envs id in (* hterms that were (possibly) put into given variables
+                                                 in hterms with dequeued id (propagating types
                                                  backwards) *)
-      (* There was an application where aterm id had put some other aterms (env) in given variables
+      (* There was an application where hterm id had put some other hterms (env) in given variables
          in its nonterminal - process it.
       *)
     (*
@@ -1816,3 +1509,7 @@ let saturate() : bool =
   profile "initializing saturation" (fun () -> init_saturation());
   profile "saturation" (fun () -> while saturation_loop() do () done);
   true (* TODO *)
+
+class saturation (cfa : Cfa.cfa) (hgrammar : HGrammar.hgrammar) = object(self)
+  method saturate : bool = true
+end
