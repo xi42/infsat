@@ -6,12 +6,14 @@ module type SL = sig
   val singleton : elt -> t
   val of_list : elt list -> t
   val to_list : t -> elt list
+  val to_ilist : t -> (int * elt) list
   val init : (int -> elt) -> int -> t
     
   val mem : elt -> t -> bool
   val hd : t -> elt
   val tl : t -> t
   val length : t -> int
+  val is_empty : t -> bool
 
   val partition : (elt -> bool) -> t -> t * t
   val filter : (elt -> bool) -> t -> t
@@ -42,6 +44,8 @@ struct
 
   let to_list (L l) = l
 
+  let to_ilist (L l) = List.mapi (fun i x -> (i, x)) l
+
   let init f n =
     let rec init_list i acc =
       if i = 0 then
@@ -60,6 +64,8 @@ struct
   let tl (L l) = L(List.tl l)
   
   let length (L l) = List.length l
+
+  let is_empty (L l) = l = []
 
   (* splitting, filtering, and joining *)
 

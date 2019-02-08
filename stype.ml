@@ -1,9 +1,10 @@
 (** Check the sorts of non-terminals, and print them and the order of the recursion scheme **)
 (* Note: the implementation below is naive and slow *)
 
-open Utilities
 open Grammar
-
+open GrammarCommon
+open Utilities
+    
 type tvar = int
 type st = STvar of (st option) ref | STbase | STfun of st * st 
 let dummy_type = STbase
@@ -23,7 +24,7 @@ let rec deref_st st =
 let rec kind_of_sty st =
   match deref_st st with
     | STvar _ | STbase -> O
-    | STfun (t1,t2) -> Kfun (kind_of_sty t1,kind_of_sty t2)
+    | STfun (t1,t2) -> KFun (kind_of_sty t1,kind_of_sty t2)
 
 let rec arity2sty n =
   if n<0 then assert false
@@ -149,16 +150,16 @@ let lookup_stype_var v vste = let (_,i) = v in vste.(i)
     address effectively becomes its id. *)
 let rec tcheck_term t vte nte =
   match t with
-  | NT(f) -> (lookup_stype_nt f nte, [])
-  | A -> (arity2sty 1, [])
-  | B -> (arity2sty 2, [])
-  | E -> (arity2sty 0, [])
-  | Var(v) -> (lookup_stype_var v vte, [])
-  | App(t1,t2) ->
+  | T A -> (arity2sty 1, [])
+  | T B -> (arity2sty 2, [])
+  | T E -> (arity2sty 0, [])
+  | NT f -> (lookup_stype_nt f nte, [])
+  | Var v -> (lookup_stype_var v vte, [])
+  | App (t1,t2) ->
        let (sty1, c1) = tcheck_term t1 vte nte in
        let (sty2, c2) = tcheck_term t2 vte nte in
-       let sty3 = new_tvar() in
-       let sty4 = STfun(sty2, sty3) in
+       let sty3 = new_tvar () in
+       let sty4 = STfun (sty2, sty3) in
        (sty3, (sty1, sty4) :: (c2 @ c1))
 
 let rec mk_functy stys sty =

@@ -2,7 +2,7 @@ open GrammarCommon
 open Grammar
 open Utilities
 
-type midhead = MVar of string | MA | MB | ME | MNT of string | MFun of string list * midterm
+type midhead = MT of terminal | MNT of string | MVar of string | MFun of string list * midterm
 and midterm = MApp of midhead * midterm list
 type midrule = string * string list * midterm
 type midrules = midrule list
@@ -38,8 +38,8 @@ let register_new_rule f arity body =
 
 let rec depth_of_term term =
   match term with
-  | A | B | E | NT(_) | Var(_) -> 0
-  | App(t1, t2) -> max (depth_of_term t1) (depth_of_term t2 + 1)
+  | T _ | NT _ | Var _ -> 0
+  | App (t1, t2) -> max (depth_of_term t1) (depth_of_term t2 + 1)
 
 
 
@@ -56,9 +56,7 @@ let rec midterm2term vmap pterm =
         end
       | MNT(s) -> NT(lookup_ntid s)
       | MFun(_, _) -> failwith "Expected no functions at this point"
-      | MA -> A
-      | MB -> B
-      | ME -> E
+      | MT a -> T a
     in
     let terms = List.map (midterm2term vmap) pterms in
     let terms' = if !(Flags.normalize) then
@@ -130,8 +128,8 @@ and elim_fun_from_midterms vl (terms : midterm list) newrules =
          (pterm'::pterms', newrules'')
 and elim_fun_from_head vl (h : midhead) newrules : midterm * midrules =
   match h with
-  | MVar(_) | MNT(_) | MA | MB | ME -> (MApp(h, []), newrules)
-  | MFun(vl1, pterm) ->
+  | MT _ | MNT _ | MVar _ -> (MApp(h, []), newrules)
+  | MFun (vl1, pterm) ->
        let vl' = vl@vl1 in (* what if names in vl and vl1 clashe? *)
        let (pterm',newrules') = elim_fun_from_midterm vl' pterm newrules in
        let f = Syntax.new_ntname() in
@@ -161,11 +159,11 @@ module SS = Set.Make(String)
 let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
   let rec b_tree_aux from_arg to_arg =
     if from_arg = to_arg then
-      MApp(MVar("_"^(string_of_int from_arg)), [])
+      MApp (MVar ("_" ^ (string_of_int from_arg)), [])
     else
       let mid_arg = (from_arg + to_arg) / 2 in
       let args = [b_tree_aux from_arg mid_arg; b_tree_aux (mid_arg + 1) to_arg] in
-      MApp(MB, args)
+      MApp (MT B, args)
   in
   let rec vars k acc =
     if k = 0 then
@@ -176,7 +174,7 @@ let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
   let (body, wrap_fun) =
     if k = 0 then
       (* converted terminal with no children as _e *)
-      (MApp(ME, []), false)
+      (MApp (MT E, []), false)
     else if k = 1 && List.length arg_terms = 1 then
       (* removing identities *)
       (List.hd arg_terms, false)
@@ -185,7 +183,7 @@ let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
   in
   (* adding _a above counted ones *)
   let body' = if counted then
-      MApp(MA, [body])
+      MApp(MT A, [body])
     else 
       body
   in
@@ -223,7 +221,7 @@ let prerules2midrules (prerules : Syntax.prerules)
             MApp(MVar(name), arg_preterms)
           else if name = "br" then
             (* converting br *)
-            MApp(MB, arg_preterms)
+            MApp(MT B, arg_preterms)
           else
             (* converting terminals *)
             (try
@@ -236,7 +234,7 @@ let prerules2midrules (prerules : Syntax.prerules)
                failwith ("Unbounded name "^name^" in the body of nonterminal "^nt)
             )
         (* leaving nonterminals as they were *)
-        | Syntax.NT(name) -> MApp(MNT(name), arg_preterms)
+        | Syntax.NT(name) -> MApp (MNT(name), arg_preterms)
         | Syntax.Fun(fvars, preterm) ->
           let fun_args = List.fold_left (fun acc arg ->
               if SS.mem arg acc then
@@ -247,7 +245,7 @@ let prerules2midrules (prerules : Syntax.prerules)
               else
                 SS.add arg acc) SS.empty fvars
           in
-          MApp(MFun(fvars, preterm2midterm (SS.union vars fun_args) preterm),
+          MApp (MFun (fvars, preterm2midterm (SS.union vars fun_args) preterm),
                       arg_preterms)
     in
     (* set for fast access, also checking for conflicts *)

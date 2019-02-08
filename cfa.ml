@@ -150,10 +150,6 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
       List.iter self#print_binding (binding_array_nt).(nt)
     done
 
-  method arity_of_term id =
-    let (hterms,_,_) = hgrammar#lookup_id_terms id in
-    List.length hterms
-
   method add_index rho i =
     match rho with
     | [] -> []
@@ -321,7 +317,7 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
       let node = self#register_newnode hterm in
       (* expanding the calls to see what hterms go in what variables *)
       match h with
-      | HA | HB | HE ->
+      | HT _ ->
         (* decoding arguments as hterm ids into hterms *)
         let (_, termss) = hgrammar#decompose_hterm hterm in
         (* ignore the terminal and go deeper *)
@@ -571,7 +567,7 @@ else b::bindmasks)
       nonterminals on the right. *)
   method nt_in_term_with_linearity (term : term) : SortedNTs.t * SortedNTs.t =
     match term with
-    | Var _ | A | B | E -> (SortedNTs.empty, SortedNTs.empty)
+    | T _ | Var _ -> (SortedNTs.empty, SortedNTs.empty)
     | NT f -> (SortedNTs.singleton f, SortedNTs.empty)
     | App _ ->
       let (h,terms) = Grammar.decompose_term term in
@@ -582,7 +578,7 @@ else b::bindmasks)
         else
           (SortedNTs.singleton f, nts) (* if head nt used once *)
       | Var _ -> (SortedNTs.empty, self#nt_in_terms terms)
-      | A | B | E ->
+      | T _ ->
         (* c has no children. a has a single child, so it is linear. b has two children, but only
            one at a time is used. Even if we do b (N ..) (N ..) that yield different types, only
            one N is used as long as there is no other N present. Therefore, b is also linear. *)

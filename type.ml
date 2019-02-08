@@ -111,11 +111,11 @@ let rec ty2array (f : ty) : ity array * ty =
   (Array.of_list args, res)
 
 (** Returns functional type ty with first count arguments removed *)
-let rec remove_args (count : int) (ty : ty) : ty =
+let rec remove_args (ty : ty) (count : int) : ty =
   match count with
   | 0 -> ty
   | _ -> match ty with
-    | Fun (_, _, ty) -> remove_args (count - 1) ty
+    | Fun (_, _, ty) -> remove_args ty (count - 1)
     | _ -> failwith "Tried to remove more arguments than the function has"
 
 (* TODO design subtyping where NP args may be added/removed

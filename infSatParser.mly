@@ -40,7 +40,7 @@ rules_list:
 | rule 
   {[$1]}
 | rule rules_list
-  {$1::$2};
+  {$1 :: $2};
 
 rule:
 | NONTERM names ARROW term PERIOD
@@ -50,32 +50,34 @@ rule:
 
 subterm:
 | NONTERM
-  {PApp(NT($1), [])}
+  {PApp (NT($1), [])}
 | NAME 
-  {PApp(Name($1), [])}
+  {PApp (Name($1), [])}
 | LPAR term RPAR
-  {$2};
+  {match $2 with
+   | PApp _ -> $2};
 
 term:
 | terms_list
   {match $1 with
    | [x] -> x
-   | PApp(h, [])::terms -> PApp(h, terms)
-   | _ -> assert false};
+   | PApp (h, []) :: terms -> PApp (h, terms)
+   | PApp (h, args) :: terms -> PApp (h, args @ terms)
+   | [] -> assert false};
 | FUN names ARROW term
-  {PApp(Fun($2, $4), [])}
+  {PApp (Fun($2, $4), [])}
 
 terms_list:
 | subterm
   {[$1]}
 | subterm terms_list
-  {$1::$2};
+  {$1 :: $2};
 
 names:
 | NAME
   {[$1]}
 | NAME names
-  {$1::$2};
+  {$1 :: $2};
 
 terminals:
   BEGINT terminals_list END
@@ -85,10 +87,10 @@ terminals_list:
 | terminal
   {[$1]}
 | terminal terminals_list
-  {$1::$2};
+  {$1 :: $2};
 
 terminal:
 | NAME ARROW INT PERIOD
-  {Terminal($1, $3, false)}
+  {Terminal ($1, $3, false)}
 | NAME ARROW INT COUNTED PERIOD
-  {Terminal($1, $3, true)};
+  {Terminal ($1, $3, true)};

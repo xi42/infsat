@@ -1,5 +1,6 @@
-open Grammar
+open Cfa
 open GrammarCommon
+open HGrammar
 open Type
 
 (** A single possible typing of variables mapping variables to their types, treated as if there
@@ -11,7 +12,7 @@ type venvl = venv list
 
 module TySet = Set.Make(Ty)
 
-class typing (grammar : grammar) = object(self)
+class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
   (* --- registers --- *)
                      
   (** nt_ity[nt] has all typings of nonterminal nt. *)
@@ -24,7 +25,7 @@ class typing (grammar : grammar) = object(self)
 
   (* --- typing --- *)
   
-  method terminal_ity : term -> ity =
+  method terminal_ity : terminal -> ity =
     let np = TyList.singleton NP in
     let pr = TyList.singleton PR in
     let a_ity = TyList.of_list [
@@ -42,42 +43,52 @@ class typing (grammar : grammar) = object(self)
     | A -> a_ity
     | B -> b_ity
     | E -> e_ity
-    | _ -> failwith "Expected a terminal"
 
   (** Returns sorted list of typings available for given head term. *)
-  method infer_head_ity (h : term) : ity =
+  method infer_head_ity (h : head) : ity =
     match h with
-    | A | B | E -> self#terminal_ity h
-    | NT nt -> nt_ity.(nt)
-    | Var x -> failwith "TODO"
-    | App _ -> failwith "Expected a head term"
+    | HNT nt -> nt_ity.(nt)
+    | HVar x -> failwith "TODO"
+    | HT a -> self#terminal_ity a
 
   method is_nonproductive_app_head_ty (ty : ty) (arity : int) : bool =
     let arg_itys, res_ty = ty2list ty arity in
     not (is_productive res_ty) &&
     not (List.exists (fun ity -> TyList.exists is_productive ity) arg_itys)
 
-  method filter_compatible_head (ity : ity) (arity : int) (target : ty) : ity =
+  (** Assume that the target is
+      /\_i t_1i -> .. -> /\_i t_ki -> t
+      with t = pr or np. Typings of h that could make the application have the target type are
+      * -> .. -> * -> /\_i t_1i -> .. -> /\_i t_ki -> *
+      with some restrictions. If t = NP then t = np, but any * are valid without additional
+      information. If t = PR then t = pr or at least one of * is pr. However, if head is not a
+      productive variable then at least two of * are pr. *)
+  method filter_compatible_heads (head_is_var : bool) (ity : ity) (arity : int) (target : ty) : ity =
     if is_productive target then
-      (* left side and codomain of productive application can have any types *)
       let flipped_target = flip_productivity target in
       TyList.filter (fun ty ->
-          let res_ty = remove_args arity ty in
+          let arg_itys, res_ty = ty2list ty arity in
           eq_ty res_ty target ||
-          eq_ty res_ty flipped_target
+          eq_ty res_ty flipped_target &&
+          List.fold_left (fun acc ity ->
+              TyList.fold_left (fun acc ty ->
+                  if is_productive ty then
+                    acc + 1
+                  else
+                    acc
+                ) acc ity
+            ) 0 arg_itys >= if head_is_var then 1 else 2
         ) ity
     else
-      (* left side of a nonproductive application must have nonproductive arguments and codomain *)
       TyList.filter (fun ty ->
-          let arg_itys, res_ty = ty2list ty arity in
-          eq_ty res_ty target &&
-          not (List.exists (fun ity -> TyList.exists is_productive ity) arg_itys)
+          let res_ty = remove_args ty arity in
+          eq_ty res_ty target
         ) ity
 
   (** Creates a list of arrays of pairs (term, ity) with ity being intersection type for given
       argument, and each element of outer list corresponds to one of provided types.
       Combines that in a tuple with a boolean whether the whole type is productive. *)
-  method annotate_args (terms : term list) (ity : ity) : ((term * ity) array * bool) list =
+  method annotate_args : 'a. 'a list -> ity -> (('a * ity) array * bool) list = fun terms ity ->
     let rec annotate_args_ty terms ty acc =
       match terms, ty with
       | term :: terms', Fun (_, ity, ty') ->
@@ -89,7 +100,7 @@ class typing (grammar : grammar) = object(self)
     TyList.map (fun ty ->
         annotate_args_ty terms ty []
       ) ity
-
+        
   (** Merges vtes (variable types) by combining the list of type bindings in order, and combining
       types when a binding for the same variable is present in both lists. The resulting binding
       is ordered ascendingly lexicographically by variable ids. Combining types is also idempodently
@@ -134,79 +145,102 @@ class typing (grammar : grammar) = object(self)
       self#intersect_two_venvls venvl (self#intersect_venvls venvs')
 
   (* TODO this should be done on hterm, not term *)
-  method infer_wo_venv (term : term) (target : ty) (no_pr_vars : bool) : venvl =
-    match term with
-    | Var x ->
-      (* x : NP : s, any s *)
-      if is_productive target then
-        [] (* variables are only NP *)
-      else
-        (* both NP and PR versions are possible *)
-        let res = [[(x, TyList.singleton target)]] in
-        if no_pr_vars then
-          res
-        else
-          [(x, TyList.singleton (with_productivity target PR))] :: res
-    | A ->
-      (* a : f -> PR : O -> O, f = PR or NP *)
-      begin
-        match target with
-        | Fun(_, _, PR) -> [[]]
-        | _ -> []
-      end
-    | B ->
-      (* b : f -> T -> NP, T -> f -> NP : O -> O -> O, f = PR or NP *)
-      begin
-        match target with
-        | Fun(_, TyList.L [_], Fun(_, TyList.L [], NP))
-        | Fun(_, TyList.L [], Fun(_, TyList.L [_], NP)) -> [[]]
-        | _ -> []
-      end
-    | E ->
-      (* e : NP : O *)
-      begin
-        match target with
-        | NP -> [[]]
-        | _ -> []
-      end
-    | NT nt ->
-      if self#nt_ty_exists nt target then
+  method infer_wo_venv (hterm : hterm) (target : ty)
+      (no_pr_vars : bool) (force_pr_var : bool) : venvl =
+    assert (not (no_pr_vars && force_pr_var));
+    match hterm with
+    | HT a, [] ->
+      if TyList.exists (fun ty -> eq_ty target ty) (self#terminal_ity a) && not force_pr_var then
         [[]]
       else
         []
-    | App _ ->
-      let h, terms = Grammar.decompose_term term in
-      self#infer_app_wo_env h terms target no_pr_vars
+    | HNT nt, [] ->
+      if self#nt_ty_exists nt target && not force_pr_var then
+        [[]]
+      else
+        []
+    | HVar x, [] ->
+      if is_productive target then
+        [] (* variables are only NP *)
+      else if no_pr_vars then
+        [[(x, TyList.singleton target)]]
+      else if force_pr_var then
+        [[(x, TyList.singleton (with_productivity target PR))]]
+      else
+        (* both NP and PR versions are possible *)
+        [
+          [(x, TyList.singleton target)];
+          [(x, TyList.singleton (with_productivity target PR))]
+        ]
+    | _ -> (* application *)
+      let h, args = hgrammar#decompose_hterm hterm in
+      self#infer_app_wo_env h args target no_pr_vars force_pr_var
 
-  method infer_app_wo_env (h : term) (terms : term list) (target : ty) (no_pr_vars : bool) : venvl =
-    (* target is PR <=>
-       - lhs is PR or some arg is PR or there is duplication but all possibilities have to be
-         checked
-       lhs arg is PR <=>
-       - rhs arg is PR or has PR variable
-
-       first compute lhs, then rhs.
-
-       targeting lhs PR:
-       - lhs target=*->PR - need to be able to describe * without usual subtyping
-       - lhs target=NP
-       targeting lhs PR means brute or optimizing checking for duplications
-       targeting rhs PR means brute or optimizing checking for PR variables
-    *)
-    let h_arity = List.length terms in
+  (** To be used only on terms without head variables. *)
+  method infer_app_wo_env (h : head) (args : hterm list) (target : ty)
+      (no_pr_vars : bool) (force_pr_var : bool) : venvl =
+    let h_arity = List.length args in
     (* Get all h typings *)
     let all_h_ity = self#infer_head_ity h in
-    (* Assume that the target is
-       /\_i t_1i -> .. -> /\_i t_ki -> t
-       with t = pr or np. Typings of h that could make the application have the target type are
-       * -> .. -> * -> /\_i t_1i -> .. -> /\_i t_ki -> *,
-       where if t = PR then * is any type and if t = NP then * is any nonproductive type. Still,
-       even for t = PR, case where all * are nonproductive is treated specially, so these types
-       have to be distinguished. We filter the list of h typings accordingly. *)
-    let h_ity = self#filter_compatible_head all_h_ity h_arity target in
-    let h_ity = self#annotate_args terms h_ity in
-    let arg_itys_sums : TySet.t array = Array.make h_arity TySet.empty in
-    []
+    (* filtering compatible head types assuming head is not a variable *)
+    let h_ity = self#filter_compatible_heads false all_h_ity h_arity target in
+    let h_ity = self#annotate_args args h_ity in
+    (* TODO optimizations:
+       * caching argument index * argument required productivity -> venvl
+       * computing terms without variables first and short circuit after for all terms
+       * computing terms with non-duplicating variables last
+       * pre-computing order of computing argument types
+       * maybe cache with versioning or just cache of all typings
+       * flag to choose optimization in order to benchmark them later *)
+    let target_pr = is_productive target in
+    List.concat (List.map (fun (args, head_pr) ->
+        let venvl = Array.fold_left (fun acc (arg_term, arg_ity) ->
+            (* typing arg_term : arg_ity with short-circuit *)
+            if acc = [] then
+              acc
+            else
+              self#intersect_two_venvls acc (TyList.fold_left (fun acc arg_ty ->
+                  if acc = [] then
+                    acc
+                  else
+                    let arg_pr = is_productive arg_ty in
+                    (* When argument is productive in head type, it can be either productive or
+                       not productive with a productive variable. When argument is not productive
+                       in head type, it must be not productive and have no productive variables. *)
+                    (* TODO refactor - split by productivity, not flipping *)
+                    let venvl_direct =
+                      if arg_pr || not force_pr_var then
+                        self#infer_wo_venv arg_term arg_ty
+                          (no_pr_vars || not arg_pr) force_pr_var
+                      else
+                        []
+                    in
+                    let venvl_flipped =
+                      if arg_pr && not no_pr_vars then
+                        self#infer_wo_venv arg_term (flip_productivity arg_ty) false true
+                      else
+                        []
+                    in
+                    self#intersect_two_venvls (List.rev_append venvl_flipped venvl_direct) acc
+                ) acc arg_ity)
+          ) [[]] args
+        in
+        (* Note that below productive argument describes productivity of the argument term, not
+           productivity of the argument in head's type. *)
+        if target_pr then
+          (* When the target is productive, there are three options:
+             * head is productive and there are no restrictions on arguments, or
+             * head is not productive and at least one argument is productive, or
+             * head is not productive and all arguments are not productive and there is a
+               duplication (which implies that at least two arguments are productive in head type
+               assuming no head variables). *)
+          []
+        else
+          (* When the target is not productive, the head is not productive, no arguments are
+             productive, and there are no duplications. There still can be productive arguments in
+             head's type, as long as that does not force a duplication. *)
+          []
+      ) h_ity)
     (*
     List.iter (fun h_ity ->
         List.iter (fun (_, h_arg_itys) ->
@@ -333,7 +367,7 @@ class typing (grammar : grammar) = object(self)
   method print_nt_ity =
     print_string "Types of nt:\n============\n";
     for nt = 0 to (Array.length nt_ity) - 1 do
-      print_string ((grammar#name_of_nt nt)^":\n");
+      print_string ((hgrammar#nt_name nt)^":\n");
       self#print_itylist nt_ity.(nt)
     done
 end
