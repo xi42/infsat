@@ -2,11 +2,11 @@ open GrammarCommon
 open Utilities
 
 type term = T of terminal | NT of nt_id | Var of var_id | App of term * term
-type kind = O | KFun of kind * kind
+type sort = O | KFun of sort * sort
 
-type nonterminal = (string * kind)
+type nonterminal = (string * sort)
 
-(* store the original name of each non-terminal and its kind *)
+(* store the original name of each non-terminal and its sort *)
 type var_names = string array array (* store the original name of each variable *)
 
 (** The total number of formal parameters and nonterminal body *)
@@ -35,8 +35,8 @@ let rec subst_nt_in_term s term =
 | App (t1, t2) -> App(subst_nt_in_term s t1, subst_nt_in_term s t2)
 
 
-let rec arity2kind k =
-  if k = 0 then O else KFun(O, arity2kind(k - 1))
+let rec arity2sort k =
+  if k = 0 then O else KFun(O, arity2sort(k - 1))
    
 let rec size_of_term t =
   match t with
@@ -108,6 +108,10 @@ class grammar nonterminals var_names rules = object(self)
     self#print_gram;
     print_string ("\nThe number of rewrite rules: " ^ (string_of_int self#nt_count) ^ "\n"^
                   "The size of recursion scheme: " ^ (string_of_int self#size) ^ "\n")
+
+  initializer
+    if snd nonterminals.(self#start_nt) <> O then
+      failwith "Starting nonterminal should have sort o"
 end
 
 (** change normal tree with app nodes to tree with (head, list-of-arg-terms) nodes *)
@@ -187,6 +191,6 @@ let rec nt_in_rules rules : SortedNTs.t =
   | r :: rules' ->
     SortedNTs.merge (nt_in_rule r) (nt_in_rules rules')
       
-let rec arity_of_kind = function
+let rec arity_of_sort = function
   | O -> 0
-  | KFun (k1, k2) -> 1 + arity_of_kind k2
+  | KFun (k1, k2) -> 1 + arity_of_sort k2

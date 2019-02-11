@@ -20,11 +20,11 @@ class hgrammar (grammar : grammar) = object(self)
       h is a terminal, nonterminal, or a variable. iX points at tab_id_terms[iX]. This represents
       an applicative term
       h a11 a12 ... a1K a21 ... aM1 ... aMR
-      terms are hterms in the original tree representation, and vars is a list of all free variables
-      in terms. Variables are represented as integer tuples (X, Y) for Y-th argument (0-indexed)
-      of X-th nonterminal (0-indexed).
-      Note that two terms with variables that are used in two different nonterminal definitions will
-      have different ids, because variables are tuples (nt_id, var_id) that are disjoint for
+      terms are hterms in the original tree representation, and vars is a list of all free
+      variables in terms. Variables are represented as integer tuples (X, Y) for Y-th argument
+      (0-indexed) of X-th nonterminal (0-indexed).
+      Note that two terms with variables that are used in two different nonterminal definitions
+      will have different ids, because variables are tuples (nt_id, var_id) that are disjoint for
       different nonterminal bodies. *)
   val mutable hterms_data : (hterm list * Grammar.term list * SortedVars.t * nt_id option) array = [||]
 
@@ -144,6 +144,15 @@ class hgrammar (grammar : grammar) = object(self)
           end
       in
       (self#term2head h, [id]) (* return just the head and id of list of args, note that this fun will only return [] or [id] in snd *)
+
+  method find_term (t : term) : hterm =
+    let h, terms = Grammar.decompose_term t in
+    if terms = [] then
+      (self#term2head h, [])
+    else
+      let hterms = List.map self#find_term terms in
+      let id = Hashtbl.find tab_terms_id hterms in
+      (self#term2head h, [id])
 
   (* --- printing --- *)
 
