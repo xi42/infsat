@@ -27,7 +27,7 @@ let typing_test : test =
                (Fun (2, TyList.singleton NP, Fun(3, TyList.singleton PR, Fun(4, TyList.empty, PR))))
             )
         ) [
-          ([|(1, TyList.singleton NP); (2, TyList.singleton PR)|], true)
+          ([(1, TyList.singleton NP); (2, TyList.singleton PR)], true)
         ]
       )
   ]

@@ -1,18 +1,14 @@
 open Flags
 
-let table_create n = Hashtbl.create n;;
-let table_find tab x = Hashtbl.find tab x 
-let table_add tab a b = Hashtbl.add tab a b
-(***
-  let debug s = (print_string s; print_string "\n"; flush(stdout))
-***)
-let show_time() =
-  if
-    !debugging
-  then
-    print_string (string_of_float (Sys.time()))
-  else 
-    ()
+let rec fold_left_short_circuit (f : 'a -> 'b -> 'a) (acc : 'a) (l : 'b list) (bottom : 'a) : 'a =
+  match l with
+  | [] -> acc
+  | x :: l' ->
+    if acc = bottom then
+      acc
+    else
+      fold_left_short_circuit f (f acc x) l' bottom
+
 let debug s =
   if
     !debugging
@@ -21,13 +17,7 @@ let debug s =
   else 
     ()
 
-let rec take_some l =
-  match l with
-    [] -> []
-   | None::l' -> take_some l'
-   | (Some(x))::l' -> x::(take_some l')
-
-(*** returns a list of integers [m;...;n-1] ***)
+(** A list of integers m, m + 1, ..., n - 1 (empty if m >= n). *)
 let rec fromto m n =
   if m >= n then
     []
@@ -73,29 +63,6 @@ let rec list_take_nth l n =
       let (x, l'') = list_take_nth l' (n-1) in
       (x, a::l'')
 
-(*
-(** Merge two asc-sorted list idempodently, resulting in asc-sorted list with unique values. *)
-let rec merge_and_unify comp l1 l2 =
-  match (l1, l2) with
-  | (_, []) -> l1
-  | ([], _)->l2
-  | (x :: l1', y :: l2') -> 
-    let c = comp x y in
-    if c=0 then x::(merge_and_unify comp l1' l2')
-    else if c<0 then x::(merge_and_unify comp l1' l2)
-    else y::(merge_and_unify comp l1 l2');;
-
-let rec merge_and_unify_list comp ll =
-  List.fold_left
-  (fun l1 l2 -> merge_and_unify comp l1 l2)
-  [] ll
-
-let merge_and_unify_safe comp l1 l2 =
-  if List.sort compare l1=l1 && List.sort compare l2=l2 then
-      merge_and_unify comp l1 l2
-  else
-     assert false
-*)
 let rec is_sorted l =
   match l with
     [] -> true
@@ -232,24 +199,6 @@ let comp_subst subst s1 s2 =
   let s1' = List.filter (fun (x,v) -> List.for_all (fun (x',v')->x!=x') s2) s1 in
     s1'@s2'
 
-type ('a, 'b) env = ('a * 'b) list
-let env_lookup = List.assoc
-let env_empty = []
-let env_extend x v env = (x,v)::env
-let env_map f env = List.map (fun (x,v)->(x,f v)) env
-let print_env f g env =
-  let rec print_seq env =
-    match env with
-      [] -> ()
-    | (x,v)::env' -> (print_string (f x); print_string " : ";
-                      print_string (g v); print_string "\n";
-                      print_seq env')
-  in
-     (print_string "{\n"; print_seq env; print_string "}\n")
-
-let env2list x = x;;
-let list2env x = x;;
-
 (*** perfect_matching checks to see if there exists a perfect matching 
  *** The implementation is extremely naive, assuming
  *** that the size of the input graph is very small.
@@ -298,9 +247,6 @@ let list_singleton l =
     [_] -> true
   | _ -> false
 
-let report_time() =
-  print_string ((string_of_float (Sys.time()))^"\n"); flush stdout
-
 let filter_tail p l =
   let rec f l r =
     match l with
@@ -325,22 +271,3 @@ let index_list_r l =
   let len = List.length l in
   let indices = fromto 0 len in
   List.combine l indices
-
-type 'a queue = ('a list * 'a list) ref
-let enqueue item queue =
-  let (q1,q2) = !queue in
-    queue := (q1, item::q2)
-let enqueue_fifo item queue =
-  let (q1,q2) = !queue in
-    queue := (item::q1, q2)
-let rec dequeue queue =
-  let (q1,q2) = !queue in
-  match q1 with
-    [] -> if q2=[] then None
-          else (queue:= (List.rev_append q2 [], []); dequeue queue)
-  | x::q1' -> (queue := (q1',q2); Some(x))
-
-(* integer set *)
-module X = struct type t=int;; let compare = Pervasives.compare end
-module IntSet = Set.Make(X)
-

@@ -1112,7 +1112,7 @@ let rec tcheck_wo_venv term (target : ty) : (var_id * ity) list list =
       [] (* variables are only NP *)
     else
       (* both NP and PR versions are possible *)
-      [[(x, [target])]; [(x, [with_productivity target PR])]]
+      [[(x, [target])]; [(x, [with_productivity PR target])]]
   | A ->
     (* a : f -> PR : O -> O, f = PR or NP *)
     begin

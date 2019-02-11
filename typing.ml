@@ -5,10 +5,20 @@ open Type
 
 (** A single possible typing of variables mapping variables to their types, treated as if there
     was AND as the delimiter. *)
-type venv = (var_id * ity) list
+module VEnv = SortedList.Make(struct
+    type t = var_id * ity
+    let compare (x_id, _) (y_id, _) = Pervasives.compare x_id y_id
+  end)
 
 (** List of possible typings of variables, treated as if there was OR as the delimiter. *)
-type venvl = venv list
+type venvl = VEnv.t list
+
+(** Variable environment along with flags whether there was a duplication during its
+    construction and whether a productive argument was used. *)
+type venvf = VEnv.t * bool * bool
+
+(** List of variable environments with duplication flags. *)
+type venvfl = venvf list
 
 module TySet = Set.Make(Ty)
 
@@ -88,13 +98,13 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
   (** Creates a list of arrays of pairs (term, ity) with ity being intersection type for given
       argument, and each element of outer list corresponds to one of provided types.
       Combines that in a tuple with a boolean whether the whole type is productive. *)
-  method annotate_args : 'a. 'a list -> ity -> (('a * ity) array * bool) list = fun terms ity ->
+  method annotate_args : 'a. 'a list -> ity -> (('a * ity) list * bool) list = fun terms ity ->
     let rec annotate_args_ty terms ty acc =
       match terms, ty with
       | term :: terms', Fun (_, ity, ty') ->
         annotate_args_ty terms' ty' ((term, ity) :: acc)
       | [], _ ->
-        (Array.of_list (List.rev acc), is_productive ty)
+        (List.rev acc, is_productive ty)
       | _ -> failwith "List of terms longer than list of arguments"
     in
     TyList.map (fun ty ->
@@ -105,28 +115,30 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
       types when a binding for the same variable is present in both lists. The resulting binding
       is ordered ascendingly lexicographically by variable ids. Combining types is also idempodently
       merging list of types (i.e., there are sets of types). TODO redo docs from old ones *)
-  method intersect_two_venvs (venv1 : venv) (venv2 : venv) : venv =
-    match venv1, venv2 with
-    | [], _ -> venv2
-    | _, [] -> venv1
-    | ((v1, ity1) :: venv1', (v2, ity2) :: venv2') ->
-      let n = compare v1 v2 in
-      if n < 0 then
-        (v1, ity1) :: (self#intersect_two_venvs venv1' venv2)
-      else if n > 0 then
-        (v2, ity2) :: (self#intersect_two_venvs venv1 venv2')
-      else
-        (v1, TyList.merge ity1 ity2) :: (self#intersect_two_venvs venv1' venv2')
+  method intersect_two_venvs (venv1, dup1, pruse1 : venvf) (venv2, dup2, pruse2 : venvf) : venvf =
+    let duplication = ref (dup1 || dup2) in
+    let intersection = VEnv.merge_custom (fun (v1, ity1) (v2, ity2) ->
+        (v1, TyList.merge_custom (fun x _ ->
+             duplication := true;
+             x
+           ) ity1 ity2)
+      ) venv1 venv2
+    in
+    (intersection, !duplication, pruse1 || pruse2)
 
   (** Flatten an intersection of variable environment lists, which are OR-separated lists of
       AND-separated lists of typings of unique in inner list variables. Flattening means moving
-      outer intersection (AND) inside. *)
-  method intersect_two_venvls (venvl1 : venvl) (venvl2 : venvl) : venvl =
+      outer intersection (AND) inside. Return if there was a duplication. *)
+  method intersect_two_venvls (venvl1 : venvfl) (venvl2 : venvfl) : venvfl =
     match venvl1, venvl2 with
     | _, [] -> [] (* second typing is invalid *)
     | [], _-> [] (* first typing is invalid *)
-    | _, [[]] -> venvl1 (* no variables in second typing *)
-    | [[]], _ -> venvl2 (* no variables in first typing *)
+    | _, [(VEnv.L [], _, _)] ->
+      (* no variables in second typing - special case optimization *)
+      venvl1
+    | [(VEnv.L [], _,  _)], _ ->
+      (* no variables in first typing - special case optimization *)
+      venvl2
     | _ ->
       List.fold_left
         (fun acc venv1 ->
@@ -137,12 +149,45 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
            List.rev_append venvl2' acc)
         [] venvl1
 
+  (*
   method intersect_venvls (venvls : venvl list) : venvl =
     match venvls with
-    | [] -> [[]]
+    | [] -> [VEnv.empty]
     | [venvl] -> venvl
     | venvl :: venvs' ->
       self#intersect_two_venvls venvl (self#intersect_venvls venvs')
+*)
+
+  (*
+  method venvl_has_duplication (venvl : venvl) : bool =
+    let min_var_id = List.fold_left (fun min_var_id venv ->
+        match min_var_id, VEnv.hd_option venv with
+        | Some mv, Some (v, _) -> Some (min mv v)
+        | mv, None -> mv
+        | None, v -> v
+      ) None venvl
+    in
+    match min_var_id with
+    | Some mv ->
+      let min_var_tys = List.fold_left (fun ity_sum venv ->
+          match VEnv.hd_option venv with
+          | Some (v, ity) ->
+            if v = mv then
+              begin
+                let eq =
+              TyList.merge_custom (fun x _ ->
+                    x
+                  ) ity_sum ity
+            end
+            else
+              ity_sum
+          | None ->
+            ity_sum
+        ) TyList.empty venvl
+      in
+      true
+    | None -> false
+              *)
 
   (* TODO this should be done on hterm, not term *)
   method infer_wo_venv (hterm : hterm) (target : ty)
@@ -151,26 +196,26 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
     match hterm with
     | HT a, [] ->
       if TyList.exists (fun ty -> eq_ty target ty) (self#terminal_ity a) && not force_pr_var then
-        [[]]
+        [VEnv.empty]
       else
         []
     | HNT nt, [] ->
       if self#nt_ty_exists nt target && not force_pr_var then
-        [[]]
+        [VEnv.empty]
       else
         []
     | HVar x, [] ->
       if is_productive target then
         [] (* variables are only NP *)
       else if no_pr_vars then
-        [[(x, TyList.singleton target)]]
+        [VEnv.singleton (x, TyList.singleton target)]
       else if force_pr_var then
-        [[(x, TyList.singleton (with_productivity target PR))]]
+        [VEnv.singleton (x, TyList.singleton (with_productivity PR target))]
       else
         (* both NP and PR versions are possible *)
         [
-          [(x, TyList.singleton target)];
-          [(x, TyList.singleton (with_productivity target PR))]
+          VEnv.singleton (x, TyList.singleton target);
+          VEnv.singleton (x, TyList.singleton (with_productivity PR target))
         ]
     | _ -> (* application *)
       let h, args = hgrammar#decompose_hterm hterm in
@@ -193,53 +238,86 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
        * maybe cache with versioning or just cache of all typings
        * flag to choose optimization in order to benchmark them later *)
     let target_pr = is_productive target in
+    (* Iterate over each possible typing of the head *)
     List.concat (List.map (fun (args, head_pr) ->
-        let venvl = Array.fold_left (fun acc (arg_term, arg_ity) ->
-            (* typing arg_term : arg_ity with short-circuit *)
-            if acc = [] then
-              acc
-            else
-              self#intersect_two_venvls acc (TyList.fold_left (fun acc arg_ty ->
-                  if acc = [] then
-                    acc
+        (* The target is args = (arg_i: arg_ity_i)_i and the codomain is head_pr.
+           Iterate over arguments while intersecting variable environments with short-circuit.
+           Note that below productive argument describes productivity of the argument term, not
+           productivity of the argument in head's type.
+
+           When the target is productive, there are three options:
+           (1) head is productive and there are no restrictions on arguments, or
+           (2) head is not productive and at least one argument is productive, or
+           (3) head is not productive and all arguments are not productive and there
+               is a duplication (which implies that at least two arguments are
+               productive in head type assuming no head variables).
+
+           (NP) When the target is not productive, the head is not productive, no
+                arguments are productive, and there are no duplications. There still can
+                be productive arguments in head's type, as long as that does not force a
+                duplication. *)
+        let venvfl = Utilities.fold_left_short_circuit (fun venvfl (arg_term, arg_ity) ->
+            (* venvfl contains not only variable environments, but also information whether
+               there was a duplication (for (3) and (NP)) and whether a productive argument was
+               used (for (3)). *)
+            TyList.fold_left_short_circuit (fun venvfl arg_ty ->
+                (* venvfl are possible variable environments constructed so far with processed
+                   arguments and typings of the current argument *)
+                let target_arg_pr = is_productive arg_ty in
+                (* When argument is productive in head type, it can be either productive or
+                   not productive with a productive variable. When argument is not productive
+                   in head type, it must be not productive and have no productive variables. *)
+                let arg_venvfl =
+                  if target_arg_pr then
+                    (* productive target argument *)
+                    let arg_pr_venvfl =
+                      if target_pr then
+                        (* productive argument *)
+                        List.map (fun v -> (v, false, true))
+                          (self#infer_wo_venv arg_term arg_ty no_pr_vars false)
+                        (* TODO check force_pr_var after everything *)
+                      else
+                        []
+                    in
+                    let arg_np_venvfl =
+                      if no_pr_vars then
+                        []
+                      else
+                        (* nonproductive argument with productive variable *)
+                        List.map (fun v -> (v, false, false))
+                          (self#infer_wo_venv arg_term (with_productivity NP arg_ty) false true)
+                    in
+                    List.rev_append arg_pr_venvfl arg_np_venvfl
                   else
-                    let arg_pr = is_productive arg_ty in
-                    (* When argument is productive in head type, it can be either productive or
-                       not productive with a productive variable. When argument is not productive
-                       in head type, it must be not productive and have no productive variables. *)
-                    (* TODO refactor - split by productivity, not flipping *)
-                    let venvl_direct =
-                      if arg_pr || not force_pr_var then
-                        self#infer_wo_venv arg_term arg_ty
-                          (no_pr_vars || not arg_pr) force_pr_var
-                      else
-                        []
-                    in
-                    let venvl_flipped =
-                      if arg_pr && not no_pr_vars then
-                        self#infer_wo_venv arg_term (flip_productivity arg_ty) false true
-                      else
-                        []
-                    in
-                    self#intersect_two_venvls (List.rev_append venvl_flipped venvl_direct) acc
-                ) acc arg_ity)
-          ) [[]] args
+                    (* nonproductive target argument (which implies nonproductive argument) *)
+                    List.map (fun v -> (v, false, false))
+                      (self#infer_wo_venv arg_term arg_ty true false)
+                in
+                let intersection = self#intersect_two_venvls venvfl arg_venvfl in
+                if target_pr then
+                  (* pr target might require duplication in (3), but this can only be checked at
+                     the end (or TODO optimization in argument order) *)
+                  intersection
+                else
+                  (* np target requires no duplication *)
+                  List.filter (fun (_, dup, _) -> not dup) intersection
+              ) venvfl arg_ity []
+          ) [(VEnv.empty, false, false)] args []
         in
-        (* Note that below productive argument describes productivity of the argument term, not
-           productivity of the argument in head's type. *)
-        if target_pr then
-          (* When the target is productive, there are three options:
-             * head is productive and there are no restrictions on arguments, or
-             * head is not productive and at least one argument is productive, or
-             * head is not productive and all arguments are not productive and there is a
-               duplication (which implies that at least two arguments are productive in head type
-               assuming no head variables). *)
-          []
+        let venvfl =
+          if target_pr then
+            List.filter (fun (_, dup, pruse) -> dup || pruse)
+              venvfl
+          else
+            venvfl
+        in
+        let venvl = List.map (fun (venv, _, _) -> venv) venvfl in
+        if force_pr_var then
+          List.filter (fun venv ->
+              VEnv.exists (fun (_, ity) -> TyList.exists is_productive ity) venv
+            ) venvl
         else
-          (* When the target is not productive, the head is not productive, no arguments are
-             productive, and there are no duplications. There still can be productive arguments in
-             head's type, as long as that does not force a duplication. *)
-          []
+          venvl
       ) h_ity)
     (*
     List.iter (fun h_ity ->

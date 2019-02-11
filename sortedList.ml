@@ -11,6 +11,7 @@ module type SL = sig
     
   val mem : elt -> t -> bool
   val hd : t -> elt
+  val hd_option : t -> elt option
   val tl : t -> t
   val length : t -> int
   val is_empty : t -> bool
@@ -18,11 +19,13 @@ module type SL = sig
   val partition : (elt -> bool) -> t -> t * t
   val filter : (elt -> bool) -> t -> t
   val uniq : t -> t
+  val merge_custom : (elt -> elt -> elt) -> t -> t -> t
   val merge : t -> t -> t
   val for_all : (elt -> bool) -> t -> bool
   val exists : (elt -> bool) -> t -> bool
   
   val fold_left : ('a -> elt -> 'a) -> 'a -> t -> 'a
+  val fold_left_short_circuit : ('a -> elt -> 'a) -> 'a -> t -> 'a -> 'a
   val fold_right : (elt -> 'a -> 'a) -> t -> 'a -> 'a
   val map : (elt -> 'a) -> t -> 'a list
   val rev_map : (elt -> 'a) -> t -> 'a list
@@ -61,7 +64,12 @@ struct
 
   let hd (L l) = List.hd l
 
-  let tl (L l) = L(List.tl l)
+  let hd_option (L l) =
+    match l with
+    | [] -> None
+    | h :: l' -> Some h
+
+  let tl (L l) = L (List.tl l)
   
   let length (L l) = List.length l
 
@@ -89,22 +97,26 @@ struct
     in
     L (uniq_list l [])
 
-  (** Merge two sorted list idempodently, resulting in sorted list with unique values. *)
-  let merge (L l1) (L l2) =
+  (** Merge two sorted lists with special merge function for equal values. *)
+  let merge_custom merge_fun (L l1) (L l2) =
     let rec merge_lists l1 l2 =
       match l1, l2 with
       | _, [] -> l1
-      | [], _ ->l2
+      | [], _ -> l2
       | x :: l1', y :: l2' -> 
         let c = Ord.compare x y in
         if c = 0 then
-          x :: (merge_lists l1' l2')
+          (merge_fun x y) :: (merge_lists l1' l2')
         else if c < 0 then
           x :: (merge_lists l1' l2)
         else
           y :: (merge_lists l1 l2')
     in
     L (merge_lists l1 l2)
+
+  (** Merge two sorted lists idempodently, resulting in sorted list with unique values. *)
+  let merge sl1 sl2 =
+    merge_custom (fun x _ -> x) sl1 sl2
 
   let for_all f (L l) = List.for_all f l
   
@@ -113,6 +125,8 @@ struct
   (* iteration *)
   
   let fold_left f acc (L l) = List.fold_left f acc l
+
+  let fold_left_short_circuit f acc (L l) bottom = Utilities.fold_left_short_circuit f acc l bottom
 
   let fold_right f (L l) acc = List.fold_right f l acc
   

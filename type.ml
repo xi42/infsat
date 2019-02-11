@@ -79,10 +79,10 @@ let rec is_productive (ty : ty) : bool =
   | NP -> false
   | _ -> failwith "Expected PR or NP"
 
-let rec with_productivity (orig : ty) (f : ty) : ty =
+let rec with_productivity (f : ty) (orig : ty) : ty =
   match orig with
   | PR | NP -> f
-  | Fun (_, ity, ty) -> mk_fun_ty ity (with_productivity ty f)
+  | Fun (_, ity, ty) -> mk_fun_ty ity (with_productivity f ty)
 
 let rec flip_productivity (orig : ty) : ty =
   match orig with
