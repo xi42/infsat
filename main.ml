@@ -7,16 +7,26 @@ let parse_file filename =
     try
       open_in filename 
     with
-	Sys_error _ -> (print_string ("Cannot open file: "^filename^"\n");exit(-1)) in
-  print_string ("Analyzing "^filename^".\n");
+      Sys_error _ ->
+      begin
+        print_string ("Cannot open file: " ^ filename ^ "\n");
+        exit (-1)
+      end
+  in
+  print_string ("Analyzing " ^ filename ^ ".\n");
   flush stdout;
   let lexbuf = Lexing.from_channel in_strm in
   let result =
     try
       InfSatParser.main InfSatLexer.token lexbuf
     with 
-	Failure _ -> exit(-1) (*** exception raised by the lexical analyer ***)
-      | Parsing.Parse_error -> (print_string "Parse error\n";exit(-1)) in
+    | Failure _ -> exit (-1) (*** exception raised by the lexical analyer ***)
+    | Parsing.Parse_error ->
+      begin
+        print_string "Parse error\n";
+        exit(-1)
+      end
+  in
   let _ = 
     try
       close_in in_strm
@@ -60,13 +70,13 @@ let report_finiteness input : bool =
     )
 
 let string_of_input (prerules, tr) =
-  (Syntax.string_of_prerules prerules)^"\n"^(Syntax.string_of_preterminals tr)
+  Syntax.string_of_prerules prerules ^ "\n" ^ Syntax.string_of_preterminals tr
 
 let report_usage () =
-  print_string "Usage: \n";
-  print_string "infsat <option>* <filename> \n\n";
-  print_string " -d\n";
-  print_string "  debug mode\n"
+  print_string @@ "Usage: \n" ^
+                  "infsat <option>* <filename> \n\n" ^
+                  " -d\n" ^
+                  "  debug mode\n"
 
 let rec read_options index =
   match Sys.argv.(index) with
@@ -106,18 +116,18 @@ let parse_and_report_finiteness (filename : string option) : bool =
   let input = profile "parsing" (fun () ->
       try
         match filename with
-        | Some(f) -> parse_file f
-        | None -> parse_stdin()
+        | Some f -> parse_file f
+        | None -> parse_stdin ()
       with
-        InfSatLexer.LexError s -> failwith ("Lexer error: "^s)
+      | InfSatLexer.LexError s -> failwith @@ "Lexer error: "^s
     )
   in
   if !Flags.debugging then
-    print_string ("Input:\n"^(string_of_input input));
+    print_string @@ "Input:\n" ^ string_of_input input;
   report_finiteness input
   
-let main() : unit =
-  let _ = print_string "InfSat2 0.1: Saturation-based finiteness checker for higher-order recursion schemes\n" in
+let main () : unit =
+  print_string "InfSat2 0.1: Saturation-based finiteness checker for higher-order recursion schemes\n";
   flush stdout;
   let filename = 
     try
@@ -126,10 +136,10 @@ let main() : unit =
     | Invalid_argument _ -> None
     | _ -> 
       print_string "Invalid options.\n\n";
-      report_usage();
+      report_usage ();
       exit (-1)
   in
-  let start_t = Sys.time() in
+  let start_t = Sys.time () in
   ignore (parse_and_report_finiteness filename);
-  let end_t = Sys.time() in
+  let end_t = Sys.time () in
   report_timings start_t end_t

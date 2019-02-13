@@ -21,7 +21,7 @@ let rec subst_term s term =
         List.assoc x s
       with Not_found -> term
     end
-  | App (t1, t2) -> App(subst_term s t1, subst_term s t2)
+  | App (t1, t2) -> App (subst_term s t1, subst_term s t2)
 
 let rec subst_nt_in_term s term =
   match term with
@@ -32,7 +32,7 @@ let rec subst_nt_in_term s term =
         List.assoc x s
       with Not_found -> term
     end
-| App (t1, t2) -> App(subst_nt_in_term s t1, subst_nt_in_term s t2)
+| App (t1, t2) -> App (subst_nt_in_term s t1, subst_nt_in_term s t2)
 
 
 let rec arity2sort k =
@@ -47,6 +47,8 @@ let rec size_of_rule r = size_of_term (snd r)
 
 class grammar nonterminals var_names rules = object(self)
   val nonterminals : nonterminal array = nonterminals
+  (** Names of variables in nonterminals used for pretty printing. May be empty and will be
+      replaced by generic v1, v2, etc. in that case. *)
   val var_names : string array array = var_names
   val rules : rule array = rules
 
@@ -76,7 +78,7 @@ class grammar nonterminals var_names rules = object(self)
     let nt, i = x in
     (* variable added by normalization *)
     if nt < 0 || nt >= Array.length var_names || i >= Array.length var_names.(nt) then
-      "v" ^ (string_of_int i)
+      "v" ^ string_of_int i
     else
       var_names.(nt).(i)
 
@@ -85,7 +87,7 @@ class grammar nonterminals var_names rules = object(self)
     | T a -> string_of_terminal a
     | NT f -> self#name_of_nt f
     | Var x -> self#name_of_var x
-    | App (t1, t2) -> "(" ^ (self#string_of_term t1) ^ " " ^ (self#string_of_term t2) ^ ")"
+    | App (t1, t2) -> "(" ^ self#string_of_term t1 ^ " " ^ self#string_of_term t2 ^ ")"
 
   method print_term (term : term) =
     print_string (self#string_of_term term)
@@ -94,9 +96,9 @@ class grammar nonterminals var_names rules = object(self)
     for i = 0 to self#nt_count - 1 do 
       let arity, body = rules.(i) in
       begin
-        print_string ((self#name_of_nt i) ^ " ");
+        print_string (self#name_of_nt i ^ " ");
         for j = 0 to arity - 1 do
-          print_string ((self#name_of_var (i, j)) ^ " ")
+          print_string (self#name_of_var (i, j) ^ " ")
         done;
         print_string "-> ";
         self#print_term body;
@@ -106,8 +108,8 @@ class grammar nonterminals var_names rules = object(self)
 
   method report_grammar =
     self#print_gram;
-    print_string ("\nThe number of rewrite rules: " ^ (string_of_int self#nt_count) ^ "\n"^
-                  "The size of recursion scheme: " ^ (string_of_int self#size) ^ "\n")
+    print_string ("\nThe number of rewrite rules: " ^ string_of_int self#nt_count ^ "\n"^
+                  "The size of recursion scheme: " ^ string_of_int self#size ^ "\n")
 
   initializer
     if snd nonterminals.(self#start_nt) <> O then

@@ -1,5 +1,9 @@
-type nt_id = int (** names of non-terminal symbols; they are just integers **)
-type var_id = nt_id * int (* pair of the non-terminal and the variable index *)
+(** Identifier of a nonterminal. Nonterminals are numbered starting from 0. **)
+type nt_id = int
+
+(** Identifier of a variable. Contains identifier of the nonterminal it is defined in and its
+    index *)
+type var_id = nt_id * int
 
 type terminal = A | B | E
 

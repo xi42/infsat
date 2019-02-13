@@ -21,7 +21,7 @@ test: $(SOURCE) test.ml
 	ocamlfind ocamlc -o test -package oUnit -linkpkg -g $^
 
 run-test: test
-	./test
+	./test -runner sequential -no-cache-filename -no-output-file
 
 TAGS: $(SOURCE)
 	ctags -e $(SOURCE)
@@ -36,4 +36,4 @@ doc: $(SOURCE)
 	all clean run-test
 
 clean:
-	rm -f *.cmi *.cmx *.o *.cmo *.exe infsat top infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat-debug test oUnit-*
+	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infsat top infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat-debug test oUnit-*

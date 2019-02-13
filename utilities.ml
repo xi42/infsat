@@ -9,6 +9,51 @@ let rec fold_left_short_circuit (f : 'a -> 'b -> 'a) (acc : 'a) (l : 'b list) (b
     else
       fold_left_short_circuit f (f acc x) l' bottom
 
+let string_of_list (p : 'a -> string) (l : 'a list) : string =
+  match l with
+  | [] -> "[]"
+  | [x] -> "[" ^ p x ^ "]"
+  | x :: l' ->
+    "[" ^
+    (List.fold_left (fun acc x ->
+         acc ^ "; " ^ p x
+       ) (p x) l') ^
+    "]"
+
+let trim_parens (str : string) : string =
+  if String.length str >= 2 && str.[0] = '(' && str.[String.length str - 1] = ')' then
+    String.sub str 1 (String.length str - 2)
+  else
+    str
+
+(** Splits str on the first occurence of sep in two strings that do not contain the sep between
+    them. *)
+let split_outside_parens (str : string) (sep : string) : (string * string) option =
+  assert (String.length sep > 0);
+  let strlen = String.length str in
+  let seplen = String.length sep in
+  let i = ref 0 in
+  let parens = ref 0 in
+  let res = ref None in
+  while !i < strlen && !res = None do
+    if str.[!i] = '(' then
+      parens := !parens + 1
+    else if str.[!i] = ')' then
+      parens := !parens - 1
+    else if !parens = 0 && str.[!i] = sep.[0] && !i + seplen <= strlen then
+      begin
+        let j = ref 1 in
+        while !j < seplen && str.[!i + !j] = sep.[!j] do
+          j := !j + 1
+        done;
+        if !j = seplen then
+          res := Some (String.sub str 0 !i,
+                       String.sub str (!i + seplen) (strlen - seplen - !i));
+      end;
+    i := !i + 1
+  done;
+  !res
+
 let debug s =
   if
     !debugging

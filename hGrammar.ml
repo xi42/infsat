@@ -37,20 +37,20 @@ class hgrammar (grammar : grammar) = object(self)
       then represents
       h a11 a12 ... a1n a21 a22 ... a2m ...
       Mappings from asX to lists are in hterms_data. *)
-  val mutable normalized_body : hterm array = [||]
+  val mutable nt_bodies : hterm array = [||]
 
   (** Increasing counter for fresh identifiers for hterms (all terms and subterms in head form). *)
   val mutable next_hterms_id : int = 0
 
   (* --- access --- *)
 
-  method nt_count : int = Array.length normalized_body
+  method nt_count : int = Array.length nt_bodies
 
   method nt_arity (nt : nt_id) : int = grammar#arity_of_nt nt
 
   method nt_name (nt : nt_id) : string = grammar#name_of_nt nt
   
-  method nt_body (nt : nt_id) = normalized_body.(nt)
+  method nt_body (nt : nt_id) : hterm = nt_bodies.(nt)
 
   method hterms_count : int = next_hterms_id
 
@@ -156,23 +156,26 @@ class hgrammar (grammar : grammar) = object(self)
 
   (* --- printing --- *)
 
-  method print_head = function
-    | HNT nt -> print_string (grammar#name_of_nt nt)
-    | HVar v -> print_string (grammar#name_of_var v)
-    | HT a -> print_string (string_of_terminal a)
+  method string_of_head = function
+    | HNT nt -> grammar#name_of_nt nt
+    | HVar v -> grammar#name_of_var v
+    | HT a -> string_of_terminal a
 
-  method print_hterm (h, ids : hterm) =
-    self#print_head h;
-    List.iter (fun id ->
-        print_string "[";
+  method string_of_hterm (h, ids : hterm) : string =
+    self#string_of_head h ^
+    String.concat " " (List.map (fun id ->
         let hterms = self#id2hterms id in
-        List.iter (fun t ->
-            print_string "(";
-            self#print_hterm t;
-            print_string ") "
-          ) hterms;
-        print_string "]";
-      ) ids
+        " [" ^
+        String.concat " " (List.map (fun t ->
+            "(" ^
+            self#string_of_hterm t ^
+            ")"
+          ) hterms) ^
+        "]"
+      ) ids)
+
+  method print_hterm (hterm : hterm) =
+    print_string (self#string_of_hterm hterm)
   
   method print_hterms =
     print_string "hterms_id --> terms\n\n";
@@ -191,11 +194,11 @@ class hgrammar (grammar : grammar) = object(self)
     let size = grammar#size in
     hterms_data <- Array.make size ([], [], SortedVars.empty, None); (* for each a-term, i.e., @ x t, where x is not an application *)
     let dummy_hterm : hterm = (HNT (-1), []) in
-    normalized_body <- Array.make grammar#nt_count dummy_hterm; (* convert each rule to a normalized form and store in this global array along with its arity (this is ref) *)
+    nt_bodies <- Array.make grammar#nt_count dummy_hterm; (* convert each rule to a normalized form and store in this global array along with its arity (this is ref) *)
     for nt = 0 to grammar#nt_count - 1 do
       let arity, body = grammar#rule nt in
       let hterm = self#convert_term body in
-      normalized_body.(nt) <- hterm (* normalized_body now contains (arity, (H, [ID])), where H is a var/nonterminal/terminal and ID points in hterms_data at list of terms normalized to (H, [ID]) or (H, []) if there are no args *)
+      nt_bodies.(nt) <- hterm (* nt_bodies now contains (arity, (H, [ID])), where H is a var/nonterminal/terminal and ID points in hterms_data at list of terms normalized to (H, [ID]) or (H, []) if there are no args *)
     done;
     if !Flags.debugging then
       begin

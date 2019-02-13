@@ -30,6 +30,10 @@ module type SL = sig
   val map : (elt -> 'a) -> t -> 'a list
   val rev_map : (elt -> 'a) -> t -> 'a list
   val iter : (elt -> unit) -> t -> unit
+  val compare_custom : (elt -> elt -> int) -> t -> t -> int
+  val compare : t -> t -> int
+
+  val to_string : (elt -> string) -> t -> string
 end
 
 module Make (Ord : Set.OrderedType) =
@@ -41,7 +45,7 @@ struct
         
   let empty = L []
       
-  let singleton e = L [e]
+  let singleton x = L [x]
 
   let of_list l = L (List.sort Ord.compare l)
 
@@ -135,4 +139,27 @@ struct
   let rev_map f (L l) = List.rev_map f l
 
   let iter f (L l) = List.iter f l
+
+  let compare_custom compare_elt (L l1) (L l2) =
+    let rec compare_lists l1 l2 =
+      match l1, l2 with
+      | x1 :: l1', x2 :: l2' ->
+        let res = compare_elt x1 x2 in
+        if res = 0 then
+          compare_lists l1' l2'
+        else
+          res
+      | [], [] -> 0
+      | [], _ -> -1
+      | _, [] -> 1
+    in
+    compare_lists l1 l2
+
+  let compare l1 l2 =
+    compare_custom Ord.compare l1 l2
+
+  (* pretty printing *)
+
+  let to_string p (L l) =
+    Utilities.string_of_list p l
 end

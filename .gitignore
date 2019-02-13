@@ -1,6 +1,8 @@
 *.cmi
 *.cmx
 *.cmo
+*.cmt
+*.cmti
 *.exe
 *.log
 infsat

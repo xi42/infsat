@@ -6,11 +6,13 @@ module rec
 sig
   type t = PR | NP | Fun of ty_id * TyList.t * t
   val compare : t -> t -> int
+  val equal : t -> t -> bool
 end =
 struct
   (** A single type, i.e. base productive/nonproductive type or part of an intersection type
       /\_i t_i -> t. *)
   type t = PR | NP | Fun of ty_id * TyList.t * t
+
   let compare ty1 ty2 =
     match ty1, ty2 with
     | Fun (id1, _, _), Fun (id2, _, _) -> Pervasives.compare id1 id2
@@ -20,7 +22,10 @@ struct
     | PR, NP -> -1
     | NP, PR -> 1
     | NP, NP -> 0
+
+  let equal ty1 ty2 = compare ty1 ty2 = 0
 end
+
 
 and
 
@@ -56,7 +61,7 @@ let eq_ty ty1 ty2 =
 (** Given arg_ity /\_i t_i and res_ty t_r finds unique identifier of the type /\_i t_i -> t_r and
     return the type with that identifier built in. If such a type was not assigned a unique
     identifier yet, it assigns it. *)
-let mk_fun_ty (arg_ity : ity) (res_ty : ty) : ty =
+let mk_fun (arg_ity : ity) (res_ty : ty) : ty =
   let arg_ids = TyList.map id_of_ty arg_ity in
   let res_id = id_of_ty res_ty in
   try
@@ -82,13 +87,13 @@ let rec is_productive (ty : ty) : bool =
 let rec with_productivity (f : ty) (orig : ty) : ty =
   match orig with
   | PR | NP -> f
-  | Fun (_, ity, ty) -> mk_fun_ty ity (with_productivity f ty)
+  | Fun (_, ity, ty) -> mk_fun ity (with_productivity f ty)
 
 let rec flip_productivity (orig : ty) : ty =
   match orig with
   | PR -> NP
   | NP -> PR
-  | Fun (_, ity, ty) -> mk_fun_ty ity (flip_productivity ty)
+  | Fun (_, ity, ty) -> mk_fun ity (flip_productivity ty)
 
 (** Changes t1 -> .. -> tK -> t into ([t1; ..; tK], t). If a non-negative limit is supplied, it
     only splits up to K=limit, otherwise uses maximum K. *)
@@ -117,6 +122,9 @@ let rec remove_args (ty : ty) (count : int) : ty =
   | _ -> match ty with
     | Fun (_, _, ty) -> remove_args ty (count - 1)
     | _ -> failwith "Tried to remove more arguments than the function has"
+
+(** Alias for singleton intersection types. *)
+let sty : ty -> ity = TyList.singleton
 
 (* TODO design subtyping where NP args may be added/removed
 let tab_subtype = Hashtbl.create 100000
@@ -153,6 +161,52 @@ let rec subtype aty1 aty2 =
 and subtype_ty ty1 ty2 =
    List.for_all (fun ity2 -> List.exists (fun ity1 -> subtype ity1 ity2) ty1) ty2
 *)
+
+let rec string_of_ty (ty : ty) : string =
+  match ty with
+  | PR -> "pr"
+  | NP -> "np"
+  | Fun (_, arg, res) -> string_of_ity arg ^ " -> " ^ string_of_ty res
+
+and string_of_ity (ity : ity) : string =
+  let string_of_ty_w_parens ty =
+    match ty with
+    | Fun _ -> "(" ^ string_of_ty ty ^ ")"
+    | _ -> string_of_ty ty
+  in
+  let ity_list = TyList.to_list ity in
+  match ity_list with
+  | [] -> "T"
+  | [ty] -> string_of_ty_w_parens ty
+  | ty :: ity' -> string_of_ty_w_parens ty ^ List.fold_left (fun acc ty ->
+      " /\\ " ^ string_of_ty_w_parens ty ^ acc
+    ) "" ity'
+
+(** The reverse of string_of_ty. Input must be exactly like the one returned by string_of_ty
+    except for whitespace or else the behavior is undefined. *)
+let rec ty_of_string (ty_str : string) : ty =
+  match String.trim ty_str with
+  | "pr" -> PR
+  | "np" -> NP
+  | s ->
+    match Utilities.split_outside_parens s "->" with
+    | Some (arg_str, res_str) ->
+      mk_fun (ity_of_string arg_str) (ty_of_string res_str)
+    | None -> failwith "Failed to parse type string"
+
+and ity_of_string (ity_str : string) : ity =
+  match String.trim ity_str with
+  | "T" -> TyList.empty
+  | "pr" -> TyList.singleton PR
+  | "np" -> TyList.singleton NP
+  | s ->
+    match Utilities.split_outside_parens s "/\\" with
+    | Some (ty_str, ity_str') ->
+      TyList.merge
+        (TyList.singleton (ty_of_string (Utilities.trim_parens ty_str)))
+        (ity_of_string ity_str')
+    | None ->
+      TyList.singleton (ty_of_string (Utilities.trim_parens s))
 
 (*
 let rec print_ity ity =

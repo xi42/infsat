@@ -344,7 +344,7 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
       if !Flags.debugging then
         begin
           self#print_binding_array;
-          print_string ("\nSize of abstract control flow graph: " ^ (string_of_int (HTermHashtbl.length nodetab)) ^ "\n")
+          print_string ("\nSize of abstract control flow graph: " ^ string_of_int (HTermHashtbl.length nodetab) ^ "\n")
         end
     | Some hterm ->
       self#process_node hterm;
@@ -368,9 +368,9 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
 
   method print_binding_with_mask binding =
     List.iter (fun (i,j,mask,id1) ->
-        print_string ("("^(string_of_int i)^ "," ^(string_of_int j) ^ ",");
+        print_string ("(" ^ string_of_int i ^ "," ^ string_of_int j ^ ",");
         self#print_mask mask;
-        print_string(", "^(string_of_int id1)^"), "))
+        print_string (", " ^ string_of_int id1 ^ "), "))
       binding; 
     print_string "\n"
 
