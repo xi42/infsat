@@ -32,6 +32,8 @@ module type SL = sig
   val iter : (elt -> unit) -> t -> unit
   val compare_custom : (elt -> elt -> int) -> t -> t -> int
   val compare : t -> t -> int
+  val equal_custom : (elt -> elt -> int) -> t -> t -> bool
+  val equal : t -> t -> bool
 
   val to_string : (elt -> string) -> t -> string
 end
@@ -157,6 +159,10 @@ struct
 
   let compare l1 l2 =
     compare_custom Ord.compare l1 l2
+
+  let equal_custom compare_elt l1 l2 = compare_custom compare_elt l1 l2 = 0
+
+  let equal = equal_custom Ord.compare
 
   (* pretty printing *)
 

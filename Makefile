@@ -7,15 +7,15 @@ infSatParser.mli infSatParser.ml: infSatParser.mly
 infSatLexer.ml: infSatLexer.mll
 	ocamllex infSatLexer.mll
 
-infsat: $(SOURCE) wrapper.ml
+infsat: $(SOURCE) main_wrapper.ml
 # -unsafe can be considered
-	ocamlopt -inline 1000 -o infsat unix.cmxa $^
+	ocamlopt -inline 1000 -o infsat $^
 
-top: $(SOURCE)
-	ocamlmktop -o top unix.cma $(SOURCE)
+top: $(SOURCE) utop_wrapper.ml
+	ocamlfind ocamlmktop -o top -thread -package utop -linkpkg -g $^
 
- infsat-debug: $(SOURCE) wrapper.ml
-	ocamlc -g -o infsat-debug unix.cma $^
+infsat-debug: $(SOURCE) main_wrapper.ml
+	ocamlc -g -o infsat-debug $^
 
 test: $(SOURCE) test.ml
 	ocamlfind ocamlc -o test -package oUnit -linkpkg -g $^

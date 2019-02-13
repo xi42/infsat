@@ -1,8 +1,8 @@
 (** Unique identifier of a single type *)
 type ty_id = int
 
-module rec
-  Ty :
+(** Type wrapped in a module. *)
+module rec Ty :
 sig
   type t = PR | NP | Fun of ty_id * TyList.t * t
   val compare : t -> t -> int
@@ -26,15 +26,15 @@ struct
   let equal ty1 ty2 = compare ty1 ty2 = 0
 end
 
+(** Intersection type of a function - /\_j (/\ t_ji -> t_j) *)
+and TyList : SortedList.SL with type elt = Ty.t = struct
+  include SortedList.Make(struct
+      type t = Ty.t
+      let compare = Ty.compare
+    end)
+end
 
-and
-
-  (** Intersection type of a function - /\_j (/\ t_ji -> t_j) *)
-  TyList : SortedList.SL with type elt = Ty.t = SortedList.Make(struct
-    type t = Ty.t
-    let compare = Ty.compare
-  end)
-
+(** Exposing constructors outside of Ty module. *)
 type ty = Ty.t = PR | NP | Fun of ty_id * TyList.t * Ty.t
 type ity = TyList.t
 
@@ -203,38 +203,7 @@ and ity_of_string (ity_str : string) : ity =
     match Utilities.split_outside_parens s "/\\" with
     | Some (ty_str, ity_str') ->
       TyList.merge
-        (TyList.singleton (ty_of_string (Utilities.trim_parens ty_str)))
-        (ity_of_string ity_str')
+        (TyList.singleton @@ ty_of_string @@ Utilities.trim_parens @@ String.trim ty_str)
+        (ity_of_string @@ String.trim ity_str')
     | None ->
-      TyList.singleton (ty_of_string (Utilities.trim_parens s))
-
-(*
-let rec print_ity ity =
-  match ity with
-   ItyQ q -> print_string (Ai.id2state q)
- | ItyFun(_,ty,ity) ->
-     print_string "(";
-     print_ty ty;
-     print_string "->";
-     print_ity ity;
-     print_string ")"
-and print_ty ty =
-  match ty with
-    [] -> print_string "top"
-  | [ity] -> print_ity ity
-  | ity::ty' ->
-      print_ity ity;
-      print_string "^";
-      print_ty ty'
-
-let cte: (nameT, ty array) Hashtbl.t = Hashtbl.create 100
-let lookup_cte c =
-  try Hashtbl.find cte c 
-  with Not_found -> assert false
-
-let ty_of_t a = 
-  Array.fold_left (@) [] (lookup_cte a)
-
-let ty_of_t_q a q = 
-  (lookup_cte a).(q)
-*)
+      TyList.singleton @@ ty_of_string @@ Utilities.trim_parens @@ String.trim s

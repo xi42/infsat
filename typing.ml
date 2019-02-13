@@ -91,7 +91,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
         mk_fun TyList.empty (mk_fun np NP);
         mk_fun TyList.empty (mk_fun pr NP)
       ] in
-    let e_ity = TyList.singleton NP in
+    let e_ity = np in
     function
     | A -> a_ity
     | B -> b_ity
@@ -113,10 +113,10 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
       /\_i t_1i -> .. -> /\_i t_ki -> t
       with t = pr or np. Typings of h that could make the application have the target type are
       * -> .. -> * -> /\_i t_1i -> .. -> /\_i t_ki -> *
-      with some restrictions. If t = NP then t = np, but any * are valid without additional
-      information. If t = PR then t = pr or at least one of * is pr. However, if head is not a
-      productive variable then at least two of * are pr. *)
-  method filter_compatible_heads (head_is_var : bool) (ity : ity) (arity : int) (target : ty) : ity =
+      with some restrictions. If target = NP then t = np, but any * could be valid without
+      additional information about duplication. If t = PR then t = pr or at least one of * is
+      pr. *)
+  method filter_compatible_heads (ity : ity) (arity : int) (target : ty) : ity =
     if is_productive target then
       let flipped_target = flip_productivity target in
       TyList.filter (fun ty ->
@@ -130,7 +130,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
                   else
                     acc
                 ) acc ity
-            ) 0 arg_itys >= if head_is_var then 1 else 2
+            ) 0 arg_itys >= 1
         ) ity
     else
       TyList.filter (fun ty ->
@@ -236,8 +236,16 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
       (no_pr_vars : bool) (force_pr_var : bool) : venvl =
     assert (not (no_pr_vars && force_pr_var));
     if !Flags.verbose then
-      print_string ("Type checking " ^
-                    hgrammar#string_of_hterm hterm ^ " : " ^ string_of_ty target ^ "\n");
+      begin
+        let vars_info = match no_pr_vars, force_pr_var with
+          | true, false -> " (no pr vars)"
+          | false, true -> " (force pr var)"
+          | _ -> ""
+        in
+        print_string @@ "Type checking " ^
+                        hgrammar#string_of_hterm hterm ^ " : " ^ string_of_ty target ^
+                        vars_info ^ "\n"
+      end;
     let res = match hterm with
       | HT a, [] ->
         if TyList.exists (fun ty -> eq_ty target ty) (self#terminal_ity a) && not force_pr_var then
@@ -282,10 +290,11 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
     (* Get all h typings *)
     let all_h_ity = self#infer_head_ity h in
     if !Flags.verbose then
-      print_string @@ "head_ity " ^ string_of_ity all_h_ity ^
-                      " (target " ^ string_of_ty target ^ ")\n";
+      print_string @@ "head_ity " ^ string_of_ity all_h_ity ^ "\n";
     (* filtering compatible head types assuming head is not a variable *)
-    let h_ity = self#filter_compatible_heads false all_h_ity h_arity target in
+    let h_ity = self#filter_compatible_heads all_h_ity h_arity target in
+    if !Flags.verbose then
+      print_string @@ "compatible head_ity " ^ string_of_ity h_ity ^ "\n";
     let h_ity = self#annotate_args args h_ity in
     (* TODO optimizations:
        * caching argument index * argument required productivity -> venvl
