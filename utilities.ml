@@ -1,5 +1,9 @@
 open Flags
 
+let string_of_bool = function
+  | true -> "true"
+  | false -> "false"
+
 let rec fold_left_short_circuit (f : 'a -> 'b -> 'a) (acc : 'a) (l : 'b list) (bottom : 'a) : 'a =
   match l with
   | [] -> acc

@@ -9,12 +9,27 @@ licensed under the GPL version 3.0.
 
 How to install
 --------------
-Run "make infsat". This requires OCaml version 3.12 or later.
+First install all opam dependencies by "make install-dependencies".
+
+Run "make infsat" to make the final executable. Run "make run-test" to compile and run all
+tests.
+
+TODO write which version of OCaml is needed.
 
 TODO update readme later
 
 Usage
 ------
+Basic usage:
+./infsat path/to/file.inf
+Skip the file path for input from stdin.
+
+To learn advanced usage, run
+./infsat -help
+
+TODO incomplete
+
+infsat [options] <input file name>
   horsat2 [option] <input file name>
 
  option: 
@@ -27,7 +42,7 @@ Usage
     -o <filename>
           Output the result to <filename>.
           The output is either:
-             SATISFIED  
+             SATISFIED
                   if the property is satisfied; or
              VIOLATED
              ... (counterexample)
@@ -37,7 +52,7 @@ Usage
           If the automaton is deterministic, the counterexample is a path of the tree,
           written in the form:
               (a_1,d_1)(a_2,d_2)....(a_n,d_n).
-          where a_i is a terminal symbol, and 
+          where a_i is a terminal symbol, and
                 d_i is a non-negative integer representing the direction of the branch.
 
           If the automaton is alternating, the counterexample is a finite subtree that
@@ -45,13 +60,15 @@ Usage
 
 Format of Input File
 --------------------
+TODO
+
 The input file should consist of a grammar section, followed by a description of
 a tree automaton.
 
 The grammar section should be of the form:
 %BEGING
 <rewriting rule 1>
- .... 
+ ....
 <rewriting rule n>
 %ENDG
 where each rule should be of the form "F x1 ... xn -> t."

@@ -13,7 +13,7 @@ let new_tvid () = ref None
 
 let new_tvar () = STvar (new_tvid ())
 
-let rec deref_st st =
+let rec deref_st (st : st) : st =
   match st with
   | STvar tref ->
     begin
@@ -240,9 +240,10 @@ let eta_expand (gram : grammar) =
     try
       unify_all c 
     with
-    | UnifFailure (sty1, sty2) -> failwith @@ "HORS grammar has rules that are not well-sorted " ^
-                                              "- could not unify " ^ string_of_sty sty1 ^
-                                              " with " ^ string_of_sty sty2
+    | UnifFailure (sty1, sty2) ->
+      failwith @@ "HORS grammar has rules that are not well-sorted " ^
+                  "- could not unify " ^ (string_of_sty @@ deref_st sty1) ^
+                  " with " ^ (string_of_sty @@ deref_st sty2)
   end;
   (* saving nonterminal sorts in nste *)
   for i = 0 to num_of_nts - 1 do

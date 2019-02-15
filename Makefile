@@ -2,14 +2,17 @@ SOURCE = flags.ml profiling.ml utilities.ml sortedList.ml setQueue.ml twoLayerQu
 
 all: infsat-debug TAGS
 
+install-dependencies:
+	opam install oUnit
+
 infSatParser.mli infSatParser.ml: infSatParser.mly
 	ocamlyacc infSatParser.mly
 infSatLexer.ml: infSatLexer.mll
 	ocamllex infSatLexer.mll
 
 infsat: $(SOURCE) main_wrapper.ml
-# -unsafe can be considered
-	ocamlopt -inline 1000 -o infsat $^
+#	ocamlopt -pp cppo -inline 999 -unsafe -o infsat $^
+	ocamlopt -inline 999 -o infsat $^
 
 top: $(SOURCE) utop_wrapper.ml
 	ocamlfind ocamlmktop -o top -thread -package utop -linkpkg -g $^
@@ -33,7 +36,7 @@ doc: $(SOURCE)
 	.ml .cmo .mli .cmi
 
 .PHONY:
-	all clean run-test
+	all install-dependencies run-test clean
 
 clean:
 	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infsat top infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat-debug test oUnit-*
