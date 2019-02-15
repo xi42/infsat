@@ -3,7 +3,7 @@ SOURCE = flags.ml profiling.ml utilities.ml sortedList.ml setQueue.ml twoLayerQu
 all: infsat-debug TAGS
 
 install-dependencies:
-	opam install oUnit
+	opam install oUnit utop
 
 infSatParser.mli infSatParser.ml: infSatParser.mly
 	ocamlyacc infSatParser.mly
