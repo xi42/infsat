@@ -12,6 +12,7 @@ module type SL = sig
   val mem : elt -> t -> bool
   val hd : t -> elt
   val hd_option : t -> elt option
+  val hd_tl_option : t -> (elt * t) option
   val tl : t -> t
   val length : t -> int
   val is_empty : t -> bool
@@ -74,6 +75,11 @@ struct
     match l with
     | [] -> None
     | h :: l' -> Some h
+
+  let hd_tl_option (L l) =
+    match l with
+    | [] -> None
+    | h :: l' -> Some (h, L l')
 
   let tl (L l) = L (List.tl l)
   

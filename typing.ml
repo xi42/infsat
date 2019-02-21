@@ -1,67 +1,9 @@
 open Cfa
+open Environment
 open GrammarCommon
 open HGrammar
 open Type
-
-(** A single possible typing of variables mapping variables to their types, treated as if there
-    was AND as the delimiter. *)
-module VEnv = struct
-  include SortedList.Make(struct
-    type t = var_id * ity
-    let compare (id1, _) (id2, _) = Pervasives.compare id1 id2
-  end)
-
-  (** Merge works differently here, since types are not part of the compare function and need to
-      be merged manually. Also, information about duplication of productive variables is needed. *)
-  let merge_with_dup_info v1 v2 : t * bool =
-    let dup = ref false in
-    let res = merge_custom (fun (id1, ity1) (_, ity2) ->
-        let merged_ity = TyList.merge_custom (fun ty _ ->
-            if is_productive ty then
-              dup := true;
-            ty
-          ) ity1 ity2
-        in
-        (id1, merged_ity)
-      ) v1 v2
-    in
-    (res, !dup)
-
-  let merge v1 v2 = fst @@ merge_with_dup_info v1 v2
-end
-
-type venv = VEnv.t
-
-(** List of possible typings of variables, treated as if there was OR as the delimiter. *)
-type venvl = venv list
-
-(** Variable environment along with flags whether there was a duplication during its
-    construction and whether a productive argument was used. *)
-type venvf = venv * bool * bool
-
-(** List of variable environments with duplication flags. *)
-type venvfl = venvf list
-
-module TySet = Set.Make(Ty)
-
-let string_of_venv : venv -> string =
-  VEnv.to_string (fun ((nt, vix), ity) ->
-      string_of_int nt ^ "-" ^ string_of_int vix ^ " : " ^ string_of_ity ity
-    )
-
-let string_of_venvl (venvl : venvl) : string =
-  Utilities.string_of_list string_of_venv venvl
-
-(** List of variable environments does not need to be sorted during computations, but it is useful
-    for unique representation when testing. *)
-let sort_venvl (venvl : venvl) : venvl =
-  List.sort (VEnv.compare_custom (fun (id1, ity1) (id2, ity2) ->
-      let res = Pervasives.compare id1 id2 in
-      if res = 0 then
-        TyList.compare ity1 ity2
-      else
-        res
-    )) venvl
+open HtyStore
 
 class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
   (* --- registers --- *)
@@ -69,19 +11,60 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
   (** nt_ity[nt] has all typings of nonterminal nt. *)
   val nt_ity : ity array = Array.make hgrammar#nt_count TyList.empty
 
-  (* --- utility --- *)
+  (** htys[id] contains list of types derived under some environment for
+      corresponding terms in the list of terms identified by id. *)
+  val htys : hty_store = new hty_store hgrammar
 
+  (* --- printing --- *)
+  
   (** Used only for verbose printing; global in order to not pass additional argument when not
       verbose printing. *)
   val mutable indent = 0
 
+  (* --- direct manipulation on registers --- *)
+
   method nt_ty_exists (nt : nt_id) (ty : ty) : bool =
     TyList.exists (fun nt_ty -> nt_ty = ty) nt_ity.(nt)
 
-  (* --- direct manipulation on registers --- *)
-
   method add_nt_ty (nt : nt_id) (ty : ty) =
     nt_ity.(nt) <- TyList.merge nt_ity.(nt) (TyList.singleton ty)
+
+  (* --- generating envs --- *)
+
+  (** Returns venvs where each venv in envs is prepended with exactly one ty from tys in every
+      combination. *)
+  method private mk_prod_hty_bindings (i, j : int * int) (prefixes : hty list)
+      (postfixes : hty binding list) (acc : hty binding list) : hty binding list =
+    match prefixes with 
+    | [] -> acc
+    | prefix :: prefixes' ->
+      let acc' = List.fold_left (fun acc postfix ->
+          ((i, j, prefix) :: postfix) :: acc
+        ) acc postfixes
+      in
+      self#mk_prod_hty_bindings (i, j) prefixes' postfixes acc'
+
+  (* env is a list of elements of the form (i,j,id), 
+     which means that variables i to j are bound to ti to tj,
+     where id is the identifier of [ti;...;tj] *)
+  method mk_hty_bindings : hterms_id binding -> hty binding list = function
+    | [] -> [[]]
+    | [(i, j, id)] ->
+      let htys = htys#get_htys id in 
+      List.map (fun hty -> [(i, j, hty)]) htys
+    | (i, j, id) :: bindings' ->
+      match htys#get_htys id with
+      | [] -> []
+      | htys ->
+        (* recursively get all bindings without using current application info *)
+        match self#mk_hty_bindings bindings' with
+        | [] -> []
+        | hty_bindings ->
+          (* Make product with the current application info - each typing of hterm with
+             identifier id is valid for range i-j, so the output is all possible bindings
+             constructed by prepending one of possible types for i-j to any of current bindings.
+             This may blow up the number of possible type bindings. *)
+          self#mk_prod_hty_bindings (i, j) htys hty_bindings []
 
   (* --- typing --- *)
   
@@ -161,39 +144,14 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
         annotate_args_ty terms ty []
       ) ity
         
-  (** Merges vtes (variable types) by combining the list of type bindings in order, and combining
-      types when a binding for the same variable is present in both lists. The resulting binding
-      is ordered ascendingly lexicographically by variable ids. Combining types is also idempodently
-      merging list of types (i.e., there are sets of types). TODO redo docs from old ones *)
-  method intersect_two_venvs (venv1, dup1, pruse1 : venvf) (venv2, dup2, pruse2 : venvf) : venvf =
-    let intersection, dup = VEnv.merge_with_dup_info venv1 venv2 in
-    (intersection, dup1 || dup2 || dup, pruse1 || pruse2)
-
-  (** Flatten an intersection of variable environment lists, which are OR-separated lists of
-      AND-separated lists of typings of unique in inner list variables. Flattening means moving
-      outer intersection (AND) inside. Return if there was a duplication. *)
-  method intersect_two_venvfls (venvl1 : venvfl) (venvl2 : venvfl) : venvfl =
-    match venvl1, venvl2 with
-    | _, [] -> [] (* second typing is invalid *)
-    | [], _-> [] (* first typing is invalid *)
-    | _ ->
-      List.fold_left
-        (fun acc venv1 ->
-           let venvl2' = List.rev_map (fun venv2 ->
-               self#intersect_two_venvs venv1 venv2
-             ) venvl2
-           in
-           List.rev_append venvl2' acc)
-        [] venvl1
-
   (** Infer variable environments under which type checking of hterm : ty succeeds. Assume no head
       variables are present and infer type of each variable based on the type of the head that is
       applied to it.
       Flag no_pr_vars prevents inference of productive variables. Flag force_pr_var ensures that
       there is at least one productive variable is inferred. Only one of these flags may be true.
   *)
-  method infer_wo_venv (hterm : hterm) (target : ty)
-      (no_pr_vars : bool) (force_pr_var : bool) : venvl =
+  method infer_wo_env (hterm : hterm) (target : ty)
+      (no_pr_vars : bool) (force_pr_var : bool) : envl =
     assert (not (no_pr_vars && force_pr_var));
     if !Flags.verbose then
       begin
@@ -209,26 +167,26 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
     let res = match hterm with
       | HT a, [] ->
         if TyList.exists (fun ty -> eq_ty target ty) (self#terminal_ity a) && not force_pr_var then
-          [VEnv.empty]
+          [Env.empty]
         else
           []
       | HNT nt, [] ->
         if self#nt_ty_exists nt target && not force_pr_var then
-          [VEnv.empty]
+          [Env.empty]
         else
           []
       | HVar x, [] ->
         if is_productive target then
           [] (* variables are only NP *)
         else if no_pr_vars then
-          [VEnv.singleton (x, TyList.singleton target)]
+          [Env.singleton (x, TyList.singleton target)]
         else if force_pr_var then
-          [VEnv.singleton (x, TyList.singleton (with_productivity PR target))]
+          [Env.singleton (x, TyList.singleton (with_productivity PR target))]
         else
           (* both NP and PR versions are possible *)
           [
-            VEnv.singleton (x, TyList.singleton target);
-            VEnv.singleton (x, TyList.singleton (with_productivity PR target))
+            Env.singleton (x, TyList.singleton target);
+            Env.singleton (x, TyList.singleton (with_productivity PR target))
           ]
       | _ -> (* application *)
         let h, args = hgrammar#decompose_hterm hterm in
@@ -240,13 +198,13 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
                         hgrammar#string_of_hterm hterm ^ " : " ^ string_of_ty target;
         match res with
         | [] -> print_string " does not type check\n"
-        | _ -> print_string @@ " type checks under " ^ string_of_venvl res ^ "\n"
+        | _ -> print_string @@ " type checks under " ^ string_of_envl res ^ "\n"
       end;
     res
 
   (** To be used only on terms without head variables. *)
   method infer_app_wo_env (h : head) (args : hterm list) (target : ty)
-      (no_pr_vars : bool) (force_pr_var : bool) : venvl =
+      (no_pr_vars : bool) (force_pr_var : bool) : envl =
     let h_arity = List.length args in
     (* Get all h typings *)
     let all_h_ity = self#infer_head_ity h in
@@ -260,7 +218,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
       end;
     let h_ity = self#annotate_args args h_ity in
     (* TODO optimizations:
-       * caching argument index * argument required productivity -> venvl
+       * caching argument index * argument required productivity -> envl
        * computing terms without variables first and short circuit after for all terms
        * computing terms with non-duplicating variables last with short-circuiting when
          duplication is expected
@@ -298,11 +256,11 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
                 arguments are productive, and there are no duplications. There still can
                 be productive arguments in head's type, as long as that does not force a
                 duplication. *)
-        let venvfl = Utilities.fold_left_short_circuit (fun venvfl (arg_term, arg_ity) ->
-            (* venvfl contains not only variable environments, but also information whether
+        let envfl = Utilities.fold_left_short_circuit (fun envfl (arg_term, arg_ity) ->
+            (* envfl contains not only variable environments, but also information whether
                there was a duplication (for (3) and (NP)) and whether a productive argument was
                used (for (3)). *)
-            TyList.fold_left_short_circuit (fun venvfl arg_ty ->
+            TyList.fold_left_short_circuit (fun envfl arg_ty ->
                 if !Flags.verbose then
                   begin
                     print_string @@ String.make indent ' ' ^ "* Typing " ^
@@ -310,44 +268,44 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
                                     string_of_ity arg_ity ^ "\n";
                     indent <- indent + 2
                   end;
-                (* venvfl are possible variable environments constructed so far with processed
+                (* envfl are possible variable environments constructed so far with processed
                    arguments and typings of the current argument *)
                 let target_arg_pr = is_productive arg_ty in
                 (* When argument is productive in head type, it can be either productive or
                    not productive with a productive variable. When argument is not productive
                    in head type, it must be not productive and have no productive variables. *)
-                let arg_venvfl =
+                let arg_envfl =
                   if target_arg_pr then
                     (* productive target argument *)
-                    let arg_pr_venvfl =
+                    let arg_pr_envfl =
                       if target_pr then
                         (* productive argument *)
                         List.map (fun v -> (v, false, true))
-                          (self#infer_wo_venv arg_term arg_ty no_pr_vars false)
+                          (self#infer_wo_env arg_term arg_ty no_pr_vars false)
                       else
                         []
                     in
-                    let arg_np_venvfl =
+                    let arg_np_envfl =
                       if no_pr_vars then
                         []
                       else
                         (* nonproductive argument with productive variable *)
                         List.map (fun v -> (v, false, false))
-                          (self#infer_wo_venv arg_term (with_productivity NP arg_ty) false true)
+                          (self#infer_wo_env arg_term (with_productivity NP arg_ty) false true)
                     in
-                    List.rev_append arg_pr_venvfl arg_np_venvfl
+                    List.rev_append arg_pr_envfl arg_np_envfl
                   else
                     (* nonproductive target argument (which implies nonproductive argument) *)
                     List.map (fun v -> (v, false, false))
-                      (self#infer_wo_venv arg_term arg_ty true false)
+                      (self#infer_wo_env arg_term arg_ty true false)
                 in
-                let intersection = self#intersect_two_venvfls venvfl arg_venvfl in
+                let intersection = intersect_two_envfls envfl arg_envfl in
                 if !Flags.verbose then
                   begin
                     indent <- indent - 2;
-                    print_string @@ String.make indent ' ' ^ "  venv count for the argument: " ^
-                                    string_of_int (List.length arg_venvfl) ^ "\n";
-                    print_string @@ String.make indent ' ' ^ "  venv count after intersection: " ^
+                    print_string @@ String.make indent ' ' ^ "  env count for the argument: " ^
+                                    string_of_int (List.length arg_envfl) ^ "\n";
+                    print_string @@ String.make indent ' ' ^ "  env count after intersection: " ^
                                     string_of_int (List.length intersection) ^ "\n"
                   end;
                 if target_pr then
@@ -360,46 +318,46 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
                     let res = List.filter (fun (_, dup, _) -> not dup) intersection in
                     if !Flags.verbose then
                       print_string @@ String.make indent ' ' ^
-                                      "  venv count after no duplication filtering: " ^
+                                      "  env count after no duplication filtering: " ^
                                       string_of_int (List.length res) ^ "\n";
                     res
                   end
-              ) venvfl arg_ity []
-          ) [(VEnv.empty, false, false)] args []
+              ) envfl arg_ity []
+          ) [(Env.empty, false, false)] args []
         in
         if !Flags.verbose then
           begin
             print_string @@ String.make indent ' ' ^
-                            "* Intersected venvs before duplication filtering:\n";
-            List.iter (fun (venv, dup, pruse) ->
+                            "* Intersected envs before duplication filtering:\n";
+            List.iter (fun (env, dup, pruse) ->
                 print_string @@ String.make indent ' ' ^ "  * (dup: " ^
                                 Utilities.string_of_bool dup ^ ", prarg: " ^
                                 Utilities.string_of_bool pruse ^ ") " ^
-                                string_of_venv venv ^ "\n";
-              ) venvfl
+                                string_of_env env ^ "\n";
+              ) envfl
           end;
-        let venvfl =
+        let envfl =
           if target_pr && not head_pr then
             begin
-              let res = List.filter (fun (_, dup, pruse) -> dup || pruse) venvfl in
+              let res = List.filter (fun (_, dup, pruse) -> dup || pruse) envfl in
               if !Flags.verbose then
                 print_string @@ String.make indent ' ' ^
-                                "* venv count after duplication or pr arg filtering: " ^
+                                "* env count after duplication or pr arg filtering: " ^
                                 string_of_int (List.length res) ^ "\n";
               res
             end
           else
-            venvfl
+            envfl
         in
-        let venvl = List.map (fun (venv, _, _) -> venv) venvfl in
+        let envl = List.map (fun (env, _, _) -> env) envfl in
         if force_pr_var then
-          let res = List.filter (fun venv ->
-              VEnv.exists (fun (_, ity) -> TyList.exists is_productive ity) venv
-            ) venvl
+          let res = List.filter (fun env ->
+              Env.exists (fun (_, ity) -> TyList.exists is_productive ity) env
+            ) envl
           in
           if !Flags.verbose then
             begin
-              print_string @@ String.make indent ' ' ^ "* venv count after pr var filtering: " ^
+              print_string @@ String.make indent ' ' ^ "* env count after pr var filtering: " ^
                               string_of_int (List.length res) ^ "\n";
               indent <- indent - 2
             end;
@@ -407,7 +365,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
         else
           begin
             indent <- indent - 2;
-            venvl
+            envl
           end
       ) h_ity)
 
@@ -425,4 +383,8 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
       print_string @@ hgrammar#nt_name nt ^ ":\n";
       self#print_itylist nt_ity.(nt)
     done
+
+  (* --- debugging --- *)
+
+  method get_htys = htys
 end

@@ -12,48 +12,56 @@ let makeall n : t = (ref (Utilities.fromto 0 n), Array.make n true)
     will be ignored during dequeue and only the topmost one will be used. *)
 let make_fromlist n l : t =
   let bitmap = Array.make n false in
-  List.iter (fun i -> bitmap.(i) <- true) l;
+  List.iter (fun i ->
+      bitmap.(i) <- true
+    ) l;
   (ref l, bitmap)
 
 (** Dequeues an integer or raises Empty. *)
-let rec dequeue (qref,bitmap) =
+let rec dequeue (qref, bitmap) =
   match !qref with
   | [] -> raise Empty
-  | n::ns ->
+  | n :: ns ->
     qref := ns;
-    if bitmap.(n) then (bitmap.(n) <- false; n)
-    else dequeue(qref,bitmap) (* should not happen unless made with duplicates in make_fromlist,
+    if bitmap.(n) then
+      begin
+        bitmap.(n) <- false;
+        n
+      end
+    else
+      dequeue (qref, bitmap) (* should not happen unless made with duplicates in make_fromlist,
                                  then the duplicates are ignored and only the topmost value is
                                  used. *)
 
-let print_queue (qref,bitmap) =
-  List.iter (fun x->
-    if bitmap.(x) then
-     print_string ((string_of_int x)^",")
-    else ())
-  !qref;
+let print_queue (qref, bitmap) =
+  List.iter (fun x ->
+      if bitmap.(x) then
+        print_string ((string_of_int x)^",")
+    ) !qref;
   print_string "\n"
 
 (** Enqueues an integer if it isn't in the queue yet. *)
-let enqueue (qref,bitmap) n =
-  if bitmap.(n)=true then ()
-  else
-    qref := n::!qref;
-    bitmap.(n) <- true
+let enqueue (qref, bitmap) n =
+  if bitmap.(n) = false then
+    qref := n :: !qref;
+  bitmap.(n) <- true
 
 let is_empty queue =
   try
     let n = dequeue queue in
-    enqueue queue n; false
+    enqueue queue n;
+    false
   with
-    Empty -> true 
+  | Empty -> true 
 
 (** Iterates over the queue by dequeuing integers until it is empty. *)
 let rec iter f queue =
   try
     let x = dequeue queue in
-    f(x); iter f queue
-  with Empty -> ()
+    f x;
+    iter f queue
+  with
+  | Empty -> ()
 
-let size ((qref, bitmap) : t) : int =
+let size (qref, bitmap : t) : int =
   List.length !qref

@@ -78,7 +78,7 @@ class grammar nonterminals var_names rules = object(self)
     let nt, i = x in
     (* variable added by normalization *)
     if nt < 0 || nt >= Array.length var_names || i >= Array.length var_names.(nt) then
-      "v" ^ string_of_int i
+      "nt" ^ string_of_int nt ^ "v" ^ string_of_int i
     else
       var_names.(nt).(i)
 
