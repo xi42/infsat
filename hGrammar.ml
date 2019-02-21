@@ -190,6 +190,24 @@ class hgrammar (grammar : grammar) = object(self)
         end
     done
 
+  (* --- debugging --- *)
+
+  (** Locates hterms_id with given path in given hterm. Path consists of integers that mean
+      "go to n-th hterms_id list in the list in given hterm" or "go to n-th hterms_id in selected
+      list of hterms_ids". The length of the list must be odd. *)
+  method locate_hterms_id_in_hterm (h, ids : hterm) (pos : int list) : hterms_id =
+    match pos with
+    | [] -> failwith "Length of pos must be odd"
+    | [i] -> List.nth ids i
+    | i :: j :: pos' ->
+      let hterms = self#id2hterms (List.nth ids i) in
+      let hterm' = List.nth hterms j in
+      self#locate_hterms_id_in_hterm hterm' pos'
+
+  (** Locates hterms_id with given path in given nonterminal's body. *)
+  method locate_hterms_id (nt : nt_id) (pos : int list) : hterms_id =
+    self#locate_hterms_id_in_hterm (self#nt_body nt) pos
+
   initializer
     let size = grammar#size in
     hterms_data <- Array.make size ([], [], SortedVars.empty, None); (* for each a-term, i.e., @ x t, where x is not an application *)

@@ -1,7 +1,9 @@
+open Binding
 open Environment
 open Grammar
 open GrammarCommon
 open HGrammar
+open HtyStore
 open Main
 open OUnit2
 open Type
@@ -46,7 +48,7 @@ let mk_typing g =
 
 (* --- tests --- *)
 
-let type_test : test =
+let type_test () : test =
   "type" >::: [
     "string_of_ty-1" >:: (fun _ ->
         assert_equal "pr" @@ string_of_ty PR
@@ -229,7 +231,19 @@ let typing_xyyz_test () =
   let hg, typing = mk_typing @@ grammar_xyyz () in
   typing#add_nt_ty 2 @@ ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr";
   typing#add_nt_ty 3 @@ ty_of_string "(np -> np) -> np -> np";
-  (*  typing#get_htys#add_hty (List.hd @@ snd @@ hg#nt_body 2) [(0, 2, ]; *)
+  let id1 = hg#locate_hterms_id 0 [0] in
+  typing#get_htys#add_hty id1
+    [
+      ity_of_string "pr -> pr";
+      ity_of_string "np -> np";
+      ity_of_string "np -> pr";
+    ];
+  typing#get_htys#add_hty id1
+    [
+      ity_of_string "pr -> pr";
+      ity_of_string "pr -> pr";
+      ity_of_string "pr -> pr";
+    ];
   [
     (* check that intersection of common types from different arguments works *)
     "infer_wo_env-6" >:: (fun _ ->
@@ -263,6 +277,27 @@ let typing_xyyz_test () =
           ]
           (typing#infer_wo_env (hg#nt_body 4) NP false false)
       );
+
+    "mk_hty_bindings" >:: (fun _ ->
+        assert_equal
+          [
+            [(0, 0,
+              [
+                ity_of_string "pr -> pr";
+                ity_of_string "pr -> pr";
+                ity_of_string "pr -> pr";
+              ]
+             )];
+            [(0, 0,
+              [
+                ity_of_string "pr -> pr";
+                ity_of_string "np -> np";
+                ity_of_string "np -> pr";
+              ]
+             )];
+          ]
+          (List.sort (binding_compare hty_compare) @@ typing#mk_hty_bindings [(0, 0, id1)])
+      );
   ]
 
 (** Grammar that tests typing with duplication in N1 when N2 receives two the same arguments. It
@@ -287,7 +322,7 @@ let grammar_dup () = mk_grammar
       (3, App (App (App (NT 1, Var (4, 0)), Var (4, 1)), Var (4, 2)));
     |]
 
-let typing_dup () =
+let typing_dup_test () =
   let hg, typing = mk_typing @@ grammar_dup () in
   typing#add_nt_ty 1 @@ ty_of_string  "(pr -> pr) -> (pr -> pr) -> pr -> np";
   typing#add_nt_ty 1 @@ ty_of_string  "(pr -> np) -> (pr -> np) -> pr -> np";
@@ -365,15 +400,15 @@ let typing_dup () =
       );
   ]
 
-let typing_test : test =
+let typing_test () : test =
   init_flags ();
   "typing" >:::
   typing_e_test () @
   typing_ax_test () @
   typing_xyyz_test () @
-  typing_dup ()
+  typing_dup_test ()
 
-let cfa_test : test =
+let cfa_test () : test =
   init_flags ();
   let g = grammar_xyyz () in
   let hg = mk_hgrammar g in
@@ -428,7 +463,7 @@ let cfa_test : test =
   ]
   
 
-let examples_test : test =
+let examples_test () : test =
   init_flags ();
   let filenames_in_dir = List.filter (fun f -> String.length f > 8)
       (Array.to_list (Sys.readdir "examples")) in
@@ -448,8 +483,8 @@ let examples_test : test =
       fin_filenames]
 
 let tests () = [
-  cfa_test;
-  type_test;
-  typing_test;
-  (* examples_test *)
+  cfa_test ();
+  type_test ();
+  typing_test ();
+  (* examples_test () *)
 ]

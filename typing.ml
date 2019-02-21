@@ -1,3 +1,4 @@
+open Binding
 open Cfa
 open Environment
 open GrammarCommon

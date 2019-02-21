@@ -1,5 +1,6 @@
 (** Control flow analysis module implementing 0CFA. *)
 
+open Binding
 open Grammar
 open GrammarCommon
 open HGrammar
@@ -8,8 +9,6 @@ open Utilities
 (* --- types --- *)
 
 type node = hterm
-type 'a binding_elt = int * int * 'a
-type 'a binding = 'a binding_elt list
 
 (* hterm -> ref (hterm, qs) *)
 module HType = struct
