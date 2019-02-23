@@ -9,12 +9,14 @@ licensed under the GPL version 3.0.
 
 How to install
 --------------
-First install all opam dependencies by "make install-dependencies".
+First install and configure opam (docs on https://opam.ocaml.org/doc/Install.html), then
+install OCaml 4.07.1 (docs on http://www.ocaml.org/docs/install.html#OPAM), e.g., using
+opam switch create 4.07.1
+and finally install opam package dependencies using
+make install-dependencies
 
 Run "make infsat" to make the final executable. Run "make run-test" to compile and run all
 tests.
-
-TODO write which version of OCaml is needed.
 
 TODO update readme later
 

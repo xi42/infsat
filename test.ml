@@ -17,7 +17,8 @@ let init_flags () =
   Flags.verbose := !Flags.debugging
 
 let assert_equal_envls envl1 envl2 =
-  assert_equal ~printer:string_of_envl (sort_envl envl1) (sort_envl envl2)
+  assert_equal ~printer:string_of_envl ~cmp:envl_eq
+    (List.sort env_compare envl1) (List.sort env_compare envl2)
 
 let mk_grammar rules =
   let nonterminals = Array.mapi (fun i _ -> ("N" ^ string_of_int i, O)) rules in
@@ -45,6 +46,12 @@ let mk_typing g =
   let hg = mk_hgrammar g in
   let cfa = mk_cfa g (Some hg) in
   (hg, new Typing.typing hg cfa)
+
+let type_check_nt (typing : typing) (hg : hgrammar) (nt : nt_id) (target : ty) =
+  typing#type_check (hg#nt_body nt) target (hg#nt_arity nt)
+
+let senv hg nt i ity_str =
+  singleton_env (hg#nt_arity nt) (nt, i) @@ ity_of_string ity_str
 
 (* --- tests --- *)
 
@@ -131,7 +138,7 @@ let type_test () : test =
 (** The smallest possible grammar. *)
 let grammar_e () = mk_grammar
     [|
-      (0, T E); (* N0 -> e *)
+      (0, T E) (* N0 -> e *)
     |]
 
 let typing_e_test () =
@@ -157,24 +164,24 @@ let typing_e_test () =
       );
     
     (* check if e : np type checks *)
-    "infer_wo_env-1" >:: (fun _ ->
+    "type_check-1" >:: (fun _ ->
         assert_equal_envls
-          [Env.empty]
-          (typing#infer_wo_env (hg#find_term (T E)) NP false false)
+          [empty_env @@ hg#nt_arity 0]
+          (type_check_nt typing hg 0 NP false false)
       );
 
     (* checking basic functionality of forcing pr vars *)
-    "infer_wo_env-2" >:: (fun _ ->
+    "type_check-2" >:: (fun _ ->
         assert_equal_envls
           []
-          (typing#infer_wo_env (hg#find_term (T E)) NP false true)
+          (type_check_nt typing hg 0 NP false true)
       );
 
     (* checking that forcing no pr vars does not break anything when there are only terminals *)
-    "infer_wo_env-3" >:: (fun _ ->
+    "type_check-3" >:: (fun _ ->
         assert_equal_envls
-          [Env.empty]
-          (typing#infer_wo_env (hg#find_term (T E)) NP true false)
+          [empty_env @@ hg#nt_arity 0]
+          (type_check_nt typing hg 0 NP true false)
       );
   ]
 
@@ -182,27 +189,27 @@ let typing_e_test () =
 let grammar_ax () = mk_grammar
     [|
       (0, App (NT 1, T E)); (* N0 -> N1 e *)
-      (1, App (T A, Var (1, 0))); (* N1 x -> a x *)
+      (1, App (T A, Var (1, 0))) (* N1 x -> a x *)
     |]
 
 let typing_ax_test () =
   let hg, typing = mk_typing @@ grammar_ax () in
   (* check that a x : pr accepts both productivities of x *)
   [
-    "infer_wo_env-4" >:: (fun _ ->
+    "type_check-4" >:: (fun _ ->
         assert_equal_envls
           [
-            Env.singleton ((1, 0), sty PR);
-            Env.singleton ((1, 0), sty NP)
+            senv hg 1 0 "pr";
+            senv hg 1 0 "np"
           ]
-          (typing#infer_wo_env (hg#nt_body 1) PR false false)
+          (type_check_nt typing hg 1 PR false false)
       );
 
     (* check that a x : np does not type check *)
-    "infer_wo_env-5" >:: (fun _ ->
+    "type_check-5" >:: (fun _ ->
         assert_equal_envls
           []
-          (typing#infer_wo_env (hg#nt_body 1) NP false false)
+          (type_check_nt typing hg 1 NP false false)
       );
   ]
   
@@ -224,7 +231,7 @@ let grammar_xyyz () = mk_grammar
       (* N4 x -> b (a x) x *)
       (1, App (App (T B, App (T A, Var (4, 0))), Var (4, 0)));
       (* N5 -> N5 *)
-      (0, NT 5);
+      (0, NT 5)
     |]
 
 let typing_xyyz_test () =
@@ -236,67 +243,63 @@ let typing_xyyz_test () =
     [
       ity_of_string "pr -> pr";
       ity_of_string "np -> np";
-      ity_of_string "np -> pr";
+      ity_of_string "np -> pr"
     ];
   typing#get_htys#add_hty id1
     [
       ity_of_string "pr -> pr";
       ity_of_string "pr -> pr";
-      ity_of_string "pr -> pr";
+      ity_of_string "pr -> pr"
     ];
   [
     (* check that intersection of common types from different arguments works *)
-    "infer_wo_env-6" >:: (fun _ ->
+    "type_check-6" >:: (fun _ ->
         assert_equal_envls
           [
-            Env.of_list [
-              ((1, 0), ity_of_string "pr -> pr");
-              ((1, 1), ity_of_string "(np -> pr) /\\ (np -> np)");
-              ((1, 2), ity_of_string "np")
-            ]
+            new env [|
+              ity_of_string "pr -> pr";
+              ity_of_string "(np -> pr) /\\ (np -> np)";
+              ity_of_string "np"
+            |]
           ]
-          (typing#infer_wo_env (hg#nt_body 1) PR false false)
+          (type_check_nt typing hg 1 PR false false)
       );
 
     (* check that branching works *)
-    "infer_wo_env-7" >:: (fun _ ->
+    "type_check-7" >:: (fun _ ->
         assert_equal_envls
           [
-            Env.singleton ((4, 0), ity_of_string "pr");
-            Env.singleton ((4, 0), ity_of_string "np")
+            senv hg 4 0 "pr";
+            senv hg 4 0 "np"
           ]
-          (typing#infer_wo_env (hg#nt_body 4) PR false false)
+          (type_check_nt typing hg 4 PR false false)
       );
 
     (* check that branching works *)
-    "infer_wo_env-8" >:: (fun _ ->
+    "type_check-8" >:: (fun _ ->
         assert_equal_envls
           [
-            Env.singleton ((4, 0), ity_of_string "pr");
-            Env.singleton ((4, 0), ity_of_string "np")
+            senv hg 4 0 "pr";
+            senv hg 4 0 "np"
           ]
-          (typing#infer_wo_env (hg#nt_body 4) NP false false)
+          (type_check_nt typing hg 4 NP false false)
       );
 
-    "mk_hty_bindings" >:: (fun _ ->
-        assert_equal
+    "binding2envl" >:: (fun _ ->
+        assert_equal_envls
           [
-            [(0, 0,
-              [
-                ity_of_string "pr -> pr";
-                ity_of_string "pr -> pr";
-                ity_of_string "pr -> pr";
-              ]
-             )];
-            [(0, 0,
-              [
-                ity_of_string "pr -> pr";
-                ity_of_string "np -> np";
-                ity_of_string "np -> pr";
-              ]
-             )];
+            new env @@ [|
+              ity_of_string "pr -> pr";
+              ity_of_string "pr -> pr";
+              ity_of_string "pr -> pr"
+            |];
+            new env @@ [|
+              ity_of_string "pr -> pr";
+              ity_of_string "np -> np";
+              ity_of_string "np -> pr"
+            |]
           ]
-          (List.sort (binding_compare hty_compare) @@ typing#mk_hty_bindings [(0, 0, id1)])
+          (typing#binding2envl (hg#hterm_arity id1) [(0, 0, id1)])
       );
   ]
 
@@ -329,74 +332,77 @@ let typing_dup_test () =
   [
     (* All valid typings of x type check, because the application is already productive due to
        a e being productive. *)
-    "infer_wo_env-9" >:: (fun _ ->
+    "type_check-9" >:: (fun _ ->
         assert_equal_envls
           [
-            Env.singleton ((2, 0), ity_of_string "pr -> pr");
-            Env.singleton ((2, 0), ity_of_string "pr -> np");
+            senv hg 2 0 "pr -> pr";
+            senv hg 2 0 "pr -> np"
           ]
-          (typing#infer_wo_env (hg#nt_body 2) PR false false)
+          (type_check_nt typing hg 2 PR false false)
       );
 
     (* No valid environment, because a e is productive and makes the application with it as
        argument productive. *)
-    "infer_wo_env-10" >:: (fun _ ->
+    "type_check-10" >:: (fun _ ->
         assert_equal_envls
           []
-          (typing#infer_wo_env (hg#nt_body 2) NP false false)
+          (type_check_nt typing hg 2 NP false false)
       );
 
     (* Only one valid env when there is a duplication. Since everything in N1 is a variable,
        there is no way to create pr terms without a duplication. The x : pr -> pr typing
        causes a duplication and type checks. Typing x : pr -> np does not type check, because
        it is not productive, so it is not a duplication. y : pr is forced by there being no
-       known typing of the head with unproductive last argument.
-
-         * one where a env did not go through because it did not generate a duplication
-           (target pr, head np, pr target args, np actual args as different pr vars) *)
-    "infer_wo_env-11" >:: (fun _ ->
+       known typing of the head with unproductive last argument. *)
+    "type_check-11" >:: (fun _ ->
         assert_equal_envls
           [
-            Env.of_list [((3, 0), ity_of_string "pr -> pr"); ((3, 1), ity_of_string "pr")];
+            new env [|
+              ity_of_string "pr -> pr";
+              ity_of_string "pr"
+            |];
           ]
-          (typing#infer_wo_env (hg#nt_body 3) PR false false)
+          (type_check_nt typing hg 3 PR false false)
       );
 
     (* Only one valid env when there is no duplication. This is exactly the opposite of the test
        above with x : pr -> np passing and x : pr -> pr failing and y : pr being forced. *)
-    "infer_wo_env-12" >:: (fun _ ->
+    "type_check-12" >:: (fun _ ->
         assert_equal_envls
           [
-            Env.of_list [((3, 0), ity_of_string "pr -> np"); ((3, 1), ity_of_string "pr")];
+            new env [|
+              ity_of_string "pr -> np";
+              ity_of_string "pr"
+            |];
           ]
-          (typing#infer_wo_env (hg#nt_body 3) NP false false)
+          (type_check_nt typing hg 3 NP false false)
       );
 
     (* Similar to test 11, but this time there are separate variables used for first
        and second argument, so there is no place for duplication. This means that there is no
        way to achieve productivity. *)
-    "infer_wo_env-13" >:: (fun _ ->
+    "type_check-13" >:: (fun _ ->
         assert_equal_envls
           []
-          (typing#infer_wo_env (hg#nt_body 4) PR false false)
+          (type_check_nt typing hg 4 PR false false)
       );
 
     (* Similar to test 12, but this time the duplication cannot happen. *)
-    "infer_wo_env-14" >:: (fun _ ->
+    "type_check-14" >:: (fun _ ->
         assert_equal_envls
           [
-            Env.of_list [
-              ((4, 0), ity_of_string "pr -> pr");
-              ((4, 1), ity_of_string "pr -> pr");
-              ((4, 2), ity_of_string "pr");
-            ];
-            Env.of_list [
-              ((4, 0), ity_of_string "pr -> np");
-              ((4, 1), ity_of_string "pr -> np");
-              ((4, 2), ity_of_string "pr");
-            ];
+            new env [|
+              ity_of_string "pr -> pr";
+              ity_of_string "pr -> pr";
+              ity_of_string "pr"
+            |];
+            new env [|
+              ity_of_string "pr -> np";
+              ity_of_string "pr -> np";
+              ity_of_string "pr"
+            |]
           ]
-          (typing#infer_wo_env (hg#nt_body 4) NP false false)
+          (type_check_nt typing hg 4 NP false false)
       );
   ]
 
@@ -436,7 +442,7 @@ let cfa_test () : test =
         assert_equal
           [
             "nt2v2";
-            "nt3v1";
+            "nt3v1"
           ]
           (List.sort Pervasives.compare @@ List.map (fun binding ->
                match binding with
@@ -456,7 +462,7 @@ let cfa_test () : test =
     "var_binding-1" >:: (fun _ ->
         assert_equal
           [
-            (HNT 4, []);
+            (HNT 4, [])
           ]
           (cfa#lookup_binding_var (1, 1))
       );

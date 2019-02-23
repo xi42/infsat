@@ -32,8 +32,8 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
 
   (* --- generating envs --- *)
 
-  (** Returns venvs where each venv in envs is prepended with exactly one ty from tys in every
-      combination. *)
+  (** Returns envs where each env in postfixes is prepended with exactly one hty from prefixes
+      in every combination. *)
   method private mk_prod_hty_bindings (i, j : int * int) (prefixes : hty list)
       (postfixes : hty binding list) (acc : hty binding list) : hty binding list =
     match prefixes with 
@@ -45,27 +45,30 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
       in
       self#mk_prod_hty_bindings (i, j) prefixes' postfixes acc'
 
-  (* env is a list of elements of the form (i,j,id), 
-     which means that variables i to j are bound to ti to tj,
-     where id is the identifier of [ti;...;tj] *)
-  method mk_hty_bindings : hterms_id binding -> hty binding list = function
+  method binding2hty_bindings : hterms_id binding -> hty binding list = function
     | [] -> [[]]
     | [(i, j, id)] ->
       let htys = htys#get_htys id in 
       List.map (fun hty -> [(i, j, hty)]) htys
-    | (i, j, id) :: bindings' ->
+    | (i, j, id) :: binding' ->
       match htys#get_htys id with
       | [] -> []
       | htys ->
         (* recursively get all bindings without using current application info *)
-        match self#mk_hty_bindings bindings' with
+        match self#binding2hty_bindings binding' with
         | [] -> []
-        | hty_bindings ->
+        | hty_binding ->
           (* Make product with the current application info - each typing of hterm with
              identifier id is valid for range i-j, so the output is all possible bindings
              constructed by prepending one of possible types for i-j to any of current bindings.
              This may blow up the number of possible type bindings. *)
-          self#mk_prod_hty_bindings (i, j) htys hty_bindings []
+          self#mk_prod_hty_bindings (i, j) htys hty_binding []
+                                                      
+  (** Converts binding to possible environments using information on possible typings of hterms
+      flowing into given variables without regard for the context in which they were typed. *)
+  (* TODO this does not take care of duplicates *)
+  method binding2envl (var_count : int) (binding : hterms_id binding) : envl =
+    List.map (hty_binding2env var_count) @@ self#binding2hty_bindings binding
 
   (* --- typing --- *)
   
@@ -151,7 +154,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
       Flag no_pr_vars prevents inference of productive variables. Flag force_pr_var ensures that
       there is at least one productive variable is inferred. Only one of these flags may be true.
   *)
-  method infer_wo_env (hterm : hterm) (target : ty)
+  method type_check (hterm : hterm) (target : ty) (var_count : int)
       (no_pr_vars : bool) (force_pr_var : bool) : envl =
     assert (not (no_pr_vars && force_pr_var));
     if !Flags.verbose then
@@ -161,37 +164,37 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
           | false, true -> " (force pr var)"
           | _ -> ""
         in
-        print_string @@ String.make indent ' ' ^ "Type checking " ^
+        print_string @@ String.make indent ' ' ^ "Inferring environment for " ^
                         hgrammar#string_of_hterm hterm ^ " : " ^ string_of_ty target ^
                         vars_info ^ "\n"
       end;
     let res = match hterm with
       | HT a, [] ->
-        if TyList.exists (fun ty -> eq_ty target ty) (self#terminal_ity a) && not force_pr_var then
-          [Env.empty]
+        if not force_pr_var && TyList.exists (fun ty -> eq_ty target ty) (self#terminal_ity a) then
+          [empty_env var_count]
         else
           []
       | HNT nt, [] ->
-        if self#nt_ty_exists nt target && not force_pr_var then
-          [Env.empty]
+        if not force_pr_var && self#nt_ty_exists nt target then
+          [empty_env var_count]
         else
           []
-      | HVar x, [] ->
+      | HVar v, [] ->
         if is_productive target then
           [] (* variables are only NP *)
         else if no_pr_vars then
-          [Env.singleton (x, TyList.singleton target)]
+          [singleton_env var_count v @@ sty target]
         else if force_pr_var then
-          [Env.singleton (x, TyList.singleton (with_productivity PR target))]
+          [singleton_env var_count v @@ sty @@ with_productivity PR target]
         else
           (* both NP and PR versions are possible *)
           [
-            Env.singleton (x, TyList.singleton target);
-            Env.singleton (x, TyList.singleton (with_productivity PR target))
+            singleton_env var_count v @@ sty target;
+            singleton_env var_count v @@ sty @@ with_productivity PR target
           ]
       | _ -> (* application *)
         let h, args = hgrammar#decompose_hterm hterm in
-        self#infer_app_wo_env h args target no_pr_vars force_pr_var
+        self#type_check_app h args target var_count no_pr_vars force_pr_var
     in
     if !Flags.verbose then
       begin
@@ -204,7 +207,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
     res
 
   (** To be used only on terms without head variables. *)
-  method infer_app_wo_env (h : head) (args : hterm list) (target : ty)
+  method type_check_app (h : head) (args : hterm list) (target : ty) (var_count : int)
       (no_pr_vars : bool) (force_pr_var : bool) : envl =
     let h_arity = List.length args in
     (* Get all h typings *)
@@ -281,8 +284,8 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
                     let arg_pr_envfl =
                       if target_pr then
                         (* productive argument *)
-                        List.map (fun v -> (v, false, true))
-                          (self#infer_wo_env arg_term arg_ty no_pr_vars false)
+                        List.map (fun v -> (v, false, true)) @@
+                        self#type_check arg_term arg_ty var_count no_pr_vars false
                       else
                         []
                     in
@@ -291,14 +294,15 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
                         []
                       else
                         (* nonproductive argument with productive variable *)
-                        List.map (fun v -> (v, false, false))
-                          (self#infer_wo_env arg_term (with_productivity NP arg_ty) false true)
+                        List.map (fun v -> (v, false, false)) @@
+                        self#type_check arg_term (with_productivity NP arg_ty)
+                          var_count false true
                     in
                     List.rev_append arg_pr_envfl arg_np_envfl
                   else
                     (* nonproductive target argument (which implies nonproductive argument) *)
                     List.map (fun v -> (v, false, false))
-                      (self#infer_wo_env arg_term arg_ty true false)
+                      (self#type_check arg_term arg_ty var_count true false)
                 in
                 let intersection = intersect_two_envfls envfl arg_envfl in
                 if !Flags.verbose then
@@ -324,7 +328,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
                     res
                   end
               ) envfl arg_ity []
-          ) [(Env.empty, false, false)] args []
+          ) [(empty_env var_count, false, false)] args []
         in
         if !Flags.verbose then
           begin
@@ -334,7 +338,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
                 print_string @@ String.make indent ' ' ^ "  * (dup: " ^
                                 Utilities.string_of_bool dup ^ ", prarg: " ^
                                 Utilities.string_of_bool pruse ^ ") " ^
-                                string_of_env env ^ "\n";
+                                env#to_string ^ "\n";
               ) envfl
           end;
         let envfl =
@@ -353,7 +357,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
         let envl = List.map (fun (env, _, _) -> env) envfl in
         if force_pr_var then
           let res = List.filter (fun env ->
-              Env.exists (fun (_, ity) -> TyList.exists is_productive ity) env
+              env#has_productive_vars
             ) envl
           in
           if !Flags.verbose then
@@ -369,6 +373,61 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
             envl
           end
       ) h_ity)
+
+  (* TODO dont type check like that, instad re-use normal typing with changed variables, option
+     for binding, and [[]] being true *)
+(*
+  method type_check (hterm : hterm) (binding : ity binding) (target : ty)
+      (no_pr_vars : bool) (force_pr_var : bool) : bool =
+    assert (not (no_pr_vars && force_pr_var));
+    if !Flags.verbose then
+      begin
+        let vars_info = match no_pr_vars, force_pr_var with
+          | true, false -> " (no pr vars)"
+          | false, true -> " (force pr var)"
+          | _ -> ""
+        in
+        print_string @@ String.make indent ' ' ^ "Type checking " ^
+                        hgrammar#string_of_hterm hterm ^ " : " ^ string_of_ty target ^
+                        vars_info ^ "\n"
+      end;
+    let res = match hterm with
+      | HT a, [] ->
+        not force_pr_var && TyList.exists (fun ty -> eq_ty target ty) (self#terminal_ity a)
+      | HNT nt, [] ->
+        self#nt_ty_exists nt target && not force_pr_var
+      | HVar (_, ix), [] ->
+        if is_productive target then
+          false
+        else
+          let b = List.filter (fun (i, j, _) -> i <= ix && ix <= j) binding in
+          let ity = match b with
+            | [(i, _, hty)] -> List.nth hty (ix - i)
+            | _ -> failwith "Did not find matching binding"
+          in
+          if no_pr_vars then
+            TyList.exists (fun ty -> ty_eq ty target) ity
+          else if force_pr_var then
+            TyList.exists (fun ty -> ty_eq ty (with_productivity PR target)) ity
+          else
+            (* both NP and PR versions are possible *)
+            TyList.exists (fun ty ->
+                ty_eq ty target || ty_eq ty (with_productivity PR target)
+              ) ity
+      | _ -> (* application *)
+        let h, args = hgrammar#decompose_hterm hterm in
+        self#infer_app_wo_env h args target no_pr_vars force_pr_var
+    in
+    if !Flags.verbose then
+      begin
+        print_string @@ String.make indent ' ' ^
+                        hgrammar#string_of_hterm hterm ^ " : " ^ string_of_ty target;
+        match res with
+        | true -> print_string " type checks\n"
+        | false -> print_string " does not type check\n"
+      end;
+    res
+*)
 
   (* --- printing --- *)
 

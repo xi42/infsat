@@ -1,8 +1,12 @@
 open Flags
 
+(* --- printing --- *)
+
 let string_of_bool = function
   | true -> "true"
   | false -> "false"
+
+(* --- lists --- *)
 
 let rec fold_left_short_circuit (f : 'a -> 'b -> 'a) (acc : 'a) (l : 'b list) (bottom : 'a) : 'a =
   match l with
@@ -12,6 +16,18 @@ let rec fold_left_short_circuit (f : 'a -> 'b -> 'a) (acc : 'a) (l : 'b list) (b
       acc
     else
       fold_left_short_circuit f (f acc x) l' bottom
+
+let rec compare_lists (cmp : 'a -> 'a -> int) (l1 : 'a list) (l2 : 'a list) : int =
+  match l1, l2 with
+  | x1 :: l1', x2 :: l2' ->
+    let res = cmp x1 x2 in
+    if res = 0 then
+      compare_lists cmp l1' l2'
+    else
+      res
+  | [], [] -> 0
+  | [], _ -> -1
+  | _, [] -> 1
 
 let string_of_list (p : 'a -> string) (l : 'a list) : string =
   match l with
@@ -23,6 +39,8 @@ let string_of_list (p : 'a -> string) (l : 'a list) : string =
          acc ^ "; " ^ p x
        ) (p x) l') ^
     "]"
+
+(* --- parsing --- *)
 
 let trim_parens (str : string) : string =
   if String.length str >= 2 && str.[0] = '(' && str.[String.length str - 1] = ')' then
@@ -57,6 +75,8 @@ let split_outside_parens (str : string) (sep : string) : (string * string) optio
     i := !i + 1
   done;
   !res
+
+(* --- ? --- *)
 
 let debug s =
   if

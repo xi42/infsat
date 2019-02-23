@@ -15,7 +15,7 @@ infsat: $(SOURCE) main_wrapper.ml
 	ocamlopt -inline 999 -o infsat $^
 
 top: $(SOURCE) test.ml utop_wrapper.ml
-	ocamlfind ocamlmktop -o top -thread -package utop -package oUnit -linkpkg -g $^
+	ocamlfind ocamlc -o top -thread -linkpkg -linkall -predicates create_toploop -package compiler-libs.toplevel,oUnit,utop -g $^
 
 infsat-debug: $(SOURCE) main_wrapper.ml
 	ocamlc -g -o infsat-debug $^

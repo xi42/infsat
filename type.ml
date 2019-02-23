@@ -1,3 +1,5 @@
+(* --- term type --- *)
+
 (** Unique identifier of a single type *)
 type ty_id = int
 
@@ -207,3 +209,14 @@ and ity_of_string (ity_str : string) : ity =
         (ity_of_string @@ String.trim ity_str')
     | None ->
       TyList.singleton @@ ty_of_string @@ Utilities.trim_parens @@ String.trim s
+
+(* --- hterms type --- *)
+
+(** Typing of each of hterm's arguments. *)
+type hty = ity list
+
+(** Lexicographical order on hty. *)
+let rec hty_compare : hty -> hty -> int =
+  Utilities.compare_lists TyList.compare
+
+let rec hty_eq (hty1 : hty) (hty2 : hty) : bool = hty_compare hty1 hty2 = 0
