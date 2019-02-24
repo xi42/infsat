@@ -47,8 +47,8 @@ let mk_typing g =
   let cfa = mk_cfa g (Some hg) in
   (hg, new Typing.typing hg cfa)
 
-let type_check_nt (typing : typing) (hg : hgrammar) (nt : nt_id) (target : ty) =
-  typing#type_check (hg#nt_body nt) target (hg#nt_arity nt)
+let type_check_nt_wo_env (typing : typing) (hg : hgrammar) (nt : nt_id) (target : ty) =
+  typing#type_check (hg#nt_body nt) target (Right (hg#nt_arity nt))
 
 let senv hg nt i ity_str =
   singleton_env (hg#nt_arity nt) (nt, i) @@ ity_of_string ity_str
@@ -167,21 +167,21 @@ let typing_e_test () =
     "type_check-1" >:: (fun _ ->
         assert_equal_envls
           [empty_env @@ hg#nt_arity 0]
-          (type_check_nt typing hg 0 NP false false)
+          (type_check_nt_wo_env typing hg 0 NP false false)
       );
 
     (* checking basic functionality of forcing pr vars *)
     "type_check-2" >:: (fun _ ->
         assert_equal_envls
           []
-          (type_check_nt typing hg 0 NP false true)
+          (type_check_nt_wo_env typing hg 0 NP false true)
       );
 
     (* checking that forcing no pr vars does not break anything when there are only terminals *)
     "type_check-3" >:: (fun _ ->
         assert_equal_envls
           [empty_env @@ hg#nt_arity 0]
-          (type_check_nt typing hg 0 NP true false)
+          (type_check_nt_wo_env typing hg 0 NP true false)
       );
   ]
 
@@ -202,14 +202,14 @@ let typing_ax_test () =
             senv hg 1 0 "pr";
             senv hg 1 0 "np"
           ]
-          (type_check_nt typing hg 1 PR false false)
+          (type_check_nt_wo_env typing hg 1 PR false false)
       );
 
     (* check that a x : np does not type check *)
     "type_check-5" >:: (fun _ ->
         assert_equal_envls
           []
-          (type_check_nt typing hg 1 NP false false)
+          (type_check_nt_wo_env typing hg 1 NP false false)
       );
   ]
   
@@ -262,7 +262,7 @@ let typing_xyyz_test () =
               ity_of_string "np"
             |]
           ]
-          (type_check_nt typing hg 1 PR false false)
+          (type_check_nt_wo_env typing hg 1 PR false false)
       );
 
     (* check that branching works *)
@@ -272,7 +272,7 @@ let typing_xyyz_test () =
             senv hg 4 0 "pr";
             senv hg 4 0 "np"
           ]
-          (type_check_nt typing hg 4 PR false false)
+          (type_check_nt_wo_env typing hg 4 PR false false)
       );
 
     (* check that branching works *)
@@ -282,7 +282,7 @@ let typing_xyyz_test () =
             senv hg 4 0 "pr";
             senv hg 4 0 "np"
           ]
-          (type_check_nt typing hg 4 NP false false)
+          (type_check_nt_wo_env typing hg 4 NP false false)
       );
 
     "binding2envl" >:: (fun _ ->
@@ -338,7 +338,7 @@ let typing_dup_test () =
             senv hg 2 0 "pr -> pr";
             senv hg 2 0 "pr -> np"
           ]
-          (type_check_nt typing hg 2 PR false false)
+          (type_check_nt_wo_env typing hg 2 PR false false)
       );
 
     (* No valid environment, because a e is productive and makes the application with it as
@@ -346,7 +346,7 @@ let typing_dup_test () =
     "type_check-10" >:: (fun _ ->
         assert_equal_envls
           []
-          (type_check_nt typing hg 2 NP false false)
+          (type_check_nt_wo_env typing hg 2 NP false false)
       );
 
     (* Only one valid env when there is a duplication. Since everything in N1 is a variable,
@@ -362,7 +362,7 @@ let typing_dup_test () =
               ity_of_string "pr"
             |];
           ]
-          (type_check_nt typing hg 3 PR false false)
+          (type_check_nt_wo_env typing hg 3 PR false false)
       );
 
     (* Only one valid env when there is no duplication. This is exactly the opposite of the test
@@ -375,7 +375,7 @@ let typing_dup_test () =
               ity_of_string "pr"
             |];
           ]
-          (type_check_nt typing hg 3 NP false false)
+          (type_check_nt_wo_env typing hg 3 NP false false)
       );
 
     (* Similar to test 11, but this time there are separate variables used for first
@@ -384,7 +384,7 @@ let typing_dup_test () =
     "type_check-13" >:: (fun _ ->
         assert_equal_envls
           []
-          (type_check_nt typing hg 4 PR false false)
+          (type_check_nt_wo_env typing hg 4 PR false false)
       );
 
     (* Similar to test 12, but this time the duplication cannot happen. *)
@@ -402,7 +402,7 @@ let typing_dup_test () =
               ity_of_string "pr"
             |]
           ]
-          (type_check_nt typing hg 4 NP false false)
+          (type_check_nt_wo_env typing hg 4 NP false false)
       );
   ]
 

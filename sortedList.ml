@@ -66,8 +66,9 @@ struct
     L (List.sort Ord.compare (init_list n []))
 
   (* basic operations *)
-
-  let mem x (L l) = List.mem x l
+  
+  let mem x (L l) =
+    List.exists (fun y -> Ord.compare x y = 0) l
 
   let hd (L l) = List.hd l
 

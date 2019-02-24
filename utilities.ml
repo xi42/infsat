@@ -1,5 +1,27 @@
 open Flags
 
+(* --- either --- *)
+
+type ('a, 'b) either = Left of 'a | Right of 'b
+
+let get_left : ('a, 'b) either -> 'a = function
+  | Left x -> x
+  | Right _ -> failwith "Expected left"
+
+let get_right : ('a, 'b) either -> 'b = function
+  | Left _ -> failwith "Expected right"
+  | Right x -> x
+
+let either_map (f : 'a -> 'c) (g : 'b -> 'c) (e : ('a, 'b) either) : 'c =
+  match e with
+  | Left a -> f a
+  | Right b -> g b
+
+let either_bimap (f : 'a -> 'c) (g : 'b -> 'd) (e : ('a, 'b) either) : ('c, 'd) either =
+  match e with
+  | Left a -> Left (f a)
+  | Right b -> Right (f b)
+
 (* --- printing --- *)
 
 let string_of_bool = function
@@ -8,6 +30,8 @@ let string_of_bool = function
 
 (* --- lists --- *)
 
+(** Version of fold_left that takes additional argument bottom. When acc is bottom after an
+    application, bottom is returned and no further calls to f are made. *)
 let rec fold_left_short_circuit (f : 'a -> 'b -> 'a) (acc : 'a) (l : 'b list) (bottom : 'a) : 'a =
   match l with
   | [] -> acc
@@ -17,6 +41,7 @@ let rec fold_left_short_circuit (f : 'a -> 'b -> 'a) (acc : 'a) (l : 'b list) (b
     else
       fold_left_short_circuit f (f acc x) l' bottom
 
+(** Lexicographical sort of lists with custom comparison of elements. *)
 let rec compare_lists (cmp : 'a -> 'a -> int) (l1 : 'a list) (l2 : 'a list) : int =
   match l1, l2 with
   | x1 :: l1', x2 :: l2' ->
@@ -29,6 +54,21 @@ let rec compare_lists (cmp : 'a -> 'a -> int) (l1 : 'a list) (l2 : 'a list) : in
   | [], _ -> -1
   | _, [] -> 1
 
+(** A list of integers from m to n - 1 (empty if m >= n). *)
+let rec fromto (m : int) (n : int) : int list =
+  if m >= n then
+    []
+  else
+    m :: fromto (m + 1) n
+
+(** Puts 0-based index in a pair with each element of the input list. *)
+let index_list (l : 'a list) : (int * 'a) list =
+  let len = List.length l in
+  let indices = fromto 0 len in
+  List.combine indices l
+
+(** Change list to string as it would be represented in OCaml using custom function to change each
+    element to string. *)
 let string_of_list (p : 'a -> string) (l : 'a list) : string =
   match l with
   | [] -> "[]"
@@ -42,14 +82,16 @@ let string_of_list (p : 'a -> string) (l : 'a list) : string =
 
 (* --- parsing --- *)
 
+(** Removes a single parenthesis from the beginning and end of the string if present on both
+    sides. *)
 let trim_parens (str : string) : string =
   if String.length str >= 2 && str.[0] = '(' && str.[String.length str - 1] = ')' then
     String.sub str 1 (String.length str - 2)
   else
     str
 
-(** Splits str on the first occurence of sep in two strings that do not contain the sep between
-    them. *)
+(** Splits str on the first occurence of sep outside parentheses into two strings that do not
+    contain the sep between them. *)
 let split_outside_parens (str : string) (sep : string) : (string * string) option =
   assert (String.length sep > 0);
   let strlen = String.length str in
@@ -78,6 +120,8 @@ let split_outside_parens (str : string) (sep : string) : (string * string) optio
 
 (* --- ? --- *)
 
+let id (x : 'a) : 'a = x
+
 let debug s =
   if
     !debugging
@@ -86,12 +130,33 @@ let debug s =
   else 
     ()
 
-(** A list of integers m, m + 1, ..., n - 1 (empty if m >= n). *)
-let rec fromto m n =
-  if m >= n then
-    []
-  else
-    m :: (fromto (m + 1) n)
+let list_max c l =
+  let rec f c l max =
+    match l with
+    | [] -> max
+    | x::l' ->
+      if c x max > 0 then
+        f c l' x
+      else
+        f c l' max
+  in
+  f c (List.tl l) (List.hd l)
+
+let rec delete_duplication l =
+  match l with
+  | [] -> []
+  | [x] -> [x]
+  | x :: y :: l ->
+    if x = y then
+      delete_duplication @@ y :: l
+    else
+      x :: delete_duplication (y :: l)
+
+let delete_duplication_unsorted c =
+  let c' = List.sort compare c in
+  delete_duplication c'
+
+(*
 
 let rec list_repl n a l =
   match l with
@@ -155,16 +220,6 @@ let rec merge_eqp l1 l2 =
 
 (*** utility functions ***)
 let id x = x;;
-let rec delete_duplication l =
-  match l with
-    [] -> []
-  | [x] -> [x]
-  | x::y::l -> if x=y then delete_duplication (y::l)
-               else x::(delete_duplication (y::l));;
-
-let delete_duplication_unsorted c =
-  let c' = List.sort compare c in
-    delete_duplication c';;
 
 let rec delete_duplication2 comp comb l =
   match l with
@@ -200,18 +255,6 @@ let rec list_count l =
            (x,n+1)::lc1
        with
          Not_found -> (x,1)::lc
-
-let list_max c l =
-  let rec f c l max =
-    match l with
-        [] -> max
-      | x::l' ->
-          if c x max >0 then
-              f c l' x
-          else
-              f c l' max
-  in
-     f c (List.tl l) (List.hd l)
 
 let rec list_last l =
   match l with
@@ -331,12 +374,8 @@ let rec assoc_eq eq x l =
      if eq x y then z
      else assoc_eq eq x l'
 
-let index_list l =
-  let len = List.length l in
-  let indices = fromto 0 len in
-  List.combine indices l
-
 let index_list_r l =
   let len = List.length l in
   let indices = fromto 0 len in
   List.combine l indices
+*)

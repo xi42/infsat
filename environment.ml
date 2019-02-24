@@ -12,9 +12,14 @@ open Type
 class env (var_itys : ity array) = object(self)
   (* --- access --- *)
 
+  method var_count : int = Array.length var_itys
+
   method get_var_itys : ity array = var_itys
 
-  method get_var_ity (i : int) : ity = var_itys.(i)
+  method get_var_ity (_, i : var_id) : ity = var_itys.(i)
+
+  method mem (v : var_id) (ty : ty) : bool =
+    TyList.mem ty @@ self#get_var_ity v
 
   method compare (env' : env) : int =
     let var_itys' = env'#get_var_itys in
