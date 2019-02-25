@@ -8,12 +8,13 @@ open Utilities
 
 (* --- types --- *)
 
+(** Node that is enqueued when performing 0CFA analysis. *)
 type node = hterm
 
 (* hterm -> ref (hterm, qs) *)
 module HType = struct
   type t = hterm
-  let equal i j = i=j
+  let equal i j = i = j
   let hash = Hashtbl.hash_param 100 100
 end
 
@@ -24,8 +25,7 @@ module SortedHTermsIds = SortedList.Make(struct
     let compare = Pervasives.compare
   end)
 
-(* TODO remove dependency on grammar *)
-class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
+class cfa (hgrammar : hgrammar) = object(self)
   (* --- registers --- *)
 
   (* necessary tables:
@@ -126,16 +126,16 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
 
   (** array_dep_nt_nt[f] contains all nonterminals (int) that have f present in their body except
       for ones present in array_dep_nt_nt_lin[f]. *)
-  val mutable array_dep_nt_nt : SortedNTs.t array = [||]
+  val mutable array_dep_nt_nt : nts array = [||]
 
   (** If Flags.incremental is false then array_dep_nt_nt_lin[f] contains list of nonterminals g that
       have f present in their body exactly once at root or applied a number of times to a terminal,
       i.e., t1 .. (t2 .. (tN (f arg1 .. argK) ..) ..) .. for some terminals tX and terms argY. *)
-  val mutable array_dep_nt_nt_lin : SortedNTs.t array = [||]
+  val mutable array_dep_nt_nt_lin : nts array = [||]
 
   (* --- logic --- *)
 
-  (* --- ? --- *)
+  (* --- TODO split into categories --- *)
 
   method print_binding (binding : hterms_id binding) =
     print_string @@ String.concat ", " @@ List.map (fun (i, j, id) ->
@@ -146,7 +146,7 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
   method print_binding_array =
     print_string "bindings (nt --> bindings list)\n\n";
     for nt = 0 to Array.length binding_array_nt - 1 do (* TODO iter *)
-      print_string ((hgrammar#nt_name nt)^":\n");
+      print_string @@ hgrammar#nt_name nt ^ ":\n";
       List.iter self#print_binding (binding_array_nt).(nt)
     done
 
@@ -154,10 +154,9 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
     match rho with
     | [] -> []
     | termsid::rho' -> (* for each args_id *)
-      let n = List.length (hgrammar#id2terms termsid) in (* check how many terms are under args_id *)
-      (*       if n<9 then *)
+      let n = List.length @@ hgrammar#id2terms termsid in (* check how many terms are under args_id *)
       let j = i+n in
-      (i,j-1,termsid)::(self#add_index rho' j) (* each termsid is converted to (first_term_number, last_term_number, termsid), like (0, 3, ...);(4, 5, ...);(6, 11, ...), i.e., start and end positions on a concatenated list of all terms *)
+      (i, j - 1, termsid) :: self#add_index rho' j (* each termsid is converted to (first_term_number, last_term_number, termsid), like (0, 3, ...);(4, 5, ...);(6, 11, ...), i.e., start and end positions on a concatenated list of all terms *)
 
   method register_dep_termid_nt (id : hterms_id) (nt : nt_id) (termss : hterms_id binding) =
     let x = tab_termid_nt.(id) in
@@ -267,8 +266,10 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
   method register_binding (nt : int) (args : int list) =
     (* binding_array_nt[nt] contains a list of
        ((number of first term in app, number of last term in app, args_id for first bundle of terms in app)::..., states under which visited) *)
-    List.iter (fun id -> termid_isarg.(id) <- true) args;
-    binding_array_nt.(nt) <- (self#insert_nt_binding args binding_array_nt.(nt));
+    List.iter (fun id ->
+        termid_isarg.(id) <- true
+      ) args;
+    binding_array_nt.(nt) <- self#insert_nt_binding args binding_array_nt.(nt);
     self#register_var_bindings nt args 0
 
   method lookup_bindings_for_nt nt =
@@ -283,12 +284,13 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
 
   method lookup_nodetab hterm = 
     try
-      Some(HTermHashtbl.find nodetab hterm)
-    with Not_found -> None
+      Some (HTermHashtbl.find nodetab hterm)
+    with
+    | Not_found -> None
 
   (** Enqueueing all argument hterms. The terminal does not matter. *)
   method expand_terminal termss =
-    List.iter (fun hterm -> self#enqueue_node hterm) termss
+    List.iter self#enqueue_node termss
 
   (* TODO unused
   (** Returns size of term as number of non-application terms on left-hand size of application (not number of terminals/nonterminals) *)
@@ -324,7 +326,9 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
         (* check what hterms flow into x (these can also be variables) *)
         let x_hterms = self#lookup_binding_var x in
         (* substitute these hterms into x and enqueue resulting application *)
-        List.iter (fun (h, x_args) -> self#enqueue_node (h, x_args@h_args)) x_hterms;
+        List.iter (fun (h, x_args) ->
+            self#enqueue_node (h, x_args@h_args)
+          ) x_hterms;
         self#register_variable_head_node x node
       | HNT(f) ->
         (* Remember in binding_array_nt that there was an application f h_args. Also remember
@@ -333,7 +337,7 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
         (* Enqueue the body hterm, ignoring all arguments. Note that arguments are not enqueued.
            If the arguments don't have kind O, they can be passed as arguments again, or used
            as variable head, which finds the original terms. *)
-        self#enqueue_node (hgrammar#nt_body f)
+        self#enqueue_node @@ hgrammar#nt_body f
 
   (** Expand nodes in queue until it's empty. *)
   method expand : unit =
@@ -342,7 +346,8 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
       if !Flags.debugging then
         begin
           self#print_binding_array;
-          print_string ("\nSize of abstract control flow graph: " ^ string_of_int (HTermHashtbl.length nodetab) ^ "\n")
+          print_string @@ "\nSize of abstract control flow graph: " ^
+                          string_of_int (HTermHashtbl.length nodetab) ^ "\n"
         end
     | Some hterm ->
       self#process_node hterm;
@@ -361,15 +366,15 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
 
   method print_mask mask =
     print_string "[";
-    List.iter(fun i-> print_string((string_of_int i)^",")) mask;
+    List.iter (fun i -> print_string @@ string_of_int i ^ ",") mask;
     print_string "]"
 
   method print_binding_with_mask binding =
     List.iter (fun (i,j,mask,id1) ->
-        print_string ("(" ^ string_of_int i ^ "," ^ string_of_int j ^ ",");
+        print_string @@ "(" ^ string_of_int i ^ "," ^ string_of_int j ^ ",";
         self#print_mask mask;
-        print_string (", " ^ string_of_int id1 ^ "), "))
-      binding; 
+        print_string @@ ", " ^ string_of_int id1 ^ "), "
+      ) binding; 
     print_string "\n"
 
   method print_tab_binding_env =
@@ -403,13 +408,13 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
   method mk_binding_with_mask vars binding: (int * int * int list * int) list =
     match binding with
     | [] -> []
-    | (i, j, id)::binding' ->
-      let (vars1,vars2) = self#split_vars vars j in
-      if vars1=[] then
-  self#mk_binding_with_mask vars2 binding'
+    | (i, j, id) :: binding' ->
+      let vars1, vars2 = self#split_vars vars j in
+      if vars1 = [] then
+        self#mk_binding_with_mask vars2 binding'
       else
         (* let vars1c = List.filter (fun i->not(List.mem i vars1)) (fromto i (j+1)) in *)
-        (i, j, vars1, id) :: (self#mk_binding_with_mask vars2 binding')
+        (i, j, vars1, id) :: self#mk_binding_with_mask vars2 binding'
 
   (** Given a list of variables v1, v2, ... from a nonterminal f and bindings from application
       f as1 as2 ..., where asX translates to lists of terms through tab_id_terms, it returns all
@@ -425,7 +430,7 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
         if v < i then
           self#filter_binding vars' binding
         else if v <= j then
-          (i, j, id) :: (self#filter_binding vars' binding')
+          (i, j, id) :: self#filter_binding vars' binding'
         else
           self#filter_binding vars binding'
 
@@ -451,30 +456,12 @@ class cfa (grammar : grammar) (hgrammar : hgrammar) = object(self)
       let bindings' =
         delete_duplication_unsorted (* sorts and removes duplicates *)
           (List.rev_map (fun binding -> self#filter_binding vars' binding) bindings)
-(*
-     List.fold_left
-       (fun bindings1 (binding,_) ->
-         let b = filter_binding vars' binding in
-   if List.mem b bindings1 then bindings1
-else b::bindings1)
-       [] bindings
-*)       
       in
       let bindings_with_mask =
         (* tuples (i, j, vs, as) where as was substituted for variables vs from vars' *)
         List.rev_map (self#mk_binding_with_mask vars') bindings'
       in
       let ids = self#ids_in_bindings bindings' in (* asX that are substituted into f's variables *)
-      (*   
-   let bindings_with_mask =
-    List.fold_left
-      (fun bindmasks (binding,_) ->
-        let b = mk_binding_with_mask vars' binding in
-if List.mem b bindmasks then bindmasks
-else b::bindmasks)
-      [] bindings
-   in
-*)
       self#register_dep_binding_env id bindings_with_mask; (* register that term with given term id
                                                          had was present in some nonterminal and
                                                          given term sequences with id asX were
@@ -484,9 +471,7 @@ else b::bindmasks)
       List.iter (fun id1 -> self#register_dep_penv_binding id1 id) ids
   (* appending current hterm's id to tab_penv_binding[asX] if f was applied to asX making a
      substitution of some variable in hterm to asX *)
-(*
-     List.iter (fun env-> register_dep_env_binding env id)  bindings_with_mask
-*)
+
   method mk_binding_depgraph_for_termss (f : int) (termss : hterms_id binding) =
     List.iter (fun (_, _, id) -> self#register_dep_termid_nt id f termss) termss (* for each term to which f was applied *)
 
@@ -543,95 +528,41 @@ else b::bindmasks)
   method lookup_dep_nt_nt_lin nt =
     array_dep_nt_nt_lin.(nt)
 
-  (** List of all nonterminals in terms without duplicates. *)
-  method nt_in_terms (terms : term list) : SortedNTs.t =
-    match terms with
-    | [] -> SortedNTs.empty
-    | t :: terms' -> SortedNTs.merge (Grammar.nt_in_term t) (self#nt_in_terms terms')
-
-  method merge_nts_lin (nts1, nts2) (nts3, nts4) =
-    let nts11, nts12 =
-      SortedNTs.partition (fun f -> SortedNTs.mem f nts3 || SortedNTs.mem f nts4) nts1 in
-    let nts31, nts32 =
-      SortedNTs.partition (fun f -> SortedNTs.mem f nts1 || SortedNTs.mem f nts2) nts3 in
-    (SortedNTs.merge nts12 nts32,
-     SortedNTs.merge nts11
-       (SortedNTs.merge nts31 
-          (SortedNTs.merge nts2 nts4)))
-
-  (** Takes all nonterminals L in position at either term = L1, L1 arg1 .. argK, or
-      t1 (.. (tN (L1 ..) ..) .., where tX are terminals, where L additionally satisfy the condition
-      that they appear exactly once in the term. It returns ([L1; ..], [N1; ..]), where NX are
-      other nonterminals present in the term.
-      Intuitively, it returns on the left all nonterminals that have have a sequence (possibly
-      empty) of terminals applied to them and appear exactly once in the term, and the rest of
-      nonterminals on the right. *)
-  method nt_in_term_with_linearity (term : term) : SortedNTs.t * SortedNTs.t =
-    match term with
-    | T _ | Var _ -> (SortedNTs.empty, SortedNTs.empty)
-    | NT f -> (SortedNTs.singleton f, SortedNTs.empty)
-    | App _ ->
-      let (h,terms) = Grammar.decompose_term term in
-      match h with
-      | NT(f) -> let nts = self#nt_in_terms terms in
-        if SortedNTs.mem f nts then
-          (SortedNTs.empty, nts) (* if head nt used twice *)
-        else
-          (SortedNTs.singleton f, nts) (* if head nt used once *)
-      | Var _ -> (SortedNTs.empty, self#nt_in_terms terms)
-      | T _ ->
-        (* c has no children. a has a single child, so it is linear. b has two children, but only
-           one at a time is used. Even if we do b (N ..) (N ..) that yield different types, only
-           one N is used as long as there is no other N present. Therefore, b is also linear. *)
-        self#nt_in_terms_with_linearity terms 0 (SortedNTs.empty, SortedNTs.empty)
-      | _ -> assert false
-
-  method nt_in_terms_with_linearity terms i (nts1, nts2) : SortedNTs.t * SortedNTs.t =
-    match terms with (* iteration over terms and linearity info simultaneously *)
-    | [] -> (nts1, nts2) 
-    | t :: terms' ->
-      let (nts1', nts2') = self#nt_in_term_with_linearity t (* recursively *) in
-      let (nts1'', nts2'') = self#merge_nts_lin (nts1', nts2') (nts1, nts2) in
-      self#nt_in_terms_with_linearity terms' (i + 1) (nts1'', nts2'')
-
+  (* TODO remove dependency on grammar#rule *)
   method mk_binding_depgraph =
     tab_termid_nt <- Array.make hgrammar#hterms_count []; (* array of lists for each head term (hterm) *)
     tab_binding_env <- Array.make hgrammar#hterms_count [];
     tab_penv_binding <- Array.make hgrammar#hterms_count [];
     let n = Array.length binding_array_nt in (* number of nonterminals *)
     array_headvars <- Array.make n SortedVars.empty; (* array of lists for each nonterminal *)
-    for f = 0 to n - 1 do
-      array_headvars.(f) <- (let (_, t)= grammar#rule f in (* applicative rule definition *)
-                                headvars_in_term t);
-      self#mk_binding_depgraph_for_nt f binding_array_nt.(f)
+    for nt = 0 to n - 1 do
+      array_headvars.(nt) <- hgrammar#headvars_in_nt nt;
+      self#mk_binding_depgraph_for_nt nt binding_array_nt.(nt)
     done;
     (* make dependency nt --> id (which means "id depends on nt") *)
     self#init_array_dep_nt_termid;
     for id' = 0 to hgrammar#hterms_count - 1 do (* for each hterm *)
       let id = hgrammar#hterms_count - 1 -id' in
       if termid_isarg.(id) then (* that had something applied to it *)
-        let terms = hgrammar#id2terms id in (* and is in applicative form list of terms,
-                                                          and has variables vars *)
-        let nts = self#nt_in_terms terms in (* list of used nonterminals *)
+        let nts = hgrammar#nts_in_hterm id in (* list of used nonterminals *)
         SortedNTs.iter (fun nt -> self#register_dep_nt_termid nt id) nts
     done;
     for id = 0 to hgrammar#hterms_count - 1 do
       if termid_isarg.(id) then
         let vars = hgrammar#id2vars id in (* for each term with given id that was an argument
-                                                      to a nonterminal and had free variables vars *)
+                                             to a nonterminal and had free variables vars *)
         self#mk_binding_depgraph_for_terms id vars
     done;
     (* make dependency nt1 --> nt2 (which means "nt2 depends on nt1") *)
     self#init_array_dep_nt_nt;
     let n = hgrammar#nt_count in
-    for i = 0 to n - 1 do
-      let (_, t) = grammar#rule i in
-      let (nts1, nts2) = self#nt_in_term_with_linearity t in
-      SortedNTs.iter (fun nt-> self#register_dep_nt_nt nt i) nts2;
+    for nt1 = 0 to n - 1 do
+      let nts1, nts2 = hgrammar#nt_in_nt_with_linearity nt1 in
+      SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1) nts2;
       if !Flags.incremental then
-        SortedNTs.iter (fun nt-> self#register_dep_nt_nt_lin nt i) nts1
+        SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt_lin nt2 nt1) nts1
       else 
-        SortedNTs.iter (fun nt-> self#register_dep_nt_nt nt i) nts1
+        SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1) nts1
     done;
     if !Flags.debugging then
       begin
@@ -644,7 +575,7 @@ else b::bindmasks)
     HTermHashtbl.clear nodetab;
     self#clear_nodequeue;
     let num_of_nts = hgrammar#nt_count in
-    termid_isarg <- Array.make grammar#size false;
+    termid_isarg <- Array.make hgrammar#hterms_count false;
     binding_array_nt <- Array.make num_of_nts []; (* binding_array_nt[nt_id] = [] *)
     binding_array_var <- Array.make num_of_nts [||]; (* binding_array_var[nt_id][arg_id] = [] *)
     for i = 0 to num_of_nts - 1 do

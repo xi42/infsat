@@ -37,7 +37,7 @@ let mk_cfa g hg =
     | None -> mk_hgrammar g
     | Some g -> g
   in
-  let cfa = new Cfa.cfa g hg in
+  let cfa = new Cfa.cfa hg in
   cfa#expand;
   cfa#mk_binding_depgraph;
   cfa

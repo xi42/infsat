@@ -12,10 +12,14 @@ module SortedVars = SortedList.Make(struct
     let compare = Pervasives.compare
   end)
 
+type vars = SortedVars.t
+
 module SortedNTs = SortedList.Make(struct
     type t = nt_id
     let compare = Pervasives.compare
   end)
+
+type nts = SortedNTs.t
 
 let arity_of_terminal (a : terminal) : int =
   match a with

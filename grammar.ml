@@ -150,14 +150,14 @@ let rec contains_vars_in_term (term : term) : bool =
     contains_vars_in_term t1 || contains_vars_in_term t2
   | _ -> false
 
-let rec vars_in_term (term : term) : SortedVars.t = 
+let rec vars_in_term (term : term) : vars = 
   match term with
   | T _ | NT _ -> SortedVars.empty
   | Var v -> SortedVars.singleton v
   | App (t1, t2) ->
     SortedVars.merge (vars_in_term t1) (vars_in_term t2) 
 
-let rec vars_in_terms (terms : term list) : SortedVars.t =
+let rec vars_in_terms (terms : term list) : vars =
   match terms with
   | [] -> SortedVars.empty
   | t :: terms' ->
@@ -165,7 +165,7 @@ let rec vars_in_terms (terms : term list) : SortedVars.t =
 
 (** Returns ascending list of variables in term that are not in an argument of a nonterminal or
     a terminal and are applied to something. *)
-let rec headvars_in_term (term : term) : SortedVars.t =
+let rec headvars_in_term (term : term) : vars =
   match term with
   | T _ | NT _ -> SortedVars.empty
   | Var _ -> SortedVars.empty

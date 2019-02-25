@@ -1,18 +1,17 @@
 open Grammar
 open GrammarCommon
 
-(** All sequences of terms converted into head form and having the same environment
-    TODO describe what environment
-    have a unique identifier assigned to them. *)
+(** Identifier of a sequence of hterms (terms in head form) that is an argument to some head term.
+    Terms under one hterms_id are defined in one nonterminal or do not contain a variable. *)
 type hterms_id = int
 (** Head of a term in head form. *)
 type head = HT of terminal | HNT of nt_id | HVar of var_id
 (** Hterm is a term in head form. It consists of a head and identifiers of sequences of hterms
     that are its arguments. If hterm is (h, [a1;..;aK]) and aX represents a sequence of terms
     [tX1;..;tXl] for some l then the whole hterm represents an application
-    h t11 .. t1A t21 .. t2B .. tK1 .. tKZ. *)
+    h t11 .. t1A t21 .. t2B .. tK1 .. tKZ.
+    Note that nonterminal bodies have K <= 1 and only bindings may have more. *)
 type hterm = head * hterms_id list
-(** Node that is enqueued when performing 0CFA analysis. *)
 
 class hgrammar (grammar : grammar) = object(self)
   (** Mapping from int ids to lists of terms. when tab_id_terms[i] = (hterms, terms, vars), then
@@ -54,7 +53,7 @@ class hgrammar (grammar : grammar) = object(self)
 
   method hterms_count : int = next_hterms_id
 
-  method hterm_arity (id : hterms_id) : int = List.length (self#id2hterms id)
+  method hterm_arity (id : hterms_id) : int = List.length @@ self#id2hterms id
 
   method id2hterms (id : hterms_id) : hterm list =
     let hterms, _, _, _ = hterms_data.(id) in
@@ -74,9 +73,11 @@ class hgrammar (grammar : grammar) = object(self)
 
   (* --- operations --- *)
   
-  (** Changes (H, [ID]) into (H, [arg 1, arg 2, ...]) and (H, [ID1, ID2, ...]) into (H, [arg 1-1, arg 1-2, ..., arg 2-1, arg 2-2, ...]), i.e., looks up one layer and combines applications *)
+  (** Changes (H, [ID]) into (H, [arg 1, arg 2, ...]) and (H, [ID1, ID2, ...]) into
+      (H, [arg 1-1, arg 1-2, ..., arg 2-1, arg 2-2, ...]), i.e., dereferences the ids into
+      a list of hterms. *)
   method decompose_hterm (hterm: hterm) : head * hterm list =
-    let (h, termids) = hterm in
+    let h, termids = hterm in
     let hterms =
       match termids with
       | [] -> []
@@ -90,6 +91,69 @@ class hgrammar (grammar : grammar) = object(self)
                 List.rev_append hterms' hterms) [] termids) []
     in
     (h, hterms)
+
+  method headvars_in_nt (nt : nt_id) : vars =
+    headvars_in_term @@ snd @@ grammar#rule nt
+
+  (** List of all nonterminals in terms without duplicates. *)
+  method nt_in_terms (terms : term list) : SortedNTs.t =
+    match terms with
+    | [] -> SortedNTs.empty
+    | t :: terms' -> SortedNTs.merge (nt_in_term t) (self#nt_in_terms terms')
+
+  method merge_nts_lin (nts1, nts2) (nts3, nts4) =
+    let nts11, nts12 =
+      SortedNTs.partition (fun f -> SortedNTs.mem f nts3 || SortedNTs.mem f nts4) nts1 in
+    let nts31, nts32 =
+      SortedNTs.partition (fun f -> SortedNTs.mem f nts1 || SortedNTs.mem f nts2) nts3 in
+    (SortedNTs.merge nts12 nts32,
+     SortedNTs.merge nts11
+       (SortedNTs.merge nts31 
+          (SortedNTs.merge nts2 nts4)))
+
+  (** Takes all nonterminals L in position at either term = L1, L1 arg1 .. argK, or
+      t1 (.. (tN (L1 ..) ..) .., where tX are terminals, where L additionally satisfy the condition
+      that they appear exactly once in the term. It returns ([L1; ..], [N1; ..]), where NX are
+      other nonterminals present in the term.
+      Intuitively, it returns on the left all nonterminals that have have a sequence (possibly
+      empty) of terminals applied to them and appear exactly once in the term, and the rest of
+      nonterminals on the right. *)
+  method nt_in_term_with_linearity (term : term) : SortedNTs.t * SortedNTs.t =
+    match term with
+    | T _ | Var _ -> (SortedNTs.empty, SortedNTs.empty)
+    | NT f -> (SortedNTs.singleton f, SortedNTs.empty)
+    | App _ ->
+      let h, terms = decompose_term term in
+      match h with
+      | NT f -> let nts = self#nt_in_terms terms in
+        if SortedNTs.mem f nts then
+          (SortedNTs.empty, nts) (* if head nt used twice *)
+        else
+          (SortedNTs.singleton f, nts) (* if head nt used once *)
+      | Var _ -> (SortedNTs.empty, self#nt_in_terms terms)
+      | T _ ->
+        (* c has no children. a has a single child, so it is linear. b has two children, but only
+           one at a time is used. Even if we do b (N ..) (N ..) that yield different types, only
+           one N is used as long as there is no other N present. Therefore, b is also linear. *)
+        self#nt_in_terms_with_linearity terms 0 (SortedNTs.empty, SortedNTs.empty)
+      | _ -> assert false
+
+  method nt_in_terms_with_linearity terms i (nts1, nts2) : nts * nts =
+    match terms with (* iteration over terms and linearity info simultaneously *)
+    | [] -> (nts1, nts2) 
+    | t :: terms' ->
+      let (nts1', nts2') = self#nt_in_term_with_linearity t (* recursively *) in
+      let (nts1'', nts2'') = self#merge_nts_lin (nts1', nts2') (nts1, nts2) in
+      self#nt_in_terms_with_linearity terms' (i + 1) (nts1'', nts2'')
+  
+  method nt_in_nt_with_linearity (nt : nt_id) : nts * nts =
+    let term = snd @@ grammar#rule nt in
+    self#nt_in_term_with_linearity term
+
+  method nts_in_hterm (nt : nt_id) : nts =
+    let terms = self#id2terms nt in (* and is in applicative form list of terms,
+                                           and has variables vars *)
+    self#nt_in_terms terms
 
   (* --- construction --- *)
 
@@ -125,6 +189,8 @@ class hgrammar (grammar : grammar) = object(self)
     else
       Some (fst (SortedVars.hd vars))
 
+  (** Recursively converts a term to hterm. Note that hterms converted this way and present in
+      nonterminal bodies never have more than one hterms_id. *)
   method private convert_term (t : term) : hterm =
     let h, terms = Grammar.decompose_term t in
     if terms = [] then
@@ -210,7 +276,8 @@ class hgrammar (grammar : grammar) = object(self)
 
   initializer
     let size = grammar#size in
-    hterms_data <- Array.make size ([], [], SortedVars.empty, None); (* for each a-term, i.e., @ x t, where x is not an application *)
+    (* allocating more than needed *)
+    hterms_data <- Array.make size ([], [], SortedVars.empty, None);
     let dummy_hterm : hterm = (HNT (-1), []) in
     nt_bodies <- Array.make grammar#nt_count dummy_hterm; (* convert each rule to a normalized form and store in this global array along with its arity (this is ref) *)
     for nt = 0 to grammar#nt_count - 1 do
