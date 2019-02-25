@@ -117,7 +117,7 @@ let rec stys2sty stys =
 
 let rec string_of_sty (sty : st) : string =
   match sty with
-  | STvar tv -> "'a"
+  | STvar tv -> "'a" ^ string_of_int (Obj.magic @@ Obj.repr tv)
   | STbase -> "o"
   | STfun (sty1, sty2) ->
     let left =
@@ -128,12 +128,12 @@ let rec string_of_sty (sty : st) : string =
     in
     left ^ " -> " ^ string_of_sty sty2
 
-let print_sortbinding (f, sty) =
-  print_string @@ " " ^ f ^ " : " ^ string_of_sty sty ^ "\n"
+let print_sortbinding (nt, sty) =
+  print_string @@ " " ^ nt ^ " : " ^ string_of_sty sty ^ "\n"
 
 let print_nste gram nste =
-  print_string @@ "Sorts of non-terminals:\n" ^
-                  "=======================\n";
+  print_string @@ "Sorts of nonterminals:\n" ^
+                  "======================\n";
   for i = 0 to (Array.length nste - 1) do
     print_sortbinding (gram#name_of_nt i, nste.(i))
   done;

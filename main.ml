@@ -53,7 +53,7 @@ let parse_stdin() =
     arbitrarily many counted letters. Prints the result. *)
 let report_finiteness input : bool =
   let grammar = profile "conversion" (fun () -> Conversion.prerules2gram input) in
-  profile "eta-expansion" (fun () -> Stype.eta_expand grammar);
+  profile "eta-expansion" (fun () -> EtaExpansion.eta_expand grammar);
   let hgrammar = profile "head conversion" (fun () -> new HGrammar.hgrammar grammar) in
   let cfa = profile "0CFA" (fun () ->
       let cfa = new Cfa.cfa hgrammar in

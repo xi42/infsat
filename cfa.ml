@@ -133,9 +133,7 @@ class cfa (hgrammar : hgrammar) = object(self)
       i.e., t1 .. (t2 .. (tN (f arg1 .. argK) ..) ..) .. for some terminals tX and terms argY. *)
   val mutable array_dep_nt_nt_lin : nts array = [||]
 
-  (* --- logic --- *)
-
-  (* --- TODO split into categories --- *)
+  (* --- printing --- *)
 
   method print_binding (binding : hterms_id binding) =
     print_string @@ String.concat ", " @@ List.map (fun (i, j, id) ->
@@ -144,19 +142,23 @@ class cfa (hgrammar : hgrammar) = object(self)
     print_string "\n"
 
   method print_binding_array =
-    print_string "bindings (nt --> bindings list)\n\n";
+    print_string @@ "bindings (nt --> one binding per line, comma-separated same-nt parts)\n" ^
+                    "=====================================================================\n\n";
     for nt = 0 to Array.length binding_array_nt - 1 do (* TODO iter *)
       print_string @@ hgrammar#nt_name nt ^ ":\n";
       List.iter self#print_binding (binding_array_nt).(nt)
     done
+    
+  (* --- TODO split into categories --- *)
 
   method add_index rho i =
     match rho with
     | [] -> []
-    | termsid::rho' -> (* for each args_id *)
-      let n = List.length @@ hgrammar#id2terms termsid in (* check how many terms are under args_id *)
+    | ids :: rho' -> (* for each args_id *)
+      (* check how many terms are under args_id *)
+      let n = List.length @@ hgrammar#id2terms ids in
       let j = i+n in
-      (i, j - 1, termsid) :: self#add_index rho' j (* each termsid is converted to (first_term_number, last_term_number, termsid), like (0, 3, ...);(4, 5, ...);(6, 11, ...), i.e., start and end positions on a concatenated list of all terms *)
+      (i, j - 1, ids) :: self#add_index rho' j (* each termsid is converted to (first_term_number, last_term_number, termsid), like (0, 3, ...);(4, 5, ...);(6, 11, ...), i.e., start and end positions on a concatenated list of all terms *)
 
   method register_dep_termid_nt (id : hterms_id) (nt : nt_id) (termss : hterms_id binding) =
     let x = tab_termid_nt.(id) in
@@ -234,7 +236,7 @@ class cfa (hgrammar : hgrammar) = object(self)
       time adding it to binding_array_var. *)
   method register_binding_singlevar nt i term =
     let tab = binding_array_var.(nt) in (* binding_array_var[nt_id][arg_id] = [...] *)
-    let (binds, changed) = self#insert_var_binding term tab.(i) in (* making sure term is in binding_array_var[nt_id][arg_id] *)
+    let binds, changed = self#insert_var_binding term tab.(i) in (* making sure term is in binding_array_var[nt_id][arg_id] *)
     if changed then (* if it was added just now *)
       begin
         tab.(i) <- binds; (* persist the addition *)
@@ -309,7 +311,7 @@ class cfa (hgrammar : hgrammar) = object(self)
   (** Processing hterms. *)
   method process_node hterm = 
     match self#lookup_nodetab hterm with
-    | Some(_) -> (* hterm has been processed before *)
+    | Some _ -> (* hterm has been processed before *)
       ()
     | None -> (* the hterm has not been processed yet *)
       let (h, h_args) = hterm in
@@ -322,22 +324,22 @@ class cfa (hgrammar : hgrammar) = object(self)
         let (_, termss) = hgrammar#decompose_hterm hterm in
         (* ignore the terminal and go deeper *)
         self#expand_terminal termss
-      | HVar(x) ->
+      | HVar x ->
         (* check what hterms flow into x (these can also be variables) *)
         let x_hterms = self#lookup_binding_var x in
         (* substitute these hterms into x and enqueue resulting application *)
         List.iter (fun (h, x_args) ->
-            self#enqueue_node (h, x_args@h_args)
+            self#enqueue_node (h, x_args @ h_args)
           ) x_hterms;
         self#register_variable_head_node x node
-      | HNT(f) ->
+      | HNT nt ->
         (* Remember in binding_array_nt that there was an application f h_args. Also remember
            that h_args were being used as an argument to a nonterminal in termid_isarg. *)
-        self#register_binding f h_args;
+        self#register_binding nt h_args;
         (* Enqueue the body hterm, ignoring all arguments. Note that arguments are not enqueued.
            If the arguments don't have kind O, they can be passed as arguments again, or used
            as variable head, which finds the original terms. *)
-        self#enqueue_node @@ hgrammar#nt_body f
+        self#enqueue_node @@ hgrammar#nt_body nt
 
   (** Expand nodes in queue until it's empty. *)
   method expand : unit =
@@ -528,7 +530,6 @@ class cfa (hgrammar : hgrammar) = object(self)
   method lookup_dep_nt_nt_lin nt =
     array_dep_nt_nt_lin.(nt)
 
-  (* TODO remove dependency on grammar#rule *)
   method mk_binding_depgraph =
     tab_termid_nt <- Array.make hgrammar#hterms_count []; (* array of lists for each head term (hterm) *)
     tab_binding_env <- Array.make hgrammar#hterms_count [];

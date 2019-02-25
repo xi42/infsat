@@ -1,7 +1,7 @@
 open Flags
 open Grammar
 open Profiling
-open Stype
+open Sort
 open Syntax
 open Type
 open Typing
@@ -42,7 +42,7 @@ let worklist_nt_binding : Cfa.binding TwoLayerQueue.t ref = ref (TwoLayerQueue.m
 
 (* --- logic --- *)
 
-type tstate = ity * Stype.st
+type tstate = ity * st
 type delta = (tstate * tr) list
 and tr = TrNT of nt_id | TrT of nameT
        | TrApp of tstate * tstate list

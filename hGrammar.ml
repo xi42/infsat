@@ -96,7 +96,7 @@ class hgrammar (grammar : grammar) = object(self)
     headvars_in_term @@ snd @@ grammar#rule nt
 
   (** List of all nonterminals in terms without duplicates. *)
-  method nt_in_terms (terms : term list) : SortedNTs.t =
+  method nt_in_terms (terms : term list) : nts =
     match terms with
     | [] -> SortedNTs.empty
     | t :: terms' -> SortedNTs.merge (nt_in_term t) (self#nt_in_terms terms')
@@ -118,7 +118,7 @@ class hgrammar (grammar : grammar) = object(self)
       Intuitively, it returns on the left all nonterminals that have have a sequence (possibly
       empty) of terminals applied to them and appear exactly once in the term, and the rest of
       nonterminals on the right. *)
-  method nt_in_term_with_linearity (term : term) : SortedNTs.t * SortedNTs.t =
+  method nt_in_term_with_linearity (term : term) : nts * nts =
     match term with
     | T _ | Var _ -> (SortedNTs.empty, SortedNTs.empty)
     | NT f -> (SortedNTs.singleton f, SortedNTs.empty)
@@ -239,6 +239,9 @@ class hgrammar (grammar : grammar) = object(self)
           ) hterms) ^
         "]"
       ) ids)
+
+  method string_of_hterms (id : hterms_id) : string =
+    Utilities.string_of_list self#string_of_hterm @@ self#id2hterms id
 
   method print_hterm (hterm : hterm) =
     print_string (self#string_of_hterm hterm)

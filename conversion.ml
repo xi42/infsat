@@ -21,29 +21,28 @@ let new_ntaux () =
   x
 
 (** Maps nonterminal names to fresh ids. *)
-let tab_ntname2id = Hashtbl.create 1000
+let tab_nt_name2id = Hashtbl.create 1000
 
 let register_nt ntname =
-  if Hashtbl.mem tab_ntname2id ntname then failwith ("Duplicated nonterminal " ^ ntname)
+  if Hashtbl.mem tab_nt_name2id ntname then
+    failwith @@ "Duplicated nonterminal " ^ ntname
   else 
     let nt = new_nt() in 
-    Hashtbl.add tab_ntname2id ntname nt;
+    Hashtbl.add tab_nt_name2id ntname nt;
     (!nt_kinds).(nt) <- (ntname, O) (* for the moment, ignore the kind *)
 
-let lookup_ntid ntname =
-  try Hashtbl.find tab_ntname2id ntname
-  with Not_found -> failwith @@ "Undefined nonterminal " ^ ntname
+let lookup_nt_id nt_name =
+  try Hashtbl.find tab_nt_name2id nt_name
+  with Not_found -> failwith @@ "Undefined nonterminal " ^ nt_name
 
 let aux_rules = ref []
 let register_new_rule f arity body =
-   aux_rules := (f,arity,body)::!aux_rules
+   aux_rules := (f, arity, body) :: !aux_rules
 
 let rec depth_of_term term =
   match term with
   | T _ | NT _ | Var _ -> 0
   | App (t1, t2) -> max (depth_of_term t1) (depth_of_term t2 + 1)
-
-
 
 let rec midterm2term vmap pterm =
   match pterm with
@@ -57,7 +56,7 @@ let rec midterm2term vmap pterm =
           with
           | Not_found -> failwith @@ "Undefined variable " ^ s ^ " used"
         end
-      | MNT s -> NT (lookup_ntid s)
+      | MNT s -> NT (lookup_nt_id s)
       | MFun _ -> failwith "Expected no functions at this point"
       | MT a -> T a
     in
@@ -72,12 +71,12 @@ let rec midterm2term vmap pterm =
 and normalize_term term =
   match term with
   | App _ -> (* reduces outer applications *)
-    if depth_of_term term > !(Flags.normalization_depth) then
-      let vars = SortedVars.to_list (vars_in_term term) in
+    if depth_of_term term > !Flags.normalization_depth then
+      let vars = SortedVars.to_list @@ vars_in_term term in
       let arity = List.length vars in
       let nt = new_ntaux () in
       let subst = List.combine vars
-          (List.map (fun i->Var (nt, i)) (fromto 0 arity))
+          (List.map (fun i-> Var (nt, i)) (fromto 0 arity))
       in
       let term' = Grammar.subst_term subst term in
       register_new_rule nt arity term';
@@ -152,7 +151,7 @@ let elim_fun_from_midrules (rules : midrules) : midrules =
   let rules', newrules =
     List.fold_left
       (fun (rules', newrules) rule ->
-         let (rule', newrules') = elim_fun_from_midrule rule newrules in
+         let rule', newrules' = elim_fun_from_midrule rule newrules in
          (rule' :: rules', newrules')
       ) ([], []) rules
   in
@@ -275,7 +274,8 @@ let prerules2midrules (prerules : Syntax.prerules)
     Distinguishes between variables and terminals. Eliminates lambdas from inside of nonterminal
     bodies by replacing them with fresh nonterminals.
     The output grammar has dummy sorts of nonterminals. *)
-let prerules2gram (prerules, preterminals : Syntax.prerules * Syntax.preterminals) : Grammar.grammar =
+let prerules2gram
+    (prerules, preterminals : Syntax.prerules * Syntax.preterminals) : Grammar.grammar =
   (* terminology:
      * Prerules are rules with terminals as strings.
      * Midrules are rules with terminals converted to a, b, or e.

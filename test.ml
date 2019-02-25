@@ -25,18 +25,13 @@ let mk_grammar rules =
   let g = new grammar nonterminals [||] rules in
   print_string "Creating grammar:\n";
   g#print_gram;
-  Stype.eta_expand g;
+  EtaExpansion.eta_expand g;
   g
 
 let mk_hgrammar g =
   new HGrammar.hgrammar g
 
-let mk_cfa g hg =
-  let hg =
-    match hg with
-    | None -> mk_hgrammar g
-    | Some g -> g
-  in
+let mk_cfa hg =
   let cfa = new Cfa.cfa hg in
   cfa#expand;
   cfa#mk_binding_depgraph;
@@ -44,7 +39,7 @@ let mk_cfa g hg =
 
 let mk_typing g =
   let hg = mk_hgrammar g in
-  let cfa = mk_cfa g (Some hg) in
+  let cfa = mk_cfa hg in
   (hg, new Typing.typing hg cfa)
 
 let type_check_nt_wo_env (typing : typing) (hg : hgrammar) (nt : nt_id) (target : ty) =
@@ -304,17 +299,18 @@ let typing_xyyz_test () =
   ]
 
 (** Grammar that tests typing with duplication in N1 when N2 receives two the same arguments. It
-    also tests no duplication when these arguments are different in N3. *)
+    also tests no duplication when these arguments are different in N3. It also has a binding where
+    N4 is partially applied, so it has two elements from two different nonterminals. *)
 let grammar_dup () = mk_grammar
     [|
-      (* N0 -> b (b (N1 a) (N3 a a)) (N4 a a (a e)) *)
+      (* N0 -> b (b (N1 a) (N3 a a)) (N5 N4 (a e)) *)
       (0, App (App (
            T B,
            App (App (
                T B,
                App (NT 2, T A)),
                 App (App (NT 3, T A), App (T A, T E)))),
-               App (App (App (NT 4, T A), T A), App (T A, T E))));
+               App (App (NT 5, NT 4), App (T A, T E))));
       (* N1 x y z -> x (y z) *)
       (3, App (Var (1, 0), App  (Var (1, 1), Var (1, 2))));
       (* N2 x -> N1 x x (a e) *)
@@ -323,6 +319,10 @@ let grammar_dup () = mk_grammar
       (2, App (App (App (NT 1, Var (3, 0)), Var (3, 0)), Var (3, 1)));
       (* N4 x y z -> N1 x y z *)
       (3, App (App (App (NT 1, Var (4, 0)), Var (4, 1)), Var (4, 2)));
+      (* N5 x -> N6 (x a) *)
+      (1, App (NT 6, App (Var (5, 0), T A)));
+      (* N6 x -> x a *)
+      (1, App (Var (6, 0), T A))
     |]
 
 let typing_dup_test () =
@@ -416,46 +416,61 @@ let typing_test () : test =
 
 let cfa_test () : test =
   init_flags ();
-  let g = grammar_xyyz () in
-  let hg = mk_hgrammar g in
-  let cfa = mk_cfa g @@ Some hg in
+  let hg_xyyz = mk_hgrammar @@ grammar_xyyz () in
+  let cfa_xyyz = mk_cfa hg_xyyz in
+  let hg_dup = mk_hgrammar @@ grammar_dup () in
+  let cfa_dup = mk_cfa hg_dup in
   "cfa" >:::
   [
     (* empty binding with no variables *)
     "nt_binding-1" >:: (fun _ ->
         assert_equal
           [[]]
-          (cfa#lookup_bindings_for_nt 0)
+          (cfa_xyyz#lookup_bindings_for_nt 0)
       );
 
     (* single binding, directly *)
     "nt_binding-2" >:: (fun _ ->
         assert_equal
           [
-            [(0, 2, List.hd @@ snd @@ hg#nt_body 0)]
+            [(0, 2, List.hd @@ snd @@ hg_xyyz#nt_body 0)]
           ]
-          (cfa#lookup_bindings_for_nt 1)
+          (cfa_xyyz#lookup_bindings_for_nt 1)
       );
 
     (* two bindings, both indirectly due to partial application *)
     "nt_binding-3" >:: (fun _ ->
         assert_equal
           [
-            "nt2v2";
-            "nt3v1"
+            "[nt2v2]";
+            "[nt3v1]"
           ]
           (List.sort Pervasives.compare @@ List.map (fun binding ->
                match binding with
-               | [(_, _, id)] -> String.concat ", " @@ List.map g#string_of_term @@ hg#id2terms id
+               | [(_, _, id)] -> hg_xyyz#string_of_hterms id
                | _ -> failwith "fail"
-             ) @@ cfa#lookup_bindings_for_nt 4)
+             ) @@ cfa_xyyz#lookup_bindings_for_nt 4)
       );
 
     (* no bindings when unreachable *)
     "nt_binding-4" >:: (fun _ ->
         assert_equal
           []
-          (cfa#lookup_bindings_for_nt 5)
+          (cfa_xyyz#lookup_bindings_for_nt 5)
+      );
+
+    (* binding with args from different nonterminals *)
+    "nt_binding-5" >:: (fun _ ->
+        assert_equal
+          [
+            [
+              (* a in N5 *)
+              (0, 0, hg_dup#locate_hterms_id 5 [0; 0; 0]);
+              (* a <var> in N6 *)
+              (1, 2, hg_dup#locate_hterms_id 6 [0])
+            ]
+          ]
+          (cfa_dup#lookup_bindings_for_nt 4) (* TODO *)
       );
 
     (* checking that cfa detected that in N0 nonterminal N1 was applied to N4 *)
@@ -464,7 +479,7 @@ let cfa_test () : test =
           [
             (HNT 4, [])
           ]
-          (cfa#lookup_binding_var (1, 1))
+          (cfa_xyyz#lookup_binding_var (1, 1))
       );
   ]
   
