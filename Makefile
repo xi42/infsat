@@ -1,4 +1,4 @@
-SOURCE = flags.ml profiling.ml utilities.ml sortedList.ml setQueue.ml twoLayerQueue.ml batchQueue.ml syntax.ml infSatParser.mli infSatParser.ml infSatLexer.ml grammarCommon.ml grammar.ml conversion.ml etaExpansion.ml hGrammar.ml binding.ml cfa.ml type.ml htyStore.ml environment.ml typing.ml main.ml
+SOURCE = flags.ml profiling.ml utilities.ml sortedList.ml setQueue.ml twoLayerQueue.ml batchQueue.ml syntax.ml infSatParser.mli infSatParser.ml infSatLexer.ml grammarCommon.ml grammar.ml conversion.ml etaExpansion.ml hGrammar.ml binding.ml cfa.ml type.ml htyStore.ml environment.ml typing.ml saturation.ml main.ml
 
 all: infsat-debug TAGS
 

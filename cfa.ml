@@ -133,6 +133,14 @@ class cfa (hgrammar : hgrammar) = object(self)
       i.e., t1 .. (t2 .. (tN (f arg1 .. argK) ..) ..) .. for some terminals tX and terms argY. *)
   val mutable array_dep_nt_nt_lin : nts array = [||]
 
+  (* --- access --- *)
+
+  method hterms_are_arg (id : hterms_id) : bool =
+    termid_isarg.(id)
+  
+  method has_head_vars (nt : nt_id) : bool =
+    SortedVars.is_empty array_headvars.(nt)
+  
   (* --- printing --- *)
 
   method print_binding (binding : hterms_id binding) =

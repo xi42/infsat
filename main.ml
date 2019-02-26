@@ -61,12 +61,12 @@ let report_finiteness input : bool =
       cfa#mk_binding_depgraph;
       cfa)
   in
+  let saturation = profile "initializing saturation" (fun () ->
+      new Saturation.saturation hgrammar cfa
+    )
+  in
   profile "saturation" (fun () ->
-      true
-        (*
-      let saturation = new Saturation.saturation cfa hgrammar in
       saturation#saturate
-*)
     )
 
 let string_of_input (prerules, tr) =
@@ -140,6 +140,11 @@ let main () : unit =
       exit (-1)
   in
   let start_t = Sys.time () in
-  ignore (parse_and_report_finiteness filename);
+  let res = parse_and_report_finiteness filename in
   let end_t = Sys.time () in
-  report_timings start_t end_t
+  report_timings start_t end_t;
+  (* TODO do that only with quiet option *)
+  if res then
+    exit 0
+  else
+    exit 1

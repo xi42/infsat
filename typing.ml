@@ -7,15 +7,15 @@ open HtyStore
 open Type
 open Utilities
 
-class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
+class typing (hg : hgrammar) (cfa : cfa) = object(self)
   (* --- registers --- *)
 
   (** nt_ity[nt] has all typings of nonterminal nt. *)
-  val nt_ity : ity array = Array.make hgrammar#nt_count TyList.empty
+  val nt_ity : ity array = Array.make hg#nt_count TyList.empty
 
   (** htys[id] contains list of types derived under some environment for
       corresponding terms in the list of terms identified by id. *)
-  val htys : hty_store = new hty_store hgrammar
+  val htys : hty_store = new hty_store hg
 
   (* --- printing --- *)
   
@@ -171,7 +171,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
           | _ -> ""
         in
         print_string @@ String.make indent ' ' ^ "Inferring environment for " ^
-                        hgrammar#string_of_hterm hterm ^ " : " ^ string_of_ty target ^
+                        hg#string_of_hterm hterm ^ " : " ^ string_of_ty target ^
                         vars_info ^ "\n"
       end;
     let var_count = match env_data with
@@ -211,13 +211,13 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
           senv_if_var_ty_available v target @
           senv_if_var_ty_available v @@ with_productivity PR target
       | _ -> (* application *)
-        let h, args = hgrammar#decompose_hterm hterm in
+        let h, args = hg#decompose_hterm hterm in
         self#type_check_app h args target env_data no_pr_vars force_pr_var
     in
     if !Flags.verbose then
       begin
         print_string @@ String.make indent ' ' ^
-                        hgrammar#string_of_hterm hterm ^ " : " ^ string_of_ty target;
+                        hg#string_of_hterm hterm ^ " : " ^ string_of_ty target;
         match res with
         | [] -> print_string " does not type check\n"
         | envl -> print_string @@ " type checks under " ^ string_of_envl envl ^ "\n"
@@ -258,7 +258,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
           begin
             print_string @@ String.make indent ' ' ^ "* Type checking " ^
                             String.concat " -> " @@ List.map (fun (arg_term, arg_ity) ->
-                "(" ^ hgrammar#string_of_hterm arg_term ^ " : " ^ string_of_ity arg_ity ^ ")"
+                "(" ^ hg#string_of_hterm arg_term ^ " : " ^ string_of_ity arg_ity ^ ")"
               ) args;
             if head_pr then
               print_string " -> ... -> pr\n"
@@ -290,7 +290,7 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
                 if !Flags.verbose then
                   begin
                     print_string @@ String.make indent ' ' ^ "* Typing " ^
-                                    hgrammar#string_of_hterm arg_term ^ " : " ^
+                                    hg#string_of_hterm arg_term ^ " : " ^
                                     string_of_ity arg_ity ^ "\n";
                     indent <- indent + 2
                   end;
@@ -405,9 +405,25 @@ class typing (hgrammar : hgrammar) (cfa : cfa) = object(self)
   method print_nt_ity =
     print_string @@ "Types of nt:\n" ^
                     "============\n";
-    for nt = 0 to (Array.length nt_ity) - 1 do
-      print_string @@ hgrammar#nt_name nt ^ ":\n";
+    for nt = 0 to hg#nt_count - 1 do
+      print_string @@ hg#nt_name nt ^ ":\n";
       self#print_itylist nt_ity.(nt)
+    done
+
+  method print_hterms_hty =
+    print_string @@ "Types of hterms:\n" ^
+                    "================\n";
+    for id = 0 to hg#hterms_count - 1 do
+      if cfa#hterms_are_arg id then
+        begin
+          print_string @@ string_of_int id ^ ":\n";
+          let htys = htys#get_htys id in
+          List.iter (fun hty ->
+              print_string @@ String.concat "; " @@ List.map string_of_ity hty;
+              print_string "\n"
+            ) htys;
+          print_string "\n"
+        end
     done
 
   (* --- debugging --- *)
