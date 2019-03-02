@@ -426,7 +426,7 @@ let cfa_test () : test =
     "nt_binding-1" >:: (fun _ ->
         assert_equal
           [[]]
-          (cfa_xyyz#lookup_bindings_for_nt 0)
+          (cfa_xyyz#lookup_nt_bindings 0)
       );
 
     (* single binding, directly *)
@@ -435,7 +435,7 @@ let cfa_test () : test =
           [
             [(0, 2, List.hd @@ snd @@ hg_xyyz#nt_body 0)]
           ]
-          (cfa_xyyz#lookup_bindings_for_nt 1)
+          (cfa_xyyz#lookup_nt_bindings 1)
       );
 
     (* two bindings, both indirectly due to partial application *)
@@ -449,14 +449,14 @@ let cfa_test () : test =
                match binding with
                | [(_, _, id)] -> hg_xyyz#string_of_hterms id
                | _ -> failwith "fail"
-             ) @@ cfa_xyyz#lookup_bindings_for_nt 4)
+             ) @@ cfa_xyyz#lookup_nt_bindings 4)
       );
 
     (* no bindings when unreachable *)
     "nt_binding-4" >:: (fun _ ->
         assert_equal
           []
-          (cfa_xyyz#lookup_bindings_for_nt 5)
+          (cfa_xyyz#lookup_nt_bindings 5)
       );
 
     (* binding with args from different nonterminals *)
@@ -470,7 +470,7 @@ let cfa_test () : test =
               (1, 2, hg_dup#locate_hterms_id 6 [0])
             ]
           ]
-          (cfa_dup#lookup_bindings_for_nt 4) (* TODO *)
+          (cfa_dup#lookup_nt_bindings 4) (* TODO *)
       );
 
     (* checking that cfa detected that in N0 nonterminal N1 was applied to N4 *)

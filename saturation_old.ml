@@ -1202,7 +1202,7 @@ let update_ty_of_nt_incremental_for_nt g f ty =
      update_ty_of_nt_inc_wo_venv g f ty
   else
   let (_,term)=Grammar.lookup_rule g in
-  let bindings = Cfa.lookup_bindings_for_nt g in
+  let bindings = Cfa.lookup_nt_bindings g in
     List.iter (fun (binding,qsref) ->
        update_ty_of_nt_inc_for_nt_sub
           g term binding !qsref f ty) bindings
@@ -1219,7 +1219,7 @@ let print_nt_binding_queue () =
 
 let add_nt_binding_queue f =
   let (nts, a) = !nt_binding_queue in
-    a.(f) <- Cfa.lookup_bindings_for_nt f;
+    a.(f) <- Cfa.lookup_nt_bindings f;
     nt_binding_queue := (f::nts, a)
     
 let rec mk_nt_binding_queue updated_terms =

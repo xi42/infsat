@@ -160,6 +160,7 @@ class typing (hg : hgrammar) (cfa : cfa) = object(self)
       Flag no_pr_vars prevents inference of productive variables. Flag force_pr_var ensures that
       there is at least one productive variable is inferred. Only one of these flags may be true.
   *)
+  (* TODO make target an option and an optimized version when any target is okay *)
   method type_check (hterm : hterm) (target : ty) (env_data : (env, int) either)
       (no_pr_vars : bool) (force_pr_var : bool) : envl =
     assert (not (no_pr_vars && force_pr_var));
@@ -397,17 +398,14 @@ class typing (hg : hgrammar) (cfa : cfa) = object(self)
 
   (* --- printing --- *)
 
-  method print_itylist (ity : ity) =
-    TyList.iter (fun ty ->
-        print_string @@ string_of_ty ty ^ "\n"
-      ) ity
-
   method print_nt_ity =
     print_string @@ "Types of nt:\n" ^
                     "============\n";
     for nt = 0 to hg#nt_count - 1 do
       print_string @@ hg#nt_name nt ^ ":\n";
-      self#print_itylist nt_ity.(nt)
+      TyList.iter (fun ty ->
+          print_string @@ string_of_ty ty ^ "\n"
+        ) nt_ity.(nt)
     done
 
   method print_hterms_hty =

@@ -1,6 +1,7 @@
 open Binding
 open Grammar
 open GrammarCommon
+open HGrammar
 open Profiling
 open Sort
 open Type
@@ -37,7 +38,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
 
   (** Each element of this queue is a specific nonterminal binding to be typed. Subsequently
       dequeued bindings are for the same nonterminal as previously, if available. *)
-  val nt_binding_queue : hty binding TwoLayerQueue.t = TwoLayerQueue.make hg#nt_count
+  val nt_binding_queue : hterms_id binding TwoLayerQueue.t = TwoLayerQueue.make hg#nt_count
 
   (** Each element of this queue is a nonterminal to be typed. Enqueuing to this queue is
       idempotent. *)
@@ -80,13 +81,37 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
   method process_nt_binding_queue : bool =
     false
       
-  (** Processes prop_nt_queue if not empty and returns if it was not empty. *)
+  (** Processes nt_queue if not empty and returns if it was not empty. *)
   method process_nt_queue : bool =
-    false
+    try
+      let nt = SetQueue.dequeue nt_queue in
+      (* TODO version for no environment ones *)
+      let bindings = cfa#lookup_nt_bindings nt in
+      if !Flags.verbose then
+        print_string @@ "nt_queue: Enqueuing all " ^ string_of_int (List.length bindings) ^
+                        " bindings of nonterminal " ^ string_of_int nt ^ "\n";
+      List.iter (fun binding ->
+          TwoLayerQueue.enqueue nt_binding_queue nt binding
+        ) bindings;
+      true
+    with
+    | SetQueue.Empty -> false
 
-  (** Processes prop_hterms_queue if not empty and returns if it was not empty. *)
+  (** Processes hterms_queue if not empty and returns if it was not empty. *)
   method process_hterms_queue : bool =
-    false
+    try
+      let id = SetQueue.dequeue hterms_queue in
+      if !Flags.verbose then
+        print_string @@ "hterms_queue: Typing hterms " ^ string_of_int id ^ "\n";
+      let envs = cfa#lookup_dep_id_envs id in (* TODO make name more clear *)
+      List.iter (fun env ->
+          () (* TODO type hterms *)
+          (* TODO where should processing cfa lookups go? saturate or typing?
+             probably types and typing envs should stay in typing, but dependency info in sat *)
+        ) envs;
+      true
+    with
+    | SetQueue.Empty -> false
 
   (* --- saturation main loop --- *)
 
@@ -131,10 +156,10 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
     (* initializing queues *)
 
     (* enqueueing all nonterminals that can be computed without environment *)
-    (* TODO this was connected with Flags.eager condition - check it out later for optimization,
-       it also had hg#nt_arity nt = 0 if eager was false *)
+    (* TODO this was connected with Flags.eager condition with including nts with true
+       cfa#has_head_vars nt as an optimization *)
     for nt = 0 to hg#nt_count - 1 do
-      if cfa#has_head_vars nt then
+      if hg#nt_arity nt = 0 then
         SetQueue.enqueue nt_queue nt
     done;
     
