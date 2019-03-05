@@ -89,7 +89,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
       let bindings = cfa#lookup_nt_bindings nt in
       if !Flags.verbose then
         print_string @@ "nt_queue: Enqueuing all " ^ string_of_int (List.length bindings) ^
-                        " bindings of nonterminal " ^ string_of_int nt ^ "\n";
+                        " bindings of nonterminal " ^ string_of_int nt ^ "\n.";
       List.iter (fun binding ->
           TwoLayerQueue.enqueue nt_binding_queue nt binding
         ) bindings;
@@ -102,7 +102,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
     try
       let id = SetQueue.dequeue hterms_queue in
       if !Flags.verbose then
-        print_string @@ "hterms_queue: Typing hterms " ^ string_of_int id ^ "\n";
+        print_string @@ "hterms_queue: Typing hterms " ^ string_of_int id ^ ".\n";
       let envs = cfa#lookup_dep_id_envs id in (* TODO make name more clear *)
       List.iter (fun env ->
           () (* TODO type hterms *)
