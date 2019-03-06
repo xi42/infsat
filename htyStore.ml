@@ -25,3 +25,6 @@ class hty_store (hgrammar : hgrammar) = object(self)
     if not @@ List.exists (hty_eq hty) htys' then
       htys.(id) <- hty :: htys'
 end
+
+let remove_hty_duplicates (htys : hty list) : hty list =
+  Utilities.delete_duplicates @@ List.sort hty_compare htys

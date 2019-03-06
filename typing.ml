@@ -1,5 +1,4 @@
 open Binding
-open Cfa
 open Environment
 open GrammarCommon
 open HGrammar
@@ -7,7 +6,7 @@ open HtyStore
 open Type
 open Utilities
 
-class typing (hg : hgrammar) (cfa : cfa) = object(self)
+class typing (hg : hgrammar) = object(self)
   (* --- registers --- *)
 
   (** nt_ity[nt] has all typings of nonterminal nt. *)
@@ -46,30 +45,69 @@ class typing (hg : hgrammar) (cfa : cfa) = object(self)
       in
       self#mk_prod_hty_bindings (i, j) prefixes' postfixes acc'
 
-  method binding2hty_bindings : hterms_id binding -> hty binding list = function
-    | [] -> [[]]
-    | [(i, j, id)] ->
-      let htys = htys#get_htys id in 
-      List.map (fun hty -> [(i, j, hty)]) htys
-    | (i, j, id) :: binding' ->
-      match htys#get_htys id with
-      | [] -> []
-      | htys ->
-        (* recursively get all bindings without using current application info *)
-        match self#binding2hty_bindings binding' with
-        | [] -> []
-        | hty_binding ->
-          (* Make product with the current application info - each typing of hterm with
-             identifier id is valid for range i-j, so the output is all possible bindings
-             constructed by prepending one of possible types for i-j to any of current bindings.
-             This may blow up the number of possible type bindings. *)
-          self#mk_prod_hty_bindings (i, j) htys hty_binding []
+  (** Converts bindings in the form "hterms identified by id are substituted for arguments i-j"
+      into bindings in the form "arguments i-j have the types <list of types>". *)
+  method binding2hty_bindings (vars : vars option)
+      (binding : hterms_id binding) : hty binding list =
+    let vars, var_count = match vars with
+      | None -> (None, 0)
+      | Some vars ->
+        let var_count = SortedVars.length vars in
+        if var_count = 0 then
+          (None, 0)
+        else
+          let nt, _ = SortedVars.hd vars in
+          if var_count = hg#nt_arity nt then
+            (None, var_count)
+          else
+            (Some vars, var_count)
+    in
+    (* Replaces hty on indexes not mentioned in vars by T. *)
+    let rec filter_hty vars index acc hty =
+      match hty with
+      | [] -> List.rev acc
+      | ity :: hty' ->
+        if SortedVars.is_empty vars || snd (SortedVars.hd vars) <> index then
+          filter_hty vars (index + 1) (ity_top :: acc) hty'
+        else
+          filter_hty vars (index + 1) (ity :: acc) hty'
+    in
+    let rec binding2hty_bindings_aux binding =
+      match binding with
+      | [] -> [[]]
+      | [(i, j, id)] ->
+        let htys = htys#get_htys id in
+        let htys' = match j - i - var_count, vars with
+          | 0, _ | _, None -> htys
+          | _, Some vars ->
+            remove_hty_duplicates @@ List.map (filter_hty vars 0 []) htys
+        in
+        List.map (fun hty -> [(i, j, hty)]) htys'
+      | (i, j, id) :: binding' ->
+        match htys#get_htys id with
+        | [] -> [] (* short-circuit *)
+        | htys ->
+          (* recursively get all bindings without using current application info *)
+          match binding2hty_bindings_aux binding' with
+          | [] -> [] (* custom to not make many mk_prod_hty_bindings iterations *)
+          | hty_binding ->
+            (* Make product with the current application info - each typing of hterm with
+               identifier id is valid for range i-j, so the output is all possible bindings
+               constructed by prepending one of possible types for i-j to any of current bindings.
+               This may blow up the number of possible type bindings. *)
+            self#mk_prod_hty_bindings (i, j) htys hty_binding []
+    in
+    binding2hty_bindings_aux binding
                                                       
   (** Converts binding to possible environments using information on possible typings of hterms
-      flowing into given variables without regard for the context in which they were typed. *)
-  (* TODO this does not take care of duplicates *)
-  method binding2envl (var_count : int) (binding : hterms_id binding) : envl =
-    List.map (hty_binding2env var_count) @@ self#binding2hty_bindings binding
+      flowing into given variables without regard for the context in which they were typed.
+      If vars is not None then only variables with specified indexes will be in the environment
+      which can reduce the cost of creating the environment, as this can introduce duplicates that
+      are removed before computing a product.
+      This does not produce duplicates, as it is the product of unique typings taken from
+      htys and hty_store does not store duplicates. *)
+  method binding2envl (var_count : int) (vars : vars option) (binding : hterms_id binding) : envl =
+    List.map (hty_binding2env var_count) @@ self#binding2hty_bindings vars binding
 
   (* --- typing --- *)
   
@@ -408,11 +446,11 @@ class typing (hg : hgrammar) (cfa : cfa) = object(self)
         ) nt_ity.(nt)
     done
 
-  method print_hterms_hty =
+  method print_hterms_hty (should_be_printed : hterms_id -> bool) =
     print_string @@ "Types of hterms:\n" ^
                     "================\n";
     for id = 0 to hg#hterms_count - 1 do
-      if cfa#hterms_are_arg id then
+      if should_be_printed id then
         begin
           print_string @@ string_of_int id ^ ":\n";
           let htys = htys#get_htys id in

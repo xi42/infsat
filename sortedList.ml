@@ -16,7 +16,8 @@ module type SL = sig
   val tl : t -> t
   val length : t -> int
   val is_empty : t -> bool
-
+  val sublist : t -> t -> bool
+  
   val partition : (elt -> bool) -> t -> t * t
   val filter : (elt -> bool) -> t -> t
   val uniq : t -> t
@@ -87,6 +88,23 @@ struct
   let length (L l) = List.length l
 
   let is_empty (L l) = l = []
+
+  let sublist (L outer) (L inner) =
+    let rec sublist_list outer inner =
+      match outer, inner with
+      | [], [] -> true
+      | _, [] -> true
+      | [], _ -> false
+      | oh :: outer', ih :: inner' ->
+        let c = Ord.compare oh ih in
+        if c = 0 then
+          sublist_list outer' inner'
+        else if c < 0 then
+          sublist_list outer' inner
+        else
+          false
+    in
+    sublist_list outer inner
 
   (* splitting, filtering, and joining *)
 

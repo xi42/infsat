@@ -8,6 +8,10 @@ open Type
 open Utilities
 
 class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
+  (* Design note: typing with specific environments occurs in Typing, but this module is used to
+     prepare precise specification of these environments based on 0CFA output, Typing does not
+     use 0CFA depdendency information. *)
+  
   (** Place to store result if it was computed before fixpoint. *)
   val mutable result : bool option = None
 
@@ -15,7 +19,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
   val mutable iteration : int = 0
 
   (** Part that stores types and types specific terms and nonterminals. *)
-  val typing = new Typing.typing hg cfa
+  val typing = new Typing.typing hg
 
   (* --- queues --- *)
 
@@ -61,7 +65,34 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
                     "================ \n";
     typing#print_nt_ity;
     print_string "\n";
-    typing#print_hterms_hty
+    typing#print_hterms_hty cfa#hterms_are_arg
+
+  (* --- typing --- *)
+
+  (* TODO this was update_ty_of_id *)
+  method infer_hterms_hty (id : hterms_id) (binding : hterms_id binding) =
+    (* Note that while bindings are filtered to contain only relevant hterms, bindings of these
+       hterms still contain unused variables. However, computing the types of all variables does
+       not impact the cost of creating the environment, because it means that an array of types
+       will have a pointer to the type copied to each field instead of skipping over unused
+       ones. NOPE, THERE ARE DUPLICATES THEN. *)
+    ()
+    (*
+    let update_ty_of_id_aux id venvs overwrite_flag = 
+      let terms = Cfa.id2terms id in
+      List.iter
+        (fun venv -> 
+           let ty = ty_of_terms venv terms in (* compute type of terms (iteration) in given environment
+                                                 based on automata typings (cte) for terminals,
+                                                 computed nonterminal types (nt_ity) for nonterminals,
+                                                 and given environment for vars *)
+           register_hterms_atys id ty overwrite_flag)
+        venvs
+    in
+    let venvs = mk_venvs_mask env in
+    update_ty_of_id_aux id venvs overwrite_flag (* generally, try to get and register an
+                                                   intersection type for each term in sequence id *)
+*)
 
   (* --- processing queues --- *)
 
@@ -103,12 +134,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
       let id = SetQueue.dequeue hterms_queue in
       if !Flags.verbose then
         print_string @@ "hterms_queue: Typing hterms " ^ string_of_int id ^ ".\n";
-      let envs = cfa#lookup_dep_id_envs id in (* TODO make name more clear *)
-      List.iter (fun env ->
-          () (* TODO type hterms *)
-          (* TODO where should processing cfa lookups go? saturate or typing?
-             probably types and typing envs should stay in typing, but dependency info in sat *)
-        ) envs;
+      cfa#lookup_hterms_bindings id |> List.iter (self#infer_hterms_hty id);
       true
     with
     | SetQueue.Empty -> false

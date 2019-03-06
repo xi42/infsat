@@ -39,8 +39,7 @@ let mk_cfa hg =
 
 let mk_typing g =
   let hg = mk_hgrammar g in
-  let cfa = mk_cfa hg in
-  (hg, new Typing.typing hg cfa)
+  (hg, new Typing.typing hg)
 
 let type_check_nt_wo_env (typing : typing) (hg : hgrammar) (nt : nt_id) (target : ty) =
   typing#type_check (hg#nt_body nt) target (Right (hg#nt_arity nt))
@@ -233,14 +232,14 @@ let typing_xyyz_test () =
   let hg, typing = mk_typing @@ grammar_xyyz () in
   typing#add_nt_ty 2 @@ ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr";
   typing#add_nt_ty 3 @@ ty_of_string "(np -> np) -> np -> np";
-  let id1 = hg#locate_hterms_id 0 [0] in
-  typing#get_htys#add_hty id1
+  let id0_0 = hg#locate_hterms_id 0 [0] in
+  typing#get_htys#add_hty id0_0
     [
       ity_of_string "pr -> pr";
       ity_of_string "np -> np";
       ity_of_string "np -> pr"
     ];
-  typing#get_htys#add_hty id1
+  typing#get_htys#add_hty id0_0
     [
       ity_of_string "pr -> pr";
       ity_of_string "pr -> pr";
@@ -280,7 +279,8 @@ let typing_xyyz_test () =
           (type_check_nt_wo_env typing hg 4 NP false false)
       );
 
-    "binding2envl" >:: (fun _ ->
+    (* Basic creation of bindings without a product *)
+    "binding2envl-1" >:: (fun _ ->
         assert_equal_envls
           [
             new env @@ [|
@@ -294,7 +294,21 @@ let typing_xyyz_test () =
               ity_of_string "np -> pr"
             |]
           ]
-          (typing#binding2envl (hg#hterm_arity id1) [(0, 0, id1)])
+          (typing#binding2envl (hg#hterm_arity id0_0) None [(0, 0, id0_0)])
+      );
+
+    (* Basic creation of bindings with filtered out all but first variables, without product *)
+    "binding2envl-2" >:: (fun _ ->
+        assert_equal_envls
+          [
+            new env @@ [|
+              ity_of_string "pr -> pr";
+              ity_of_string "T";
+              ity_of_string "T"
+            |]
+          ]
+          (typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)]))
+             [(0, 0, id0_0)])
       );
   ]
 
@@ -470,7 +484,7 @@ let cfa_test () : test =
               (1, 2, hg_dup#locate_hterms_id 6 [0])
             ]
           ]
-          (cfa_dup#lookup_nt_bindings 4) (* TODO *)
+          (cfa_dup#lookup_nt_bindings 4)
       );
 
     (* checking that cfa detected that in N0 nonterminal N1 was applied to N4 *)

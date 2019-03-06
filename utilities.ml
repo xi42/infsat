@@ -41,7 +41,7 @@ let rec fold_left_short_circuit (f : 'a -> 'b -> 'a) (acc : 'a) (l : 'b list) (b
     else
       fold_left_short_circuit f (f acc x) l' bottom
 
-(** Lexicographical sort of lists with custom comparison of elements. *)
+(** Lexicographical comparison of lists with custom comparison of elements. *)
 let rec compare_lists (cmp : 'a -> 'a -> int) (l1 : 'a list) (l2 : 'a list) : int =
   match l1, l2 with
   | x1 :: l1', x2 :: l2' ->
@@ -118,6 +118,23 @@ let split_outside_parens (str : string) (sep : string) : (string * string) optio
   done;
   !res
 
+let delete_duplicates l =
+  let rec delete_duplicates_aux l acc =
+    match l with
+    | [] -> List.rev acc
+    | [x] -> [x]
+    | x :: (y :: l as yl) ->
+      if x = y then
+        delete_duplicates_aux yl acc
+      else
+        delete_duplicates_aux yl @@ x :: acc
+  in
+  delete_duplicates_aux l []
+
+let delete_duplicates_unsorted c =
+  let c' = List.sort compare c in
+  delete_duplicates c'
+
 (* --- ? --- *)
 
 let id (x : 'a) : 'a = x
@@ -141,20 +158,6 @@ let list_max c l =
         f c l' max
   in
   f c (List.tl l) (List.hd l)
-
-let rec delete_duplication l =
-  match l with
-  | [] -> []
-  | [x] -> [x]
-  | x :: y :: l ->
-    if x = y then
-      delete_duplication @@ y :: l
-    else
-      x :: delete_duplication (y :: l)
-
-let delete_duplication_unsorted c =
-  let c' = List.sort compare c in
-  delete_duplication c'
 
 (*
 

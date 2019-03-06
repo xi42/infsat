@@ -834,12 +834,8 @@ let update_ty_of_id_aux id venvs overwrite_flag =
 (* update the set of types for each term list [t1;...;tk] *)
 (** id represents a sequence of terms (hterms). env represents which variables inside them were
     replaced with which other hterms in a single application of nonterminal in which hterms with
-    id are present. TODO what this does? *)
+    id are present. *)
 let update_ty_of_id id env overwrite_flag =
-(*  (if !Flags.debugging then
-   (print_string ("updating the type for "^(string_of_int id)^"\n");
-    Cfa.print_binding env));
-*)
   let venvs = mk_venvs_mask env in
   update_ty_of_id_aux id venvs overwrite_flag (* generally, try to get and register an
                                                  intersection type for each term in sequence id *)
@@ -901,8 +897,8 @@ let register_nte nt ity =
 
 (** Compute and update the type of hterm termid for all environments that contain id and that have
     the type of this id updated to tys. *)
-let pupdate_incremental_ty_of_id termid (id,tys) overwrite_flag = 
-  let envs = Cfa.lookup_dep_id_envs termid in
+let update_incremental_ty_of_id termid (id,tys) overwrite_flag = 
+  let envs = Cfa.lookup_hterms_bindings termid in
    List.iter (fun env -> 
       if List.exists (fun (_,_,_,id1)->id=id1) env then (* for environments of termid which
                                                            contain id *)
@@ -1194,7 +1190,7 @@ let update_ty_of_nt_inc_for_nt_sub g term binding qs f ty =
      update_ty_of_nt_inc_for_nt_sub_venv g term venv qs f ty) venvs
 
 let has_noheadvar (f : nt_id) : bool =
-  !Cfa.array_headvars.(f) = SortedVars.empty && !Flags.eager
+  SortedVars.is_empty !Cfa.array_headvars.(f) && !Flags.eager
 
 
 let update_ty_of_nt_incremental_for_nt g f ty =
@@ -1251,7 +1247,7 @@ and saturate_vartypes_wo_overwrite() : unit =
   ( try (* typed id with some type that was less or equally strict, did not save it *)
     let id = SetQueue.dequeue !worklist_var_overwritten in
     let _ = Utilities.debug ("processing terms "^(string_of_int id)^" without overwriting\n") in
-    let envs = Cfa.lookup_dep_id_envs id in (* what variables were applied to id, bundled per
+    let envs = Cfa.lookup_hterms_bindings id in (* what variables were applied to id, bundled per
                                               application *)
       List.iter (fun env-> update_ty_of_id id env false) envs 
   with SetQueue.Empty ->
@@ -1346,7 +1342,7 @@ let rec saturation_loop () : bool =
     try
       let id = SetQueue.dequeue !hterms_queue (* we take one of enqueued hterms *) in
       let _ = Utilities.debug ("Typing hterms "^(string_of_int id)^"\n\n") in
-      let envs = Cfa.lookup_dep_id_envs id in (* hterms that were (possibly) put into given variables
+      let envs = Cfa.lookup_hterms_bindings id in (* hterms that were (possibly) put into given variables
                                                  in hterms with dequeued id (propagating types
                                                  backwards) *)
       (* There was an application where hterm id had put some other hterms (env) in given variables

@@ -24,11 +24,13 @@ class hgrammar (grammar : grammar) = object(self)
       (0-indexed) of X-th nonterminal (0-indexed).
       Note that two terms with variables that are used in two different nonterminal definitions
       will have different ids, because variables are tuples (nt_id, var_id) that are disjoint for
-      different nonterminal bodies. *)
-  val mutable hterms_data : (hterm list * Grammar.term list * SortedVars.t * nt_id option) array = [||]
+      different nonterminal bodies.
+      More is allocated than needed here. *)
+  val hterms_data : (hterm list * Grammar.term list * vars * nt_id option) array =
+    Array.make grammar#size ([], [], SortedVars.empty, None)
 
   (** Reverse of fst hterms_data, i.e., hterms_data[tab_terms_id[hterms]] = (hterms, _, _). *)
-  val mutable tab_terms_id = Hashtbl.create 100000
+  val tab_terms_id = Hashtbl.create 100000
   
   (** After the nonterminals are numbered, this is a map from nonterminals' ids to their bodies in
       head form. Bodies in head form are tuples (h, [as1; as2; ..]), where asX are integers that
@@ -36,7 +38,7 @@ class hgrammar (grammar : grammar) = object(self)
       then represents
       h a11 a12 ... a1n a21 a22 ... a2m ...
       Mappings from asX to lists are in hterms_data. *)
-  val mutable nt_bodies : hterm array = [||]
+  val nt_bodies : hterm array = Array.make grammar#nt_count (HNT (-1), [])
 
   (** Increasing counter for fresh identifiers for hterms (all terms and subterms in head form). *)
   val mutable next_hterms_id : int = 0
@@ -63,7 +65,7 @@ class hgrammar (grammar : grammar) = object(self)
     let _, terms, _, _ = hterms_data.(id) in
     terms
 
-  method id2vars (id : hterms_id) : SortedVars.t =
+  method id2vars (id : hterms_id) : vars =
     let _, _, vars, _ = hterms_data.(id) in
     vars
 
@@ -169,7 +171,7 @@ class hgrammar (grammar : grammar) = object(self)
     | Var(x) -> HVar(x)
     | _ -> assert false
 
-  method vars_in_hterm (h, ids : hterm) : SortedVars.t =
+  method vars_in_hterm (h, ids : hterm) : vars =
     let vs1 =
       match h with
       | HVar x -> SortedVars.singleton x
@@ -177,13 +179,13 @@ class hgrammar (grammar : grammar) = object(self)
     in
     List.fold_left (fun vs id -> SortedVars.merge vs (self#id2vars id)) vs1 ids
 
-  method vars_in_hterms (hterms : hterm list) : SortedVars.t =
+  method vars_in_hterms (hterms : hterm list) : vars =
     List.fold_left
       (fun vars hterm ->
          SortedVars.merge vars (self#vars_in_hterm hterm))
       SortedVars.empty hterms
 
-  method private hterm_nt (vars : SortedVars.t) : nt_id option =
+  method private hterm_nt (vars : vars) : nt_id option =
     if SortedVars.is_empty vars then
       None
     else
@@ -278,11 +280,7 @@ class hgrammar (grammar : grammar) = object(self)
     self#locate_hterms_id_in_hterm (self#nt_body nt) pos
 
   initializer
-    let size = grammar#size in
-    (* allocating more than needed *)
-    hterms_data <- Array.make size ([], [], SortedVars.empty, None);
-    let dummy_hterm : hterm = (HNT (-1), []) in
-    nt_bodies <- Array.make grammar#nt_count dummy_hterm; (* convert each rule to a normalized form and store in this global array along with its arity (this is ref) *)
+    (* convert each rule to a normalized form and store in this global array along with its arity (this is ref) *)
     for nt = 0 to grammar#nt_count - 1 do
       let arity, body = grammar#rule nt in
       let hterm = self#convert_term body in

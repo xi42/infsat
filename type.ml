@@ -40,6 +40,8 @@ end
 type ty = Ty.t = PR | NP | Fun of ty_id * TyList.t * Ty.t
 type ity = TyList.t
 
+let ity_top = TyList.empty
+
 let next_ty_id : ty_id ref = ref 2
 let new_ty_id() =
   let x = !next_ty_id in
