@@ -51,8 +51,8 @@ class typing (hg : hgrammar) = object(self)
 
   (** Converts bindings in the form "hterms identified by id are substituted for arguments i-j"
       into bindings in the form "arguments i-j have the types <list of types>". *)
-  method binding2hty_bindings (mask : vars option)
-      (binding : hterms_id binding) : hty binding list =
+  method binding2hty_bindings (mask : vars option) (binding : hterms_id binding)
+    (fixed_var_ity : (var_id * ity) option) : hty binding list =
     let mask, mask_size = match mask with
       | None -> (None, 0)
       | Some mask ->
@@ -77,12 +77,20 @@ class typing (hg : hgrammar) = object(self)
       | [] -> [[]]
       | [(i, j, id)] ->
         let htys = htys#get_htys id in
-        let htys' = match j - i - mask_size, mask with
+        let htys = match fixed_var_ity with
+          | Some ((_, ix), ity) ->
+            if i <= ix && ix <= j then
+              htys |> List.map (fun hty -> Utilities.replace_nth hty (ix - i) ity)
+            else
+              htys
+          | None -> htys
+        in
+        let htys = match j - i - mask_size, mask with
           | 0, _ | _, None -> htys
           | _, Some vars ->
             remove_hty_duplicates @@ List.map (apply_hty_mask vars 0 []) htys
         in
-        List.map (fun hty -> [(i, j, hty)]) htys'
+        List.map (fun hty -> [(i, j, hty)]) htys
       | (i, j, id) :: binding' ->
         match htys#get_htys id with
         | [] -> [] (* short-circuit *)
@@ -105,9 +113,12 @@ class typing (hg : hgrammar) = object(self)
       and other will have type T. This can reduce the cost of creating the environment, as
       replacing types with T can generate duplicates that are removed before computing a product.
       This does not return duplicate environments, as it is the product of unique typings taken
-      from htys and hty_store does not store duplicates. *)
-  method binding2envl (var_count : int) (mask : vars option) (binding : hterms_id binding) : envl =
-    List.map (hty_binding2env var_count) @@ self#binding2hty_bindings mask binding
+      from htys and hty_store does not store duplicates.
+      If fixed_var_ity is not None, then only bindings with that type for given variables are
+      returned. *)
+  method binding2envl (var_count : int) (mask : vars option)
+      (fixed_var_ity : (var_id * ity) option) (binding : hterms_id binding) : envl =
+    List.map (hty_binding2env var_count) @@ self#binding2hty_bindings mask binding fixed_var_ity
 
   (* --- typing --- *)
   
@@ -193,14 +204,13 @@ class typing (hg : hgrammar) = object(self)
         annotate_args_ty terms ty []
       ) ity
         
-  (** Infer variable environments under which type checking of hterm : ty succeeds. Assume no head
-      variables are present and infer type of each variable based on the type of the head that is
-      applied to it.
+  (** Infer variable environments under which type checking of hterm : target succeeds. If target
+      is not specified, environments are inferred for all possible targets. Types of variables
+      are looked up in the supplied in env_data environment or inferred if only the number of
+      variables is provided in env_data. Inference of variable types requires no head variables
+      present in hterm.
       Flag no_pr_vars prevents inference of productive variables. Flag force_pr_var ensures that
-      there is at least one productive variable is inferred. Only one of these flags may be true.
-      The result has all duplication values set to false.
-  *)
-  (* TODO update docs with None target *)
+      there is at least one productive variable. Only one of these flags may be true. *)
   method type_check (hterm : hterm) (target : ty option) (env_data : (env, int) either)
       (no_pr_vars : bool) (force_pr_var : bool) : telm =
     assert (not (no_pr_vars && force_pr_var));

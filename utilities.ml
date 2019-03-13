@@ -34,6 +34,17 @@ let string_of_bool = function
   | true -> "true"
   | false -> "false"
 
+(* --- tuples --- *)
+
+(** Lexicographical comparison of a pair with custom comparison of elements. *)
+let compare_pair (cmp1 : 'a -> 'a -> int) (cmp2 : 'b -> 'b -> int)
+    (x1, y1 : 'a * 'b) (x2, y2 : 'a * 'b) : int =
+  let c1 = cmp1 x1 x2 in
+  if c1 = 0 then
+    cmp2 y1 y2
+  else
+    c1
+
 (* --- lists --- *)
 
 (** Version of fold_left that takes additional argument bottom. When acc is bottom after an
@@ -61,15 +72,6 @@ let rec compare_lists (cmp : 'a -> 'a -> int) (l1 : 'a list) (l2 : 'a list) : in
   | [], _ -> -1
   | _, [] -> 1
 
-(** Lexicographical comparison of a pair with custom comparison of elements. *)
-let compare_pair (cmp1 : 'a -> 'a -> int) (cmp2 : 'b -> 'b -> int)
-    (x1, y1 : 'a * 'b) (x2, y2 : 'a * 'b) : int =
-  let c1 = cmp1 x1 x2 in
-  if c1 = 0 then
-    cmp2 y1 y2
-  else
-    c1
-
 (** A list of integers from m to n - 1 (empty if m >= n). *)
 let rec fromto (m : int) (n : int) : int list =
   if m >= n then
@@ -82,6 +84,16 @@ let index_list (l : 'a list) : (int * 'a) list =
   let len = List.length l in
   let indices = fromto 0 len in
   List.combine indices l
+
+(** Replaces i-th element of list l with r. *)
+let replace_nth (l : 'a list) (i : int) (r : 'a) : 'a list =
+  let rec replace_nth_aux l i acc =
+    match l, i with
+    | _ :: l', 0 -> List.rev_append (r :: acc) l'
+    | x :: l', _ -> replace_nth_aux l' (i - 1) (x :: acc)
+    | [], _ -> failwith "List too short"
+  in
+  replace_nth_aux l i []
 
 (** Change list to string as it would be represented in OCaml using custom function to change each
     element to string. *)

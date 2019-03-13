@@ -307,7 +307,7 @@ let typing_xyyz_test () =
               ity_of_string "np -> pr"
             |]
           ]
-          (typing#binding2envl (hg#hterm_arity id0_0) None [(0, 0, id0_0)])
+          (typing#binding2envl (hg#hterm_arity id0_0) None None [(0, 0, id0_0)])
       );
 
     (* Basic creation of bindings with filtered out all but first variables, without product *)
@@ -320,7 +320,37 @@ let typing_xyyz_test () =
               ity_of_string "T"
             |]
           ]
+          (typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)])) None
+             [(0, 0, id0_0)])
+      );
+
+    (* Creation of bindings with filtering and fixed var. *)
+    "binding2envl-3" >:: (fun _ ->
+        assert_equal_envls
+          [
+            new env @@ [|
+              ity_of_string "np -> pr";
+              ity_of_string "T";
+              ity_of_string "T"
+            |]
+          ]
           (typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)]))
+             (Some ((0, 0), ity_of_string "np -> pr"))
+             [(0, 0, id0_0)])
+      );
+
+    (* Creation of bindings with filtering and filtered out fixed var. *)
+    "binding2envl-3" >:: (fun _ ->
+        assert_equal_envls
+          [
+            new env @@ [|
+              ity_of_string "pr -> pr";
+              ity_of_string "T";
+              ity_of_string "T"
+            |]
+          ]
+          (typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)]))
+             (Some ((0, 1), ity_of_string "np -> pr"))
              [(0, 0, id0_0)])
       );
   ]

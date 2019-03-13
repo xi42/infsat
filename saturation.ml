@@ -78,7 +78,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
       | Some nt -> hg#nt_arity nt
       | None -> 0
     in
-    let envl = List.concat @@ List.map (typing#binding2envl var_count @@ Some mask) bindings in
+    let envl = List.concat @@ List.map (typing#binding2envl var_count (Some mask) None) bindings in
     ()
     (*
     let update_ty_of_id_aux id venvs overwrite_flag = 
