@@ -29,10 +29,10 @@ class env (var_itys : ity array) = object(self)
         0
       else
         let ci = TyList.compare var_itys.(i) var_itys'.(i) in
-        if ci <> 0 then
-          ci
-        else
+        if ci = 0 then
           compare_aux (i + 1)
+        else
+          ci
     in
     compare_aux 0
 

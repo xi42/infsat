@@ -403,7 +403,7 @@ class cfa (hg : hgrammar) = object(self)
           List.rev_append (List.map (fun (_, _, id) -> id) binding) ids
         ) [] bindings
     in
-    delete_duplicates_unsorted ids
+    sort_and_delete_duplicates ids
 
   (** Called for each term with term_id equal to id, that has free variables var, such that this
       term was an argument to a nonterminal. *)
@@ -416,7 +416,7 @@ class cfa (hg : hgrammar) = object(self)
       let vars' = SortedVars.map snd vars in
       let bindings = nt_bindings.(f) in
       let bindings' =
-        delete_duplicates_unsorted (* sorts and removes duplicates *)
+        sort_and_delete_duplicates (* sorts and removes duplicates *)
           (List.rev_map (fun binding -> self#filter_binding vars' binding) bindings)
       in
       (*

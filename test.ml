@@ -22,7 +22,7 @@ let assert_equal_envls envl1 envl2 =
 
 let assert_equal_telms telm1 telm2 =
   assert_equal ~printer:TargetEnvListMap.to_string ~cmp:TargetEnvListMap.telm_eq
-    telm1 telm2
+    (TargetEnvListMap.with_default_flags telm1) (TargetEnvListMap.with_default_flags telm2)
 
 let mk_grammar rules =
   let nonterminals = Array.mapi (fun i _ -> ("N" ^ string_of_int i, O)) rules in

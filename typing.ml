@@ -361,8 +361,8 @@ class typing (hg : hgrammar) = object(self)
          let start_telm = TargetEnvListMap.merge pr_start_telm np_start_telm in
          if !Flags.verbose then
            begin
-             print_string @@ String.make indent ' ' ^ "* Type checking " ^
-                             String.concat " -> " @@ List.map (fun (arg_term, arg_ity) ->
+             print_string @@ String.make indent ' ' ^ "* Type checking ";
+             print_string @@ String.concat " -> " @@ List.map (fun (arg_term, arg_ity) ->
                  "(" ^ hg#string_of_hterm arg_term ^ " : " ^ string_of_ity arg_ity ^ ")"
                ) args;
              if head_pr then
@@ -396,7 +396,7 @@ class typing (hg : hgrammar) = object(self)
                   (fun telm arg_ty ->
                      if !Flags.verbose then
                        begin
-                         print_string @@ String.make indent ' ' ^ "* Typing " ^
+                         print_string @@ String.make indent ' ' ^ "* Typing argument " ^
                                          hg#string_of_hterm arg_term ^ " : " ^
                                          string_of_ity arg_ity ^ "\n";
                          indent <- indent + 2
@@ -491,7 +491,7 @@ class typing (hg : hgrammar) = object(self)
          if !Flags.verbose then
            print_string @@ String.make indent ' ' ^
                            "* Intersected envs before duplication filtering:\n" ^
-                           TargetEnvListMap.to_string telm ^ "\n";
+                           String.make (indent + 2) ' ' ^ TargetEnvListMap.to_string telm ^ "\n";
          let telm =
            if not head_pr then
              begin

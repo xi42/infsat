@@ -134,22 +134,24 @@ let split_outside_parens (str : string) (sep : string) : (string * string) optio
   done;
   !res
 
-let delete_duplicates l =
+(** Delete all but one equal consecutive elements in the list using provided comparison. *)
+let delete_consecutive_duplicates compare l =
   let rec delete_duplicates_aux l acc =
     match l with
     | [] -> List.rev acc
-    | [x] -> [x]
+    | [x] -> List.rev (x :: acc)
     | x :: (y :: l as yl) ->
-      if x = y then
-        delete_duplicates_aux yl acc
+      if compare x y = 0 then
+      delete_duplicates_aux yl acc
       else
         delete_duplicates_aux yl @@ x :: acc
   in
   delete_duplicates_aux l []
 
-let delete_duplicates_unsorted c =
-  let c' = List.sort compare c in
-  delete_duplicates c'
+(** Sort the list and delete all but one equal elements in the list using Pervasives.compare. *)
+let sort_and_delete_duplicates c =
+  let c' = List.sort Pervasives.compare c in
+  delete_consecutive_duplicates Pervasives.compare c'
 
 (* --- ? --- *)
 

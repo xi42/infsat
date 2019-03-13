@@ -31,6 +31,7 @@ module type SL = sig
   val fold_right : (elt -> 'a -> 'a) -> t -> 'a -> 'a
   val map : (elt -> 'a) -> t -> 'a list
   val map_monotonic : (elt -> elt) -> t -> t
+  val map_monotonic_and_filter_duplicates : (elt -> elt) -> t -> t
   val rev_map : (elt -> 'a) -> t -> 'a list
   val iter : (elt -> unit) -> t -> unit
   val compare_custom : (elt -> elt -> int) -> t -> t -> int
@@ -165,6 +166,9 @@ struct
   let map f (L l) = List.map f l
 
   let map_monotonic f (L l) = L (List.map f l)
+
+  let map_monotonic_and_filter_duplicates f (L l) =
+    L (Utilities.delete_consecutive_duplicates Ord.compare @@ List.map f l)
       
   let rev_map f (L l) = List.rev_map f l
 

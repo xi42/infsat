@@ -11,7 +11,8 @@ let mk_envm (env : env) : envm = { env = env; dup = false; pr_arg = false }
     them. *)
 module EnvList = SortedList.Make(struct
     type t = envm
-    let compare envm1 envm2 = Utilities.compare_pair env_compare Pervasives.compare
+    let compare envm1 envm2 =
+      Utilities.compare_pair env_compare Pervasives.compare
         (envm1.env, (envm1.dup, envm1.pr_arg)) (envm2.env, (envm2.dup, envm2.pr_arg))
   end)
 
@@ -63,25 +64,28 @@ let exists (f : ty -> envm -> bool) (telm : telm) : bool =
   telm |> TargetEnvlList.exists (fun (target, envl) ->
       envl |> EnvList.exists (fun envm -> f target envm))
 
+(** Removes targets with empty list of envms. *)
+let remove_empty_targets : telm -> telm =
+  TargetEnvlList.filter (fun (target, envl) -> not @@ EnvList.is_empty envl)
+
+(** Returns TELM with flags of environments set to default values and removes duplicates. *)
+let with_default_flags (telm : telm) : telm =
+  telm |> TargetEnvlList.map_monotonic (fun (target, envl) ->
+      (target, envl |> EnvList.map_monotonic_and_filter_duplicates (fun envm -> {
+             envm with dup = false; pr_arg = false
+           }))
+    )
+  
 (** Changes target of the sole element of TELM. Requires TELM to have exactly one target.
     Also removes duplication flag and sets productive actual argument flag to whether previous
     target was productive. *)
 let retarget (target : ty) (telm : telm) : telm =
-  assert (TargetEnvlList.length telm = 1);
+  assert (TargetEnvlList.length telm <= 1);
   telm |> TargetEnvlList.map_monotonic (fun (target', envl) ->
-      (target, envl |> EnvList.map_monotonic (fun envm -> {
+      (target, envl |> EnvList.map_monotonic_and_filter_duplicates (fun envm -> {
              envm with dup = false; pr_arg = is_productive target'
            }))
     )
-
-(** Returns TELM with all duplication flags set to false. *)
-let wo_dup : telm -> telm =
-  TargetEnvlList.map_monotonic (fun (target, envl) ->
-      (target, envl |> EnvList.map_monotonic (fun envm -> { envm with dup = false }))
-    )
-
-let remove_empty_targets : telm -> telm =
-  TargetEnvlList.filter (fun (target, envl) -> not @@ EnvList.is_empty envl)
 
 (** Returns filtered TELM with only the environments that have no duplication for nonproductive
     targets. *)
@@ -143,7 +147,7 @@ let to_string (telm : telm) =
       string_of_ty target ^ " => " ^ String.concat " | " @@
       EnvList.map (fun envm ->
           let dup_info = if envm.dup then "+" else "" in
-          let pr_arg_info = if envm.dup then "*" else "" in
+          let pr_arg_info = if envm.pr_arg then "*" else "" in
           envm.env#to_string ^ dup_info ^ pr_arg_info
         ) envl
     ) telm
