@@ -27,9 +27,10 @@ module type SL = sig
   val exists : (elt -> bool) -> t -> bool
   
   val fold_left : ('a -> elt -> 'a) -> 'a -> t -> 'a
-  val fold_left_short_circuit : ('a -> elt -> 'a) -> 'a -> t -> 'a -> 'a
+  val fold_left_short_circuit : 'a -> t -> 'a -> ('a -> elt -> 'a) -> 'a
   val fold_right : (elt -> 'a -> 'a) -> t -> 'a -> 'a
   val map : (elt -> 'a) -> t -> 'a list
+  val map_monotonic : (elt -> elt) -> t -> t
   val rev_map : (elt -> 'a) -> t -> 'a list
   val iter : (elt -> unit) -> t -> unit
   val compare_custom : (elt -> elt -> int) -> t -> t -> int
@@ -157,11 +158,13 @@ struct
   
   let fold_left f acc (L l) = List.fold_left f acc l
 
-  let fold_left_short_circuit f acc (L l) bottom = Utilities.fold_left_short_circuit f acc l bottom
+  let fold_left_short_circuit acc (L l) bottom f = Utilities.fold_left_short_circuit acc l bottom f
 
   let fold_right f (L l) acc = List.fold_right f l acc
   
   let map f (L l) = List.map f l
+
+  let map_monotonic f (L l) = L (List.map f l)
       
   let rev_map f (L l) = List.rev_map f l
 

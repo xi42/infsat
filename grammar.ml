@@ -32,8 +32,7 @@ let rec subst_nt_in_term s term =
         List.assoc x s
       with Not_found -> term
     end
-| App (t1, t2) -> App (subst_nt_in_term s t1, subst_nt_in_term s t2)
-
+  | App (t1, t2) -> App (subst_nt_in_term s t1, subst_nt_in_term s t2)
 
 let rec arity2sort k =
   if k = 0 then O else KFun(O, arity2sort(k - 1))

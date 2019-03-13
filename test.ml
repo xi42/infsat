@@ -20,6 +20,10 @@ let assert_equal_envls envl1 envl2 =
   assert_equal ~printer:string_of_envl ~cmp:envl_eq
     (List.sort env_compare envl1) (List.sort env_compare envl2)
 
+let assert_equal_telms telm1 telm2 =
+  assert_equal ~printer:TargetEnvListMap.to_string ~cmp:TargetEnvListMap.telm_eq
+    telm1 telm2
+
 let mk_grammar rules =
   let nonterminals = Array.mapi (fun i _ -> ("N" ^ string_of_int i, O)) rules in
   let g = new grammar nonterminals [||] rules in
@@ -42,7 +46,10 @@ let mk_typing g =
   (hg, new Typing.typing hg)
 
 let type_check_nt_wo_env (typing : typing) (hg : hgrammar) (nt : nt_id) (target : ty) =
-  typing#type_check (hg#nt_body nt) target (Right (hg#nt_arity nt))
+  typing#type_check (hg#nt_body nt) (Some target) (Right (hg#nt_arity nt))
+
+let type_check_nt_wo_env_wo_target (typing : typing) (hg : hgrammar) (nt : nt_id) =
+  typing#type_check (hg#nt_body nt) None (Right (hg#nt_arity nt))
 
 let senv hg nt i ity_str =
   singleton_env (hg#nt_arity nt) (nt, i) @@ ity_of_string ity_str
@@ -142,7 +149,7 @@ let typing_e_test () =
     "annotate_args" >:: (fun _ ->
         assert_equal
           [
-            ([(1, TyList.singleton NP); (2, TyList.singleton PR)], true)
+            ([(1, TyList.singleton NP); (2, TyList.singleton PR)], Fun (4, TyList.empty, PR), true)
           ]
           (typing#annotate_args
              [1; 2]
@@ -159,22 +166,22 @@ let typing_e_test () =
     
     (* check if e : np type checks *)
     "type_check-1" >:: (fun _ ->
-        assert_equal_envls
-          [empty_env @@ hg#nt_arity 0]
+        assert_equal_telms
+          (TargetEnvListMap.singleton NP @@ empty_env @@ hg#nt_arity 0)
           (type_check_nt_wo_env typing hg 0 NP false false)
       );
 
     (* checking basic functionality of forcing pr vars *)
     "type_check-2" >:: (fun _ ->
-        assert_equal_envls
-          []
+        assert_equal_telms
+          TargetEnvListMap.empty
           (type_check_nt_wo_env typing hg 0 NP false true)
       );
 
     (* checking that forcing no pr vars does not break anything when there are only terminals *)
     "type_check-3" >:: (fun _ ->
-        assert_equal_envls
-          [empty_env @@ hg#nt_arity 0]
+        assert_equal_telms
+          (TargetEnvListMap.singleton NP @@ empty_env @@ hg#nt_arity 0)
           (type_check_nt_wo_env typing hg 0 NP true false)
       );
   ]
@@ -188,21 +195,24 @@ let grammar_ax () = mk_grammar
 
 let typing_ax_test () =
   let hg, typing = mk_typing @@ grammar_ax () in
-  (* check that a x : pr accepts both productivities of x *)
   [
+    (* check that a x : pr accepts both productivities of x *)
     "type_check-4" >:: (fun _ ->
-        assert_equal_envls
-          [
-            senv hg 1 0 "pr";
-            senv hg 1 0 "np"
-          ]
+        assert_equal_telms
+          (TargetEnvListMap.of_list_default_flags
+           [
+             (PR, [
+                senv hg 1 0 "pr";
+                senv hg 1 0 "np"
+              ])
+           ])
           (type_check_nt_wo_env typing hg 1 PR false false)
       );
 
     (* check that a x : np does not type check *)
     "type_check-5" >:: (fun _ ->
-        assert_equal_envls
-          []
+        assert_equal_telms
+          TargetEnvListMap.empty
           (type_check_nt_wo_env typing hg 1 NP false false)
       );
   ]
@@ -248,34 +258,37 @@ let typing_xyyz_test () =
   [
     (* check that intersection of common types from different arguments works *)
     "type_check-6" >:: (fun _ ->
-        assert_equal_envls
-          [
-            new env [|
-              ity_of_string "pr -> pr";
-              ity_of_string "(np -> pr) /\\ (np -> np)";
-              ity_of_string "np"
-            |]
-          ]
+        assert_equal_telms
+          (TargetEnvListMap.singleton PR @@
+           new env [|
+             ity_of_string "pr -> pr";
+             ity_of_string "(np -> pr) /\\ (np -> np)";
+             ity_of_string "np"
+           |])
           (type_check_nt_wo_env typing hg 1 PR false false)
       );
 
     (* check that branching works *)
     "type_check-7" >:: (fun _ ->
-        assert_equal_envls
-          [
-            senv hg 4 0 "pr";
-            senv hg 4 0 "np"
-          ]
+        assert_equal_telms
+          (TargetEnvListMap.of_list_default_flags [
+              (PR, [
+                 senv hg 4 0 "pr";
+                 senv hg 4 0 "np"
+               ])
+            ])
           (type_check_nt_wo_env typing hg 4 PR false false)
       );
 
     (* check that branching works *)
     "type_check-8" >:: (fun _ ->
-        assert_equal_envls
-          [
-            senv hg 4 0 "pr";
-            senv hg 4 0 "np"
-          ]
+        assert_equal_telms
+          (TargetEnvListMap.of_list_default_flags [
+              (NP, [
+                 senv hg 4 0 "pr";
+                 senv hg 4 0 "np"
+               ])
+            ])
           (type_check_nt_wo_env typing hg 4 NP false false)
       );
 
@@ -347,19 +360,21 @@ let typing_dup_test () =
     (* All valid typings of x type check, because the application is already productive due to
        a e being productive. *)
     "type_check-9" >:: (fun _ ->
-        assert_equal_envls
-          [
-            senv hg 2 0 "pr -> pr";
-            senv hg 2 0 "pr -> np"
-          ]
+        assert_equal_telms
+          (TargetEnvListMap.of_list_default_flags [
+              (PR, [
+                 senv hg 2 0 "pr -> pr";
+                 senv hg 2 0 "np -> np"
+               ])
+            ])
           (type_check_nt_wo_env typing hg 2 PR false false)
       );
 
     (* No valid environment, because a e is productive and makes the application with it as
        argument productive. *)
     "type_check-10" >:: (fun _ ->
-        assert_equal_envls
-          []
+        assert_equal_telms
+          TargetEnvListMap.empty
           (type_check_nt_wo_env typing hg 2 NP false false)
       );
 
@@ -369,26 +384,22 @@ let typing_dup_test () =
        it is not productive, so it is not a duplication. y : pr is forced by there being no
        known typing of the head with unproductive last argument. *)
     "type_check-11" >:: (fun _ ->
-        assert_equal_envls
-          [
-            new env [|
+        assert_equal_telms
+          (TargetEnvListMap.singleton PR @@ new env [|
               ity_of_string "pr -> pr";
               ity_of_string "pr"
-            |];
-          ]
+            |])
           (type_check_nt_wo_env typing hg 3 PR false false)
       );
 
     (* Only one valid env when there is no duplication. This is exactly the opposite of the test
        above with x : pr -> np passing and x : pr -> pr failing and y : pr being forced. *)
     "type_check-12" >:: (fun _ ->
-        assert_equal_envls
-          [
-            new env [|
+        assert_equal_telms
+          (TargetEnvListMap.singleton NP @@ new env [|
               ity_of_string "pr -> np";
               ity_of_string "pr"
-            |];
-          ]
+            |])
           (type_check_nt_wo_env typing hg 3 NP false false)
       );
 
@@ -396,27 +407,51 @@ let typing_dup_test () =
        and second argument, so there is no place for duplication. This means that there is no
        way to achieve productivity. *)
     "type_check-13" >:: (fun _ ->
-        assert_equal_envls
-          []
+        assert_equal_telms
+          TargetEnvListMap.empty
           (type_check_nt_wo_env typing hg 4 PR false false)
       );
 
     (* Similar to test 12, but this time the duplication cannot happen. *)
     "type_check-14" >:: (fun _ ->
-        assert_equal_envls
-          [
-            new env [|
-              ity_of_string "pr -> pr";
-              ity_of_string "pr -> pr";
-              ity_of_string "pr"
-            |];
-            new env [|
-              ity_of_string "pr -> np";
-              ity_of_string "pr -> np";
-              ity_of_string "pr"
-            |]
-          ]
+        assert_equal_telms
+          (TargetEnvListMap.of_list_default_flags @@ [
+              (NP, [
+                  new env [|
+                    ity_of_string "pr -> pr";
+                    ity_of_string "pr -> pr";
+                    ity_of_string "pr"
+                  |];
+                  new env [|
+                    ity_of_string "pr -> np";
+                    ity_of_string "pr -> np";
+                    ity_of_string "pr"
+                  |]
+                ])
+            ]
+          )
           (type_check_nt_wo_env typing hg 4 NP false false)
+      );
+
+    (* Typing without target *)
+    "type_check-15" >:: (fun _ ->
+        assert_equal_telms
+          (TargetEnvListMap.of_list_default_flags @@ [
+              (PR, [
+                  new env [|
+                    ity_of_string "pr -> pr";
+                    ity_of_string "pr"
+                  |]
+                ]);
+              (NP, [
+                  new env [|
+                    ity_of_string "pr -> np";
+                    ity_of_string "pr"
+                  |]
+                ])
+            ]
+          )
+          (type_check_nt_wo_env_wo_target typing hg 3 false false)
       );
   ]
 

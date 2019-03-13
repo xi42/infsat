@@ -36,7 +36,7 @@ class env (var_itys : ity array) = object(self)
     in
     compare_aux 0
 
-  method has_productive_vars : bool =
+  method has_pr_vars : bool =
     Array.exists (fun ity -> TyList.exists is_productive ity) var_itys
 
   (* --- manipulation --- *)
@@ -99,6 +99,7 @@ let envl_eq (envl1 : envl) (envl2 : envl) : bool =
 let string_of_envl (envl : envl) : string =
   Utilities.string_of_list (fun env -> env#to_string) envl
 
+(* TODO remove since obsoleted with TargetEnvListMap
 (* --- environment with flags --- *)
 
 (** Variable environment along with flags whether there was a duplication during its
@@ -131,3 +132,4 @@ let rec intersect_two_envfls (envl1 : envfl) (envl2 : envfl) : envfl =
          in
          List.rev_append envl2' acc)
       [] envl1
+*)

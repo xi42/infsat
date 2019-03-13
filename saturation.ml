@@ -69,13 +69,16 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
 
   (* --- typing --- *)
 
+  (** Infers type of given hterm under given bindings. If the type is new, it is registered. *)
   (* TODO this was update_ty_of_id *)
   method infer_hterms_hty (id : hterms_id) (binding : hterms_id binding) =
-    (* Note that while bindings are filtered to contain only relevant hterms, bindings of these
-       hterms still contain unused variables. However, computing the types of all variables does
-       not impact the cost of creating the environment, because it means that an array of types
-       will have a pointer to the type copied to each field instead of skipping over unused
-       ones. NOPE, THERE ARE DUPLICATES THEN. *)
+    let mask = hg#id2vars id in
+    let bindings = cfa#get_hterms_bindings id in
+    let var_count = match hg#id2nt id with
+      | Some nt -> hg#nt_arity nt
+      | None -> 0
+    in
+    let envl = List.concat @@ List.map (typing#binding2envl var_count @@ Some mask) bindings in
     ()
     (*
     let update_ty_of_id_aux id venvs overwrite_flag = 
@@ -92,7 +95,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
     let venvs = mk_venvs_mask env in
     update_ty_of_id_aux id venvs overwrite_flag (* generally, try to get and register an
                                                    intersection type for each term in sequence id *)
-*)
+    *)
 
   (* --- processing queues --- *)
 
@@ -134,7 +137,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
       let id = SetQueue.dequeue hterms_queue in
       if !Flags.verbose then
         print_string @@ "hterms_queue: Typing hterms " ^ string_of_int id ^ ".\n";
-      cfa#lookup_hterms_bindings id |> List.iter (self#infer_hterms_hty id);
+      cfa#get_hterms_bindings id |> List.iter (self#infer_hterms_hty id);
       true
     with
     | SetQueue.Empty -> false

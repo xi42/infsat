@@ -10,7 +10,7 @@ type midrules = midrule list
 let nt_kinds = ref (Array.make 0 ("", O))
 let ntid = ref 0
 let new_nt () =
-  let x= !ntid in
+  let x = !ntid in
   ntid := x + 1;
   x
 

@@ -345,7 +345,7 @@ class cfa (hg : hgrammar) = object(self)
         end
     done
 
-  method lookup_hterms_bindings (id : hterms_id) : hterms_id binding list =
+  method get_hterms_bindings (id : hterms_id) : hterms_id binding list =
     hterms_bindings.(id)
 
   (*

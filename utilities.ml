@@ -22,6 +22,12 @@ let either_bimap (f : 'a -> 'c) (g : 'b -> 'd) (e : ('a, 'b) either) : ('c, 'd) 
   | Left a -> Left (f a)
   | Right b -> Right (f b)
 
+(* --- option --- *)
+
+let option_map (default : 'b) (f : 'a -> 'b) : 'a option -> 'b = function
+  | Some x -> f x
+  | None -> default
+
 (* --- printing --- *)
 
 let string_of_bool = function
@@ -31,15 +37,16 @@ let string_of_bool = function
 (* --- lists --- *)
 
 (** Version of fold_left that takes additional argument bottom. When acc is bottom after an
-    application, bottom is returned and no further calls to f are made. *)
-let rec fold_left_short_circuit (f : 'a -> 'b -> 'a) (acc : 'a) (l : 'b list) (bottom : 'a) : 'a =
+    application, bottom is returned and no further calls to f are made. Careful: it uses
+    build-in Pervasives.compare equality. *)
+let rec fold_left_short_circuit (acc : 'a) (l : 'b list) (bottom : 'a) (f : 'a -> 'b -> 'a) : 'a =
   match l with
   | [] -> acc
   | x :: l' ->
     if acc = bottom then
       acc
     else
-      fold_left_short_circuit f (f acc x) l' bottom
+      fold_left_short_circuit (f acc x) l' bottom f
 
 (** Lexicographical comparison of lists with custom comparison of elements. *)
 let rec compare_lists (cmp : 'a -> 'a -> int) (l1 : 'a list) (l2 : 'a list) : int =
@@ -53,6 +60,15 @@ let rec compare_lists (cmp : 'a -> 'a -> int) (l1 : 'a list) (l2 : 'a list) : in
   | [], [] -> 0
   | [], _ -> -1
   | _, [] -> 1
+
+(** Lexicographical comparison of a pair with custom comparison of elements. *)
+let compare_pair (cmp1 : 'a -> 'a -> int) (cmp2 : 'b -> 'b -> int)
+    (x1, y1 : 'a * 'b) (x2, y2 : 'a * 'b) : int =
+  let c1 = cmp1 x1 x2 in
+  if c1 = 0 then
+    cmp2 y1 y2
+  else
+    c1
 
 (** A list of integers from m to n - 1 (empty if m >= n). *)
 let rec fromto (m : int) (n : int) : int list =
