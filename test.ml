@@ -364,7 +364,7 @@ let typing_dup_test () =
           (TargetEnvListMap.of_list_default_flags [
               (PR, [
                  senv hg 2 0 "pr -> pr";
-                 senv hg 2 0 "np -> np"
+                 senv hg 2 0 "pr -> np"
                ])
             ])
           (type_check_nt_wo_env typing hg 2 PR false false)

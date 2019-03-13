@@ -98,38 +98,3 @@ let envl_eq (envl1 : envl) (envl2 : envl) : bool =
 
 let string_of_envl (envl : envl) : string =
   Utilities.string_of_list (fun env -> env#to_string) envl
-
-(* TODO remove since obsoleted with TargetEnvListMap
-(* --- environment with flags --- *)
-
-(** Variable environment along with flags whether there was a duplication during its
-    construction and whether a productive argument was used. *)
-type envf = env * bool * bool
-
-(** List of variable environments with duplication flags. *)
-type envfl = envf list
-
-(** Merges two environments into one and returns it along with merged flags. None of the arguments
-    are modified. *)
-let intersect_two_envs (env1, dup1, pruse1 : envf) (env2, dup2, pruse2 : envf) : envf =
-  let env, merge_dup = env1#merge env2 in
-  (env, dup1 || dup2 || merge_dup, pruse1 || pruse2)
-
-(** Flatten an intersection of variable environment lists, which are OR-separated lists of
-    AND-separated lists of typings of unique in inner list variables. Flattening means moving
-    outer intersection (AND) inside. The operations are done on environments with flags and
-    the arguments are not modified. *)
-let rec intersect_two_envfls (envl1 : envfl) (envl2 : envfl) : envfl =
-  match envl1, envl2 with
-  | _, [] -> [] (* second typing is invalid *)
-  | [], _-> [] (* first typing is invalid *)
-  | _ ->
-    List.fold_left
-      (fun acc env1 ->
-         let envl2' = List.rev_map (fun env2 ->
-             intersect_two_envs env1 env2
-           ) envl2
-         in
-         List.rev_append envl2' acc)
-      [] envl1
-*)

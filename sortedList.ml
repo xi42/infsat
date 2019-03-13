@@ -21,17 +21,18 @@ module type SL = sig
   val partition : (elt -> bool) -> t -> t * t
   val filter : (elt -> bool) -> t -> t
   val uniq : t -> t
+  val intersect_custom : (elt -> elt -> elt) -> t -> t -> t
   val merge_custom : (elt -> elt -> elt) -> t -> t -> t
   val merge : t -> t -> t
   val for_all : (elt -> bool) -> t -> bool
   val exists : (elt -> bool) -> t -> bool
-  
+
+  val filter_duplicates : t -> t
   val fold_left : ('a -> elt -> 'a) -> 'a -> t -> 'a
   val fold_left_short_circuit : 'a -> t -> 'a -> ('a -> elt -> 'a) -> 'a
   val fold_right : (elt -> 'a -> 'a) -> t -> 'a -> 'a
   val map : (elt -> 'a) -> t -> 'a list
   val map_monotonic : (elt -> elt) -> t -> t
-  val map_monotonic_and_filter_duplicates : (elt -> elt) -> t -> t
   val rev_map : (elt -> 'a) -> t -> 'a list
   val iter : (elt -> unit) -> t -> unit
   val compare_custom : (elt -> elt -> int) -> t -> t -> int
@@ -130,6 +131,22 @@ struct
     in
     L (uniq_list l [])
 
+  let intersect_custom intersect_fun (L l1) (L l2) =
+    let rec intersect_lists l1 l2 =
+      match l1, l2 with
+      | _, [] -> []
+      | [], _ -> []
+      | x :: l1', y :: l2' -> 
+        let c = Ord.compare x y in
+        if c = 0 then
+          (intersect_fun x y) :: (intersect_lists l1' l2')
+        else if c < 0 then
+          intersect_lists l1' l2
+        else
+          intersect_lists l1 l2'
+    in
+    L (intersect_lists l1 l2)
+  
   (** Merge two sorted lists with special merge function for equal values. *)
   let merge_custom merge_fun (L l1) (L l2) =
     let rec merge_lists l1 l2 =
@@ -156,6 +173,9 @@ struct
   let exists f (L l) = List.exists f l
 
   (* iteration *)
+
+  let filter_duplicates (L l) =
+    L (Utilities.delete_consecutive_duplicates Ord.compare l)
   
   let fold_left f acc (L l) = List.fold_left f acc l
 
@@ -166,9 +186,6 @@ struct
   let map f (L l) = List.map f l
 
   let map_monotonic f (L l) = L (List.map f l)
-
-  let map_monotonic_and_filter_duplicates f (L l) =
-    L (Utilities.delete_consecutive_duplicates Ord.compare @@ List.map f l)
       
   let rev_map f (L l) = List.rev_map f l
 

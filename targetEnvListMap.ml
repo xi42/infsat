@@ -71,9 +71,9 @@ let remove_empty_targets : telm -> telm =
 (** Returns TELM with flags of environments set to default values and removes duplicates. *)
 let with_default_flags (telm : telm) : telm =
   telm |> TargetEnvlList.map_monotonic (fun (target, envl) ->
-      (target, envl |> EnvList.map_monotonic_and_filter_duplicates (fun envm -> {
+      (target, EnvList.filter_duplicates (envl |>EnvList.map_monotonic (fun envm -> {
              envm with dup = false; pr_arg = false
-           }))
+           })))
     )
   
 (** Changes target of the sole element of TELM. Requires TELM to have exactly one target.
@@ -82,9 +82,9 @@ let with_default_flags (telm : telm) : telm =
 let retarget (target : ty) (telm : telm) : telm =
   assert (TargetEnvlList.length telm <= 1);
   telm |> TargetEnvlList.map_monotonic (fun (target', envl) ->
-      (target, envl |> EnvList.map_monotonic_and_filter_duplicates (fun envm -> {
+      (target, EnvList.filter_duplicates (envl |>EnvList.map_monotonic (fun envm -> {
              envm with dup = false; pr_arg = is_productive target'
-           }))
+           })))
     )
 
 (** Returns filtered TELM with only the environments that have no duplication for nonproductive
@@ -118,10 +118,11 @@ let filter_pr_vars (telm : telm) : telm =
     unique in inner list variables. Flattening means moving outer intersection (AND) inside. *)
 let intersect (telm1 : telm) (telm2 : telm) : telm =
   (* separately for each target *)
-  TargetEnvlList.merge_custom (fun (target1, envl1) (_, envl2) ->
+  TargetEnvlList.intersect_custom (fun (target1, envl1) (_, envl2) ->
       (* for each env1 in envs in telm1 *)
       let merged_envl = EnvList.fold_left (fun acc envm1 ->
           (* for each env2 in envs in telm2 *)
+          EnvList.filter_duplicates @@
           EnvList.of_list @@
           EnvList.map (fun envm2 ->
               (* merge them together, compute duplication, and reshape the list result into
@@ -146,8 +147,8 @@ let to_string (telm : telm) =
   TargetEnvlList.map (fun (target, envl) ->
       string_of_ty target ^ " => " ^ String.concat " | " @@
       EnvList.map (fun envm ->
-          let dup_info = if envm.dup then "+" else "" in
-          let pr_arg_info = if envm.pr_arg then "*" else "" in
+          let dup_info = if envm.dup then " DUP" else "" in
+          let pr_arg_info = if envm.pr_arg then " PR_ARG" else "" in
           envm.env#to_string ^ dup_info ^ pr_arg_info
         ) envl
     ) telm
