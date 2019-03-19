@@ -4,6 +4,7 @@ open GrammarCommon
 open HGrammar
 open Profiling
 open Sort
+open TargetEnvListMap
 open Type
 open Utilities
 
@@ -78,7 +79,10 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
       | Some nt -> hg#nt_arity nt
       | None -> 0
     in
-    let envl = List.concat @@ List.map (typing#binding2envl var_count (Some mask) None) bindings in
+    let envl =
+      List.fold_left EnvList.merge EnvList.empty @@
+      List.map (typing#binding2envl var_count (Some mask) None) bindings
+    in
     ()
     (*
     let update_ty_of_id_aux id venvs overwrite_flag = 
@@ -115,7 +119,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
   method process_nt_binding_queue : bool =
     false
       
-  (** Processes nt_queue if not empty and returns if it was not empty. *)
+  (** Processes nt_queue if not empty and returns if it was not empty.
+      It finds all bindings of a nonterminal and enqueues them to be typed. *)
   method process_nt_queue : bool =
     try
       let nt = SetQueue.dequeue nt_queue in

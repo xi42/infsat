@@ -231,13 +231,13 @@ class cfa (hg : hgrammar) = object(self)
   method register_var_bindings f rho i =
     match rho with
       [] -> ()
-    | termsid::rho' ->
+    | termsid :: rho' ->
       let hterms = hg#id2hterms termsid in (* convert args_id back to a list of (H, [ID..]) *)
       let hterms' = index_list hterms in (* numbering these terms *)
       List.iter (* for each term register_binding_singlevar f global-numbering-id hterm *)
-        (fun (j,hterm)-> self#register_binding_singlevar f (i+j) hterm)
+        (fun (j, hterm)-> self#register_binding_singlevar f (i+j) hterm)
         hterms';
-      self#register_var_bindings f rho' (i+List.length hterms) (* recursively *)
+      self#register_var_bindings f rho' (i + List.length hterms) (* recursively *)
 
   (** Register information that there was a call f args, i.e., save this as a binding in
       nt_bindings and register in hterms_are_arg that args were an argument to nonterminal f. *)
@@ -277,14 +277,6 @@ class cfa (hg : hgrammar) = object(self)
           let _, termss = hg#decompose_hterm hterm in
           (* ignore the terminal and go deeper *)
           self#expand_terminal termss
-        | HVar x ->
-          (* check what hterms flow into x (these can also be variables) *)
-          let x_hterms = self#lookup_binding_var x in
-          (* substitute these hterms into x and enqueue resulting application *)
-          List.iter (fun (h, x_args) ->
-              self#enqueue_hterm (h, x_args @ h_args)
-            ) x_hterms;
-          self#register_variable_head_node x hterm
         | HNT nt ->
           (* Remember in nt_bindings that there was an application f h_args. Also remember
              that h_args were being used as an argument to a nonterminal in hterms_are_arg. *)
@@ -293,6 +285,14 @@ class cfa (hg : hgrammar) = object(self)
              If the arguments don't have kind O, they can be passed as arguments again, or used
              as variable head, which finds the original terms. *)
           self#enqueue_hterm @@ hg#nt_body nt
+        | HVar x ->
+          (* check what hterms flow into x (these can also be variables) *)
+          let x_hterms = self#lookup_binding_var x in
+          (* substitute these hterms into x and enqueue resulting application *)
+          List.iter (fun (h, x_args) ->
+              self#enqueue_hterm (h, x_args @ h_args)
+            ) x_hterms;
+          self#register_variable_head_node x hterm
       end
 
   (** Expand hterms in queue until it's empty. *)

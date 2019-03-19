@@ -174,6 +174,7 @@ struct
 
   (* iteration *)
 
+  (** Returns the same list without duplicates. *)
   let filter_duplicates (L l) =
     L (Utilities.delete_consecutive_duplicates Ord.compare l)
   

@@ -3,10 +3,9 @@ open Environment
 open GrammarCommon
 open HGrammar
 open HtyStore
+open TargetEnvListMap
 open Type
 open Utilities
-
-type telm = TargetEnvListMap.telm
 
 class typing (hg : hgrammar) = object(self)
   (* --- registers --- *)
@@ -118,7 +117,9 @@ class typing (hg : hgrammar) = object(self)
       returned. *)
   method binding2envl (var_count : int) (mask : vars option)
       (fixed_var_ity : (var_id * ity) option) (binding : hterms_id binding) : envl =
-    List.map (hty_binding2env var_count) @@ self#binding2hty_bindings mask binding fixed_var_ity
+    EnvList.of_list_default_flags @@
+    List.map (hty_binding2env var_count) @@
+    self#binding2hty_bindings mask binding fixed_var_ity
 
   (* --- typing --- *)
   
@@ -212,7 +213,7 @@ class typing (hg : hgrammar) = object(self)
       Flag no_pr_vars prevents inference of productive variables. Flag force_pr_var ensures that
       there is at least one productive variable. Only one of these flags may be true. *)
   method type_check (hterm : hterm) (target : ty option) (env_data : (env, int) either)
-      (no_pr_vars : bool) (force_pr_var : bool) : telm =
+      (no_pr_vars : bool) (force_pr_var : bool) : tel =
     assert (not (no_pr_vars && force_pr_var));
     if !Flags.verbose then
       begin
@@ -239,19 +240,19 @@ class typing (hg : hgrammar) = object(self)
       | HT a, [] ->
         if not force_pr_var && target |> Utilities.option_map true (fun target ->
             TyList.exists (fun ty -> eq_ty target ty) (self#terminal_ity a)) then
-          TargetEnvListMap.of_list_default_flags @@
+          TargetEnvl.of_list_default_flags @@
           TyList.map (fun ty -> (ty, [empty_env var_count])) @@
           self#terminal_ity a
         else
-          TargetEnvListMap.empty
+          TargetEnvl.empty
       | HNT nt, [] ->
         if not force_pr_var && target |> option_map true (fun target ->
             self#nt_ty_exists nt target) then
-          TargetEnvListMap.of_list_default_flags @@
+          TargetEnvl.of_list_default_flags @@
           TyList.map (fun ty -> (ty, [empty_env var_count])) @@
           self#nt_ity nt
         else
-          TargetEnvListMap.empty
+          TargetEnvl.empty
       | HVar v, [] ->
         begin
           match target, env_data with
@@ -264,12 +265,12 @@ class typing (hg : hgrammar) = object(self)
                 | Right _ -> true
               in
               if available then
-                TargetEnvListMap.singleton target @@ singleton_env var_count v @@ sty ty
+                TargetEnvl.singleton target @@ singleton_env var_count v @@ sty ty
               else
-                TargetEnvListMap.empty
+                TargetEnvl.empty
             in
             if is_productive target then
-              TargetEnvListMap.empty (* variables are only NP *)
+              TargetEnvl.empty (* variables are only NP *)
             else if no_pr_vars then
               env_if_var_ty_available v target
             else if force_pr_var then
@@ -278,13 +279,13 @@ class typing (hg : hgrammar) = object(self)
             else
               (* both NP and PR versions are possible *)
               let pr_target = with_productivity PR target in
-              TargetEnvListMap.merge
+              TargetEnvl.merge
                 (env_if_var_ty_available v target) (env_if_var_ty_available v pr_target)
           | None, Left env ->
             (* if we're in this branch with None target then this must be a head variable or the
                whole term is a variable *)
             (* TODO maybe change definition of headvar to include var-only terms *)
-            TargetEnvListMap.of_list_default_flags @@
+            TargetEnvl.of_list_default_flags @@
             TyList.map (fun ty -> (ty, [singleton_env var_count v @@ sty ty])) @@
             env#get_var_ity v
           | None, Right _ -> failwith @@ "Type checking of terms with head variables or " ^
@@ -297,17 +298,17 @@ class typing (hg : hgrammar) = object(self)
     if !Flags.verbose then
       begin
         print_string @@ String.make indent ' ' ^ hg#string_of_hterm hterm;
-        if TargetEnvListMap.is_empty res then
+        if TargetEnvl.is_empty res then
           print_string " does not type check\n"
         else
           print_string @@ " type checks with the following targets and environments: " ^
-                          TargetEnvListMap.to_string res ^
+                          TargetEnvl.to_string res ^
                           "\n"
       end;
     res
 
   method type_check_app (h : head) (args : hterm list) (target : ty option)
-      (env_data : (env, int) either) (no_pr_vars : bool) (force_pr_var : bool) : telm =
+      (env_data : (env, int) either) (no_pr_vars : bool) (force_pr_var : bool) : tel =
     (* Definitions:
        * target is the type used in type checking hterm h : target and is either restricted to
          type in argument or all possible targets are computed
@@ -342,7 +343,7 @@ class typing (hg : hgrammar) = object(self)
        * maybe cache with versioning or just cache of all typings
        * flag to choose optimization in order to benchmark them later *)
     (* Iteration over each possible typing of the head *)
-    List.fold_left TargetEnvListMap.merge TargetEnvListMap.empty @@
+    List.fold_left TargetEnvl.merge TargetEnvl.empty @@
     (h_ity |> List.map (fun (args, h_target, head_pr) ->
          (* computing targets *)
          let pr_target, np_target = match target with
@@ -353,22 +354,23 @@ class typing (hg : hgrammar) = object(self)
                (None, Some target)
            | None ->
              if head_pr then
+               (* TODO not possible to get np target with pr head?? *)
                (Some h_target, Some (with_productivity NP h_target))
              else
                (Some (with_productivity PR h_target), Some h_target)
          in
-         (* construction of a TELM with no variables for each target *)
-         let pr_start_telm =
-           pr_target |> option_map TargetEnvListMap.empty (fun target ->
-               TargetEnvListMap.singleton target @@ empty_env var_count
+         (* construction of a TEL with no variables for each target *)
+         let pr_start_tel =
+           pr_target |> option_map TargetEnvl.empty (fun target ->
+               TargetEnvl.singleton target @@ empty_env var_count
              )
          in
-         let np_start_telm =
-           np_target |> option_map TargetEnvListMap.empty (fun target ->
-               TargetEnvListMap.singleton target @@ empty_env var_count
+         let np_start_tel =
+           np_target |> option_map TargetEnvl.empty (fun target ->
+               TargetEnvl.singleton target @@ empty_env var_count
              )
          in
-         let start_telm = TargetEnvListMap.merge pr_start_telm np_start_telm in
+         let start_tel = TargetEnvl.merge pr_start_tel np_start_tel in
          if !Flags.verbose then
            begin
              print_string @@ String.make indent ' ' ^ "* Type checking ";
@@ -397,13 +399,13 @@ class typing (hg : hgrammar) = object(self)
                arguments are productive, and there are no duplications. There still can
                be productive arguments in head's type, as long as that does not force a
                duplication. *)
-         let telm = fold_left_short_circuit start_telm args TargetEnvListMap.empty
-             (fun telm (arg_term, arg_ity) ->
-                (* telm contains not only variable environments, but also information whether
+         let tel = fold_left_short_circuit start_tel args TargetEnvl.empty
+             (fun tel (arg_term, arg_ity) ->
+                (* tel contains not only variable environments, but also information whether
                    there was a duplication (for (3) and (NP)) and whether a productive argument
                    was used (for (3)). *)
-                TyList.fold_left_short_circuit telm arg_ity TargetEnvListMap.empty
-                  (fun telm arg_ty ->
+                TyList.fold_left_short_circuit tel arg_ity TargetEnvl.empty
+                  (fun tel arg_ty ->
                      if !Flags.verbose then
                        begin
                          print_string @@ String.make indent ' ' ^ "* Typing argument " ^
@@ -411,89 +413,90 @@ class typing (hg : hgrammar) = object(self)
                                          string_of_ity arg_ity ^ "\n";
                          indent <- indent + 2
                        end;
-                     (* telm are possible variable environments constructed so far from previous
+                     (* tel are possible variable environments constructed so far from previous
                         arguments, only for the current target.
                         When target argument is productive, the actual argument can be either
                         productive or not productive, but with a productive variable. When
                         target argument is not productive, the actual argument must be not
                         productive and have no productive variables. *)
-                     let arg_telm =
+                     let arg_tel =
                        if is_productive arg_ty then
                          (* case when target argument is productive *)
                          (* subcase when actual argument is productive *)
-                         let pr_arg_telm =
+                         let pr_arg_tel =
                            (* productive actual argument implies productive target *)
                            match pr_target with
                            | Some pr_target ->
                              (* retarget also marks these environments with information that
                                 productive actual argument was used and removes duplication
                                 flags *)
-                             TargetEnvListMap.retarget pr_target @@
+                             (* TODO check if false flag for force_pr_var *)
+                             TargetEnvl.retarget pr_target @@
                              self#type_check arg_term (Some arg_ty) env_data no_pr_vars false
-                           | None -> TargetEnvListMap.empty
+                           | None -> TargetEnvl.empty
                          in
                          (* subcase when actual argument is nonproductive *)
-                         let np_arg_telm =
+                         let np_arg_tel =
                            if no_pr_vars then
-                             TargetEnvListMap.empty
+                             TargetEnvl.empty
                            else
                              (* productive target argument together with not productive actual
                                 argument implies productive variable *)
-                             let arg_telm =
+                             let arg_tel =
                                self#type_check arg_term (Some (with_productivity NP arg_ty))
                                  env_data false true
                              in
                              (* both target productivities are valid for nonproductive actual
                                 argument *)
-                             let pr_target_arg_telm = match pr_target with
-                               | Some pr_target -> TargetEnvListMap.retarget pr_target arg_telm
-                               | None -> TargetEnvListMap.empty
+                             let pr_target_arg_tel = match pr_target with
+                               | Some pr_target -> TargetEnvl.retarget pr_target arg_tel
+                               | None -> TargetEnvl.empty
                              in
-                             let np_target_arg_telm = match np_target with
-                               | Some np_target -> TargetEnvListMap.retarget np_target arg_telm
-                               | None -> TargetEnvListMap.empty
+                             let np_target_arg_tel = match np_target with
+                               | Some np_target -> TargetEnvl.retarget np_target arg_tel
+                               | None -> TargetEnvl.empty
                              in
-                             TargetEnvListMap.merge pr_target_arg_telm np_target_arg_telm
+                             TargetEnvl.merge pr_target_arg_tel np_target_arg_tel
                          in
-                         TargetEnvListMap.merge pr_arg_telm np_arg_telm
+                         TargetEnvl.merge pr_arg_tel np_arg_tel
                        else
                          (* case when target argument is nonproductive *)
                          (* nonproductive target argument implies nonproductive actual argument
                             and no productive vars *)
-                         let arg_telm =
+                         let arg_tel =
                            self#type_check arg_term (Some arg_ty) env_data true false
                          in
                          (* both target productivities are valid for nonproductive target
                             argument *)
-                         let pr_target_arg_telm = match pr_target with
-                           | Some pr_target -> TargetEnvListMap.retarget pr_target arg_telm
-                           | None -> TargetEnvListMap.empty
+                         let pr_target_arg_tel = match pr_target with
+                           | Some pr_target -> TargetEnvl.retarget pr_target arg_tel
+                           | None -> TargetEnvl.empty
                          in
-                         let np_target_arg_telm = match np_target with
-                           | Some np_target -> TargetEnvListMap.retarget np_target arg_telm
-                           | None -> TargetEnvListMap.empty
+                         let np_target_arg_tel = match np_target with
+                           | Some np_target -> TargetEnvl.retarget np_target arg_tel
+                           | None -> TargetEnvl.empty
                          in
-                         TargetEnvListMap.merge pr_target_arg_telm np_target_arg_telm
+                         TargetEnvl.merge pr_target_arg_tel np_target_arg_tel
                      in
-                     let intersection = TargetEnvListMap.intersect telm arg_telm in
+                     let intersection = TargetEnvl.intersect tel arg_tel in
                      if !Flags.verbose then
                        begin
                          indent <- indent - 2;
                          print_string @@ String.make indent ' ' ^
                                          "  env count for the argument: " ^
-                                         string_of_int (TargetEnvListMap.size arg_telm) ^ "\n" ^
+                                         string_of_int (TargetEnvl.size arg_tel) ^ "\n" ^
                                          String.make indent ' ' ^
                                          "  env count after intersection: " ^
-                                         string_of_int (TargetEnvListMap.size intersection) ^ "\n"
+                                         string_of_int (TargetEnvl.size intersection) ^ "\n"
                        end;
                      (* Productive target might require duplication in (3), but this can only
                         be checked at the end. (or TODO optimization in argument order).
                         Nonproductive target requires no duplication. *)
-                     let res = TargetEnvListMap.filter_no_dup_for_np_targets intersection in
+                     let res = TargetEnvl.filter_no_dup_for_np_targets intersection in
                      if !Flags.verbose then
                        print_string @@ String.make indent ' ' ^
                                        "  env count after no duplication filtering: " ^
-                                       string_of_int (TargetEnvListMap.size res) ^ "\n";
+                                       string_of_int (TargetEnvl.size res) ^ "\n";
                      res
                   )
              )
@@ -501,35 +504,35 @@ class typing (hg : hgrammar) = object(self)
          if !Flags.verbose then
            print_string @@ String.make indent ' ' ^
                            "* Intersected envs before duplication filtering:\n" ^
-                           String.make (indent + 2) ' ' ^ TargetEnvListMap.to_string telm ^ "\n";
-         let telm =
+                           String.make (indent + 2) ' ' ^ TargetEnvl.to_string tel ^ "\n";
+         let tel =
            if not head_pr then
              begin
                (* a duplication or productive actual argument is required when head is not
                   productive and target is productive *)
-               let telm = TargetEnvListMap.filter_dup_or_pr_arg_for_pr_targets telm in
+               let tel = TargetEnvl.filter_dup_or_pr_arg_for_pr_targets tel in
                if !Flags.verbose then
                  print_string @@ String.make indent ' ' ^
                                  "* env count after duplication or pr arg filtering: " ^
-                                 string_of_int (TargetEnvListMap.size telm) ^ "\n";
-               telm
+                                 string_of_int (TargetEnvl.size tel) ^ "\n";
+               tel
              end
            else
-             telm
+             tel
          in
          if force_pr_var then
-           let telm = TargetEnvListMap.filter_pr_vars telm in
+           let tel = TargetEnvl.filter_pr_vars tel in
            if !Flags.verbose then
              begin
                print_string @@ String.make indent ' ' ^ "* env count after pr var filtering: " ^
-                               string_of_int (TargetEnvListMap.size telm) ^ "\n";
+                               string_of_int (TargetEnvl.size tel) ^ "\n";
                indent <- indent - 2
              end;
-           telm
+           tel
          else
            begin
              indent <- indent - 2;
-             telm
+             tel
            end
        )
     )

@@ -85,16 +85,4 @@ let hty_binding2env (var_count : int) (binding : hty binding) : env =
     ) binding;
   new env itys
 
-(** List of possible typings of variables, treated as if there was OR as the delimiter. *)
-type envl = env list
-
 let env_compare (env1 : env) (env2 : env) : int = env1#compare env2
-
-let envl_compare : envl -> envl -> int =
-  Utilities.compare_lists env_compare
-
-let envl_eq (envl1 : envl) (envl2 : envl) : bool =
-  envl_compare envl1 envl2 = 0
-
-let string_of_envl (envl : envl) : string =
-  Utilities.string_of_list (fun env -> env#to_string) envl
