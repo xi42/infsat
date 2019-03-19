@@ -20,10 +20,17 @@ class hty_store (hgrammar : hgrammar) = object(self)
 
   (* --- modification --- *)
 
-  method add_hty (id : hterms_id) (hty : hty) =
+  (** Idempodently adds mapping from id to hty to the storage. Returns whether it was new (did not
+      already exist). *)
+  method add_hty (id : hterms_id) (hty : hty) : bool =
     let htys' = htys.(id) in
     if not @@ List.exists (hty_eq hty) htys' then
-      htys.(id) <- hty :: htys'
+      begin
+        htys.(id) <- hty :: htys';
+        true
+      end
+    else
+      false
 end
 
 let remove_hty_duplicates (htys : hty list) : hty list =

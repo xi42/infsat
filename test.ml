@@ -244,13 +244,13 @@ let typing_xyyz_test () =
   typing#add_nt_ty 2 @@ ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr";
   typing#add_nt_ty 3 @@ ty_of_string "(np -> np) -> np -> np";
   let id0_0 = hg#locate_hterms_id 0 [0] in
-  typing#get_htys#add_hty id0_0
+  ignore @@ typing#get_htys#add_hty id0_0
     [
       ity_of_string "pr -> pr";
       ity_of_string "np -> np";
       ity_of_string "np -> pr"
     ];
-  typing#get_htys#add_hty id0_0
+  ignore @@ typing#get_htys#add_hty id0_0
     [
       ity_of_string "pr -> pr";
       ity_of_string "pr -> pr";

@@ -222,3 +222,6 @@ let rec hty_compare : hty -> hty -> int =
   Utilities.compare_lists TyList.compare
 
 let rec hty_eq (hty1 : hty) (hty2 : hty) : bool = hty_compare hty1 hty2 = 0
+
+let string_of_hty (hty : hty) : string =
+  Utilities.string_of_list string_of_ity hty

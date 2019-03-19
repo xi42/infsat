@@ -1,6 +1,48 @@
 open Profiling
 open Utilities
 
+let report_usage () =
+  print_string @@ "Usage: \n" ^
+                  "infsat <option>* <filename> \n\n" ^
+                  " -d\n" ^
+                  "  debug mode\n"
+
+let rec read_options index =
+  match Sys.argv.(index) with
+  | "-d" -> (Flags.debugging := true; read_options (index+1))
+  | "-v" -> (Flags.verbose := true; read_options (index+1))
+  | "-n" -> (Flags.normalize := true;
+             Flags.normalization_depth := int_of_string(Sys.argv.(index+1));
+             read_options(index+2))
+  (*
+  | "-noce" -> (Flags.ce := false; read_options (index+1))
+  | "-subt" -> (Flags.subty := true; read_options (index+1))
+  | "-o" -> (Flags.outputfile := Sys.argv.(index+1); read_options (index+2))
+  | "-r" -> (Flags.redstep := int_of_string(Sys.argv.(index+1));
+             Flags.flow := false;
+             read_options(index+2))
+  | "-lazy" -> (Flags.eager := false;
+			      read_options(index+1))
+  | "-merge" -> (Flags.merge_vte := true;
+			      read_options(index+1))
+  | "-nn" -> (Flags.normalize := false;
+			      read_options(index+1))
+  | "-tyterm2" -> (Flags.ty_of_term := true;read_options(index+1))
+  | "-c" -> (Flags.compute_alltypes := true;read_options (index+1))
+  | "-noinc" -> (Flags.incremental := false;read_options (index+1))
+  | "-nooverwrite" -> (Flags.overwrite := false;read_options (index+1))
+  | "-subty" -> (Flags.subtype_hash := true;read_options (index+1))
+  | "-nosubty" -> (Flags.nosubtype := true;read_options (index+1))
+  | "-ne" -> (Flags.emptiness_check := false; read_options (index+1))
+  | "-bdd" -> (Flags.bdd_mode := 1; read_options (index+1))
+  | "-bdd2" -> (Flags.bdd_mode := 2; read_options (index+1))
+  | "-prof" -> (Flags.profile := true; read_options (index+1))
+  | "-flowcts" -> (Flags.add_flow_cts := true; read_options (index+1))
+  | "-notenv" -> (Flags.report_type_env := false; read_options (index+1))
+  | "-cert" -> (Flags.certificate := true; read_options (index+1))
+  *)
+  | _ -> index
+
 (** Parses a file to HORS prerules and automata definition. *)
 let parse_file filename =
   let in_strm = 
@@ -49,6 +91,9 @@ let parse_stdin() =
   in
     result
 
+let string_of_input (prerules, tr) =
+  Syntax.string_of_prerules prerules ^ "\n" ^ Syntax.string_of_preterminals tr
+
 (** Main part of InfSat. Takes parsed input, computes if the language contains
     arbitrarily many counted letters. Prints the result. *)
 let report_finiteness input : bool =
@@ -68,51 +113,6 @@ let report_finiteness input : bool =
   profile "saturation" (fun () ->
       saturation#saturate
     )
-
-let string_of_input (prerules, tr) =
-  Syntax.string_of_prerules prerules ^ "\n" ^ Syntax.string_of_preterminals tr
-
-let report_usage () =
-  print_string @@ "Usage: \n" ^
-                  "infsat <option>* <filename> \n\n" ^
-                  " -d\n" ^
-                  "  debug mode\n"
-
-let rec read_options index =
-  match Sys.argv.(index) with
-  | "-d" -> (Flags.debugging := true; read_options (index+1))
-  | "-v" -> (Flags.verbose := true; read_options (index+1))
-  | "-n" -> (Flags.normalize := true;
-             Flags.normalization_depth := int_of_string(Sys.argv.(index+1));
-             read_options(index+2))
-  (*
-  | "-noce" -> (Flags.ce := false; read_options (index+1))
-  | "-subt" -> (Flags.subty := true; read_options (index+1))
-  | "-o" -> (Flags.outputfile := Sys.argv.(index+1); read_options (index+2))
-  | "-r" -> (Flags.redstep := int_of_string(Sys.argv.(index+1));
-             Flags.flow := false;
-             read_options(index+2))
-  | "-lazy" -> (Flags.eager := false;
-			      read_options(index+1))
-  | "-merge" -> (Flags.merge_vte := true;
-			      read_options(index+1))
-  | "-nn" -> (Flags.normalize := false;
-			      read_options(index+1))
-  | "-tyterm2" -> (Flags.ty_of_term := true;read_options(index+1))
-  | "-c" -> (Flags.compute_alltypes := true;read_options (index+1))
-  | "-noinc" -> (Flags.incremental := false;read_options (index+1))
-  | "-nooverwrite" -> (Flags.overwrite := false;read_options (index+1))
-  | "-subty" -> (Flags.subtype_hash := true;read_options (index+1))
-  | "-nosubty" -> (Flags.nosubtype := true;read_options (index+1))
-  | "-ne" -> (Flags.emptiness_check := false; read_options (index+1))
-  | "-bdd" -> (Flags.bdd_mode := 1; read_options (index+1))
-  | "-bdd2" -> (Flags.bdd_mode := 2; read_options (index+1))
-  | "-prof" -> (Flags.profile := true; read_options (index+1))
-  | "-flowcts" -> (Flags.add_flow_cts := true; read_options (index+1))
-  | "-notenv" -> (Flags.report_type_env := false; read_options (index+1))
-  | "-cert" -> (Flags.certificate := true; read_options (index+1))
-  *)
-  | _ -> index
 
 let parse_and_report_finiteness (filename : string option) : bool =
   let input = profile "parsing" (fun () ->

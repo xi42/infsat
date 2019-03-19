@@ -35,7 +35,7 @@ class typing (hg : hgrammar) = object(self)
   method add_nt_ty (nt : nt_id) (ty : ty) =
     nt_ity.(nt) <- TyList.merge nt_ity.(nt) (TyList.singleton ty)
 
-  method add_hterms_hty (id : hterms_id) (hty : hty) =
+  method add_hterms_hty (id : hterms_id) (hty : hty) : bool =
     htys#add_hty id hty
 
   (* --- generating envs --- *)

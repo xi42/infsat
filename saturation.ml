@@ -29,7 +29,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
 
   (** Each element of this queue has a new typing of hterms that should be propagated.
       Subsequently dequeued typings are for the same hterms as previously, if available. *)
-  val prop_hterms_ty_queue : ity TwoLayerQueue.t = TwoLayerQueue.make hg#hterms_count
+  val prop_hterms_hty_queue : hty TwoLayerQueue.t = TwoLayerQueue.make hg#hterms_count
 
   (** Each element of this queue has all new typings of a nonterminal that should be propagated
       by recomputing nonterminals that contain this nonterminal in a linear way.
@@ -72,7 +72,13 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
   
   method register_hterms_hty (id : hterms_id) (hty : hty) =
     (* TODO subtyping and overwriting logic *)
-    typing#add_hterms_hty id hty
+    if typing#add_hterms_hty id hty then
+      begin
+        if !Flags.verbose then
+          print_string @@ "Registering new typing of hterms " ^ string_of_int id ^ " : " ^
+                          string_of_hty hty ^ "\n";
+        TwoLayerQueue.enqueue prop_hterms_hty_queue id hty
+      end
 
   (* --- typing --- *)
 
@@ -101,8 +107,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
 
   (* --- processing queues --- *)
 
-  (** Processes prop_hterms_ty_queue if not empty and returns if it was not empty. *)
-  method process_prop_hterms_ty_queue : bool =
+  (** Processes prop_hterms_hty_queue if not empty and returns if it was not empty. *)
+  method process_prop_hterms_hty_queue : bool =
     false
 
   (** Processes prop_nt_ty_queue if not empty and returns if it was not empty. *)
@@ -152,7 +158,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
   method process_queues : bool =
     if !Flags.debugging then
       self#print_status false;
-    self#process_prop_hterms_ty_queue ||
+    self#process_prop_hterms_hty_queue ||
     self#process_prop_nt_ty_queue ||
     self#process_prop_nt_queue ||
     self#process_nt_binding_queue ||
