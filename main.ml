@@ -81,14 +81,16 @@ let report_usage () =
 let rec read_options index =
   match Sys.argv.(index) with
   | "-d" -> (Flags.debugging := true; read_options (index+1))
+  | "-v" -> (Flags.verbose := true; read_options (index+1))
+  | "-n" -> (Flags.normalize := true;
+             Flags.normalization_depth := int_of_string(Sys.argv.(index+1));
+             read_options(index+2))
+  (*
   | "-noce" -> (Flags.ce := false; read_options (index+1))
   | "-subt" -> (Flags.subty := true; read_options (index+1))
   | "-o" -> (Flags.outputfile := Sys.argv.(index+1); read_options (index+2))
   | "-r" -> (Flags.redstep := int_of_string(Sys.argv.(index+1));
              Flags.flow := false;
-             read_options(index+2))
-  | "-n" -> (Flags.normalize := true;
-             Flags.normalization_depth := int_of_string(Sys.argv.(index+1));
              read_options(index+2))
   | "-lazy" -> (Flags.eager := false;
 			      read_options(index+1))
@@ -108,8 +110,8 @@ let rec read_options index =
   | "-prof" -> (Flags.profile := true; read_options (index+1))
   | "-flowcts" -> (Flags.add_flow_cts := true; read_options (index+1))
   | "-notenv" -> (Flags.report_type_env := false; read_options (index+1))
-  | "-v" -> (Flags.verbose := true; read_options (index+1))
   | "-cert" -> (Flags.certificate := true; read_options (index+1))
+  *)
   | _ -> index
 
 let parse_and_report_finiteness (filename : string option) : bool =

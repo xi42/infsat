@@ -165,6 +165,13 @@ let sort_and_delete_duplicates c =
   let c' = List.sort Pervasives.compare c in
   delete_consecutive_duplicates Pervasives.compare c'
 
+let rec is_sorted cmp l =
+  match l with
+  | [] -> true
+  | [x] -> true
+  | x :: (y :: l as yl) ->
+    cmp x y < 0 && is_sorted cmp yl
+
 (* --- ? --- *)
 
 let id (x : 'a) : 'a = x
@@ -229,13 +236,6 @@ let rec list_take_nth l n =
     else
       let (x, l'') = list_take_nth l' (n-1) in
       (x, a::l'')
-
-let rec is_sorted l =
-  match l with
-    [] -> true
-  | [x] -> true
-  | x::y::l ->
-       compare x y<0 && is_sorted (y::l)
 
 let rec merge comp l1 l2 =
   match (l1, l2) with

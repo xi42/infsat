@@ -443,8 +443,10 @@ class cfa (hg : hgrammar) = object(self)
     (* when no vars are only in arguments of nonterminals and terminals *)
     (* if no variable occurs in the head position, we do not use binding information to compute
        the type of f *)
+    (* TODO this is optional if Flags.eager is true
     if not (SortedVars.is_empty array_headvars.(f) && !Flags.eager) then
-      List.iter (self#mk_binding_depgraph_for_termss f) termsss
+    *)
+    List.iter (self#mk_binding_depgraph_for_termss f) termsss
         
   method print_dep_nt_nt_lin =
     for i = 0 to Array.length array_dep_nt_nt_lin - 1 do
@@ -505,10 +507,11 @@ class cfa (hg : hgrammar) = object(self)
     for nt1 = 0 to hg#nt_count - 1 do
       let nts1, nts2 = hg#nt_in_nt_with_linearity nt1 in
       SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1) nts2;
+      (* TODO support for linearity
       if !Flags.incremental then
         SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt_lin nt2 nt1) nts1
-      else 
-        SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1) nts1
+         else *)
+      SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1) nts1
     done;
     if !Flags.debugging then
       begin

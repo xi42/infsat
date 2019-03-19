@@ -23,15 +23,20 @@ class typing (hg : hgrammar) = object(self)
       verbose printing. *)
   val mutable indent = 0
 
-  (* --- direct manipulation on registers --- *)
+  (* --- getting registered typings --- *)
 
   method nt_ty_exists (nt : nt_id) (ty : ty) : bool =
     TyList.exists (fun nt_ty -> nt_ty = ty) nt_ity.(nt)
 
   method nt_ity (nt : nt_id) : ity = nt_ity.(nt)
 
+  (* --- saving new typings --- *)
+  
   method add_nt_ty (nt : nt_id) (ty : ty) =
     nt_ity.(nt) <- TyList.merge nt_ity.(nt) (TyList.singleton ty)
+
+  method add_hterms_hty (id : hterms_id) (hty : hty) =
+    htys#add_hty id hty
 
   (* --- generating envs --- *)
 

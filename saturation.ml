@@ -68,6 +68,12 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
     print_string "\n";
     typing#print_hterms_hty cfa#hterms_are_arg
 
+  (* --- processing results of typing --- *)
+  
+  method register_hterms_hty (id : hterms_id) (hty : hty) =
+    (* TODO subtyping and overwriting logic *)
+    typing#add_hterms_hty id hty
+
   (* --- typing --- *)
 
   (** Infers type of given hterm under given bindings. If the type is new, it is registered. *)
@@ -79,27 +85,19 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
       | Some nt -> hg#nt_arity nt
       | None -> 0
     in
+    let hterms = hg#id2hterms id in
     let envl =
       List.fold_left EnvList.merge EnvList.empty @@
       List.map (typing#binding2envl var_count (Some mask) None) bindings
     in
-    ()
-    (*
-    let update_ty_of_id_aux id venvs overwrite_flag = 
-      let terms = Cfa.id2terms id in
-      List.iter
-        (fun venv -> 
-           let ty = ty_of_terms venv terms in (* compute type of terms (iteration) in given environment
-                                                 based on automata typings (cte) for terminals,
-                                                 computed nonterminal types (nt_ity) for nonterminals,
-                                                 and given environment for vars *)
-           register_hterms_atys id ty overwrite_flag)
-        venvs
-    in
-    let venvs = mk_venvs_mask env in
-    update_ty_of_id_aux id venvs overwrite_flag (* generally, try to get and register an
-                                                   intersection type for each term in sequence id *)
-    *)
+    envl |> EnvList.iter (fun envm ->
+        let tels = hterms |> List.map (fun hterm ->
+            typing#type_check hterm None (Left envm.env) false false
+          )
+        in
+        let hty = tels |> List.map TargetEnvl.targets in
+        self#register_hterms_hty id hty
+      )
 
   (* --- processing queues --- *)
 

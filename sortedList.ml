@@ -56,6 +56,10 @@ struct
 
   let of_list l = L (List.sort Ord.compare l)
 
+  let of_sorted_list l =
+    assert (Utilities.is_sorted Ord.compare l);
+    L l
+
   let to_list (L l) = l
 
   let to_ilist (L l) = List.mapi (fun i x -> (i, x)) l

@@ -161,6 +161,12 @@ module TargetEnvl = struct
         (target1, merged_envl)
       ) tel1 tel2
 
+  let map (f : ty -> envl -> 'a) (tel : t) : 'a list =
+    TargetEnvlListBase.map (fun (target, envl) -> f target envl) tel
+
+  let targets (tel : t) : ity =
+    TyList.of_list @@ TargetEnvlListBase.map fst tel
+
   let compare : t -> t -> int =
     TargetEnvlListBase.compare_custom @@ Utilities.compare_pair Ty.compare EnvList.compare
 
