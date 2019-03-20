@@ -69,6 +69,16 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
     typing#print_hterms_hty cfa#hterms_are_arg
 
   (* --- processing results of typing --- *)
+
+  method register_nt_ity (nt : nt_id) (ity : ity) =
+    (* TODO subtyping and overwriting logic *)
+    if typing#add_nt_ity nt ity then
+      begin
+        if !Flags.verbose then
+          print_string @@ "Registering new typing of nonterminal " ^ string_of_int nt ^ " : " ^
+                          string_of_ity ity ^ "\n";
+        SetQueue.enqueue prop_nt_queue nt
+      end
   
   method register_hterms_hty (id : hterms_id) (hty : hty) =
     (* TODO subtyping and overwriting logic *)
@@ -82,6 +92,17 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
 
   (* --- typing --- *)
 
+  method infer_nt_ity (nt : nt_id) (binding : hterms_id binding) =
+    let body = hg#nt_body nt in
+    let var_count = hg#nt_arity nt in
+    let envl = typing#binding2envl var_count None None binding in
+    let ity = EnvList.fold_left (fun ity envm ->
+        let tel = typing#type_check body None (Left envm.env) false false in
+        TyList.merge ity @@ TargetEnvl.targets tel
+      ) TyList.empty envl
+    in
+    self#register_nt_ity nt ity
+  
   (** Infers type of given hterm under given bindings. If the type is new, it is registered. *)
   (* TODO this was update_ty_of_id *)
   method infer_hterms_hty (id : hterms_id) (binding : hterms_id binding) =
@@ -121,7 +142,21 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
       
   (** Processes prop_nt_binding_queue if not empty and returns if it was not empty. *)
   method process_nt_binding_queue : bool =
-    false
+    try
+      let nt, binding = TwoLayerQueue.dequeue nt_binding_queue in
+(*      let bindings = cfa#lookup_nt_bindings nt in
+      if !Flags.verbose then
+        print_string @@ "nt_queue: Enqueuing all " ^ string_of_int (List.length bindings) ^
+                        " bindings of nonterminal " ^ string_of_int nt ^ "\n.";
+      List.iter (fun binding ->
+          TwoLayerQueue.enqueue nt_binding_queue nt binding
+        ) bindings;*)
+
+      self#infer_nt_ity nt binding;
+      true
+    with
+    | TwoLayerQueue.Empty -> false
+
       
   (** Processes nt_queue if not empty and returns if it was not empty.
       It finds all bindings of a nonterminal and enqueues them to be typed. *)

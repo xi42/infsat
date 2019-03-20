@@ -31,9 +31,17 @@ class typing (hg : hgrammar) = object(self)
   method nt_ity (nt : nt_id) : ity = nt_ity.(nt)
 
   (* --- saving new typings --- *)
+
+  method add_nt_ity (nt : nt_id) (ity : ity) : bool =
+    let new_ity_count = ref @@ TyList.length ity in
+    nt_ity.(nt) <- TyList.merge_custom (fun x _ ->
+        new_ity_count := !new_ity_count - 1;
+        x
+      ) nt_ity.(nt) ity;
+    !new_ity_count <> 0
   
-  method add_nt_ty (nt : nt_id) (ty : ty) =
-    nt_ity.(nt) <- TyList.merge nt_ity.(nt) (TyList.singleton ty)
+  method add_nt_ty (nt : nt_id) (ty : ty) : bool =
+    self#add_nt_ity nt @@ TyList.singleton ty
 
   method add_hterms_hty (id : hterms_id) (hty : hty) : bool =
     htys#add_hty id hty

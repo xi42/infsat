@@ -241,8 +241,8 @@ let grammar_xyyz () = mk_grammar
 
 let typing_xyyz_test () =
   let hg, typing = mk_typing @@ grammar_xyyz () in
-  typing#add_nt_ty 2 @@ ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr";
-  typing#add_nt_ty 3 @@ ty_of_string "(np -> np) -> np -> np";
+  ignore @@ typing#add_nt_ty 2 @@ ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr";
+  ignore @@ typing#add_nt_ty 3 @@ ty_of_string "(np -> np) -> np -> np";
   let id0_0 = hg#locate_hterms_id 0 [0] in
   ignore @@ typing#get_htys#add_hty id0_0
     [
@@ -385,8 +385,8 @@ let grammar_dup () = mk_grammar
 
 let typing_dup_test () =
   let hg, typing = mk_typing @@ grammar_dup () in
-  typing#add_nt_ty 1 @@ ty_of_string  "(pr -> pr) -> (pr -> pr) -> pr -> np";
-  typing#add_nt_ty 1 @@ ty_of_string  "(pr -> np) -> (pr -> np) -> pr -> np";
+  ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> pr) -> (pr -> pr) -> pr -> np";
+  ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> np) -> (pr -> np) -> pr -> np";
   [
     (* All valid typings of x type check, because the application is already productive due to
        a e being productive. *)
