@@ -1,4 +1,5 @@
 open Binding
+open Cfa
 open Grammar
 open GrammarCommon
 open HGrammar
@@ -8,7 +9,7 @@ open TargetEnvListMap
 open Type
 open Utilities
 
-class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
+class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   (* Design note: typing with specific environments occurs in Typing, but this module is used to
      prepare precise specification of these environments based on 0CFA output, Typing does not
      use 0CFA depdendency information. *)
@@ -92,10 +93,11 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
 
   (* --- typing --- *)
 
-  method infer_nt_ity (nt : nt_id) (binding : hterms_id binding) =
+  method infer_nt_ity (nt : nt_id) (binding : hterms_id binding)
+      (fixed_hterms_hty : (hterms_id * hty) option) =
     let body = hg#nt_body nt in
     let var_count = hg#nt_arity nt in
-    let envl = typing#binding2envl var_count None None binding in
+    let envl = typing#binding2envl var_count None fixed_hterms_hty binding in
     let ity = EnvList.fold_left (fun ity envm ->
         let tel = typing#type_check body None (Left envm.env) false false in
         TyList.merge ity @@ TargetEnvl.targets tel
@@ -130,34 +132,69 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
 
   (** Processes prop_hterms_hty_queue if not empty and returns if it was not empty. *)
   method process_prop_hterms_hty_queue : bool =
-    false
+    try
+      let id, hty = TwoLayerQueue.dequeue prop_hterms_hty_queue in
+      if !Flags.verbose then
+        print_string @@ "prop_nt_queue: Propagating new types of hterms " ^
+                        string_of_int id ^ " : " ^ string_of_hty hty ^ ".\n";
+      (* TODO isn't this redundant? *)
+      cfa#get_hterms_where_hterms_flow id |> SortedHTermsIds.iter (fun id' ->
+          ()
+        );
+      cfa#get_nt_bindings_applied_to_hterms id |> List.iter (fun (nt, binding) ->
+          self#infer_nt_ity nt binding @@ Some (id, hty)
+        );
+      (*
+      cfa#get_hterms_bindings id |> List.iter (self#infer_hterms_hty id);
+      let ids = Cfa.get_hterms_where_hterms_flow id in (* ids of hterms that dequeued hterm was applied to
+                                           substituting one or more variables inside (propagating
+                                           types forward) *)
+      (* update type of id1 in envs where there is id, forced to id : tys *)
+      List.iter (fun id1 -> update_incremental_ty_of_id id1 (id,tys) true) ids;
+      let bindings = Cfa.get_nt_bindings_applied_to_hterms id in (* nonterminals and their bindings that were
+                                                       applied to the hterm id *)
+      List.iter (fun binding -> update_incremental_ty_of_nt binding (id,tys)) bindings
+*)
+      true
+    with
+    | TwoLayerQueue.Empty -> false
 
   (** Processes prop_nt_ty_queue if not empty and returns if it was not empty. *)
   method process_prop_nt_ty_queue : bool =
+    (* TODO this is to be implemented when implementing special case for linear nonterminals *)
     false
 
   (** Processes prop_nt_queue if not empty and returns if it was not empty. *)
   method process_prop_nt_queue : bool =
-    false
+    try
+      let nt = SetQueue.dequeue prop_nt_queue in
+      if !Flags.verbose then
+        print_string @@ "prop_nt_queue: Propagating all types of nonterminal " ^
+                        string_of_int nt ^ ".\n";
+      cfa#get_nt_containing_nt nt |> SortedNTs.iter (fun nt' ->
+          SetQueue.enqueue nt_queue nt';
+          (* removing bindings for that nt, since all of its bindings will be recomputed *)
+          TwoLayerQueue.remove_all nt_binding_queue nt'
+        );
+      cfa#get_hterms_containing_nt nt |> SortedHTermsIds.iter (fun id ->
+          SetQueue.enqueue hterms_queue id
+        );
+      true
+    with
+    | SetQueue.Empty -> false
       
   (** Processes prop_nt_binding_queue if not empty and returns if it was not empty. *)
   method process_nt_binding_queue : bool =
     try
       let nt, binding = TwoLayerQueue.dequeue nt_binding_queue in
-(*      let bindings = cfa#lookup_nt_bindings nt in
       if !Flags.verbose then
-        print_string @@ "nt_queue: Enqueuing all " ^ string_of_int (List.length bindings) ^
-                        " bindings of nonterminal " ^ string_of_int nt ^ "\n.";
-      List.iter (fun binding ->
-          TwoLayerQueue.enqueue nt_binding_queue nt binding
-        ) bindings;*)
-
-      self#infer_nt_ity nt binding;
+        print_string @@ "nt_binding_queue: Typing nonterminal " ^ string_of_int nt ^
+                        " with binding " ^ string_of_binding string_of_int binding ^ ".\n";
+      self#infer_nt_ity nt binding None;
       true
     with
     | TwoLayerQueue.Empty -> false
 
-      
   (** Processes nt_queue if not empty and returns if it was not empty.
       It finds all bindings of a nonterminal and enqueues them to be typed. *)
   method process_nt_queue : bool =
@@ -167,7 +204,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : Cfa.cfa) = object(self)
       let bindings = cfa#lookup_nt_bindings nt in
       if !Flags.verbose then
         print_string @@ "nt_queue: Enqueuing all " ^ string_of_int (List.length bindings) ^
-                        " bindings of nonterminal " ^ string_of_int nt ^ "\n.";
+                        " bindings of nonterminal " ^ string_of_int nt ^ ".\n";
       List.iter (fun binding ->
           TwoLayerQueue.enqueue nt_binding_queue nt binding
         ) bindings;

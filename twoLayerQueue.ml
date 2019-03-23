@@ -23,6 +23,13 @@ let dequeue (firsts, seconds : 'a t) : int * 'a =
         firsts := firsts';
       (first, second)
 
+let remove_all (firsts, seconds : 'a t) (first : int) : unit =
+  match seconds.(first) with
+  | [] -> ()
+  | _ ->
+    seconds.(first) <- [];
+    firsts := !firsts |> List.filter (fun first' -> first' <> first)
+
 let size (firsts, seconds : 'a t) : int =
   List.fold_left (fun acc first ->
       acc + (List.length seconds.(first))

@@ -174,26 +174,35 @@ let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
     else
       vars (k - 1) (("_" ^ string_of_int k) :: acc)
   in
-  let (body, wrap_fun) =
-    if k = 0 then
-      (* converted terminal with no children as _e *)
-      (MApp (MT E, []), false)
-    else if k = 1 && List.length arg_terms = 1 then
-      (* removing identities *)
-      (List.hd arg_terms, false)
-    else
-      (b_tree_aux 1 k, true)
-  in
-  (* adding _a above counted ones *)
-  let body' = if counted then
-      MApp (MT A, [body])
-    else 
-      body
-  in
-  if wrap_fun then
-    MApp (MFun (vars k [], body'), arg_terms)
+  if k = 0 then
+    (* converting terminal with no children to e *)
+    MApp (MT E, [])
+  else if k = 1 && List.length arg_terms = 0 && counted then
+    (* converting counted terminal with no children and arity 1 to a *)
+    MApp (MT A, [])
   else
-    body
+    let (body, wrap_fun) =
+      if k = 1 && List.length arg_terms = 1 then
+        (* removing identities when terminal has one child *)
+        (List.hd arg_terms, false)
+      else if k = 2 then
+        (* converting terminal with two children to b *)
+        (MApp (MT B, arg_terms), false)
+      else
+        (* converting terminal with more than two children to a binary tree with that many
+           leaves and b in non-leaf nodes *)
+        (b_tree_aux 1 k, true)
+    in
+    (* adding _a above counted ones *)
+    let body = if counted then
+        MApp (MT A, [body])
+      else 
+        body
+    in
+    if wrap_fun then
+      MApp (MFun (vars k [], body), arg_terms)
+    else
+      body
 
 (** Replaces preterminals with minimal set of standard terminals - _a, _b, _e.
     Checks for name conflicts between variables, terminals, and br. Replacing is done by changing
@@ -303,8 +312,6 @@ let prerules2gram
   let g = new Grammar.grammar nt' vinfo rules' in
   (* saving grammar in a global variable *)
   if !Flags.debugging then
-    begin
-      print_string "Grammar after conversion from prerules:\n";
-      g#report_grammar
-    end;
+    print_string @@ "Grammar after conversion from prerules:\n" ^
+                    g#report_grammar;
   g

@@ -1,0 +1,60 @@
+Grammar.
+S -> br S1 S2.
+(* B is applied with two same hterms - a and a *)
+S1 -> A (B a).
+A x -> x a.
+B x y -> x (y e).
+(*
+y x
+y <- D x
+(D x) x
+
+D : k1 -> k1 -> k3
+D x : k1 -> k3
+y : k1 -> k3
+x : k1
+
+We need a binding C [x] [t1] ... [tK] [tL] ... [tM] [x] where each of these [x] is separate hterms.
+It cannot be achieved without substitution, because without substitution there can be at most one
+hterm. We need a subterm y [tL] ... [tM] [x] where y = C [x] [t1] ... [tK].
+
+TODO note that C does not need to be the thing where y is defined in.
+
+, so we need a term y [x] where y = (C [x]) or (C [x] [t]) for some hterms t.
+
+If y = (C [x]) then:
+C : k1 -> k2 -> k3
+x : k1
+C x = y : k2 -> k3
+but y : k2, so k2 = k2 -> k3, which means that unification failed.
+
+If y = (C [x] [t1] ... [tN]) then
+C : k1 -> k2 -> k3
+
+
+
+
+C [x] [x]
+y [x], y <- C [x]
+
+x and y are variables from D (which can be equal to C).
+
+C [x] [x]
+only way is
+y [x] with y <- C [x]
+
+since application is needed, C [x] must come from same nonterminal as [x] - it must be a recursive call to self
+
+D x y -> x y | D (C x) y
+x = a, C = id?
+*)
+S2 -> C a e.
+C x y -> b (x y) (C (D y) y).
+D x y -> x.
+End.
+
+Terminals.
+a -> 1 $.
+b -> 2.
+e -> 0.
+End.

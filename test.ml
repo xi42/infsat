@@ -28,8 +28,8 @@ let assert_equal_tels tel1 tel2 =
 let mk_grammar rules =
   let nonterminals = Array.mapi (fun i _ -> ("N" ^ string_of_int i, O)) rules in
   let g = new grammar nonterminals [||] rules in
-  print_string "Creating grammar:\n";
-  g#print_gram;
+  print_string @@ "Creating grammar:\n" ^
+                  g#report_grammar;
   EtaExpansion.eta_expand g;
   g
 
@@ -39,7 +39,7 @@ let mk_hgrammar g =
 let mk_cfa hg =
   let cfa = new Cfa.cfa hg in
   cfa#expand;
-  cfa#mk_binding_depgraph;
+  cfa#compute_dependencies;
   cfa
 
 let mk_typing g =
@@ -55,7 +55,197 @@ let type_check_nt_wo_env_wo_target (typing : typing) (hg : hgrammar) (nt : nt_id
 let senv hg nt i ity_str =
   singleton_env (hg#nt_arity nt) (nt, i) @@ ity_of_string ity_str
 
+let list_sort_eq (l1 : 'a list list) (l2 : 'a list list) : bool =
+  (List.sort (compare_lists Pervasives.compare) l1) =
+  (List.sort (compare_lists Pervasives.compare) l2)
+
+let string_of_ll = string_of_list (string_of_list string_of_int)
+
 (* --- tests --- *)
+
+let utilities_test () : test =
+  "utilities" >::: [
+    "product-0" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
+          [] @@
+        product []
+      );
+    
+    "product-1" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
+          [[1]] @@
+        product [[1]]
+      );
+    
+    "product-2" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
+          [[1; 2]] @@
+        product [[1]; [2]]
+      );
+    
+    "product-3" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
+          [
+            [1; 2; 3];
+            [1; 2; 33];
+            [1; 2; 333];
+            [11; 2; 3];
+            [11; 2; 33];
+            [11; 2; 333]
+          ] @@
+        product [[1; 11]; [2]; [3; 33; 333]]
+      );
+
+    "product-4" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
+          [
+            [1; 2];
+            [1; 22]
+          ] @@
+        product [[1]; [2; 22]]
+      );
+
+    "product-5" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
+          [[1]; [2]] @@
+        product [[1; 2]]
+      );
+    
+    "product_with_one_fixed-0" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
+          [] @@
+        product_with_one_fixed [] 0
+      );
+    
+    "product_with_one_fixed-1" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
+          [[0]] @@
+        product_with_one_fixed [[1; 2; 3]] 0
+      );
+    
+    "product_with_one_fixed-2" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
+          [
+            [0; 0];
+            [0; 2];
+            [0; 22];
+            [1; 0];
+            [11; 0]
+          ] @@
+        product_with_one_fixed [[1; 11]; [2; 22]] 0
+      );
+    
+    "product_with_one_fixed-3" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
+          [
+            [0; 0; 0];
+            [1; 0; 0];
+            [0; 2; 0];
+            [0; 0; 3];
+            [0; 22; 0];
+            [0; 222; 0];
+            [1; 2; 0];
+            [1; 0; 3];
+            [1; 22; 0];
+            [1; 222; 0];
+            [0; 2; 3];
+            [0; 22; 3];
+            [0; 222; 3]
+          ] @@
+        product_with_one_fixed [[1]; [2; 22; 222]; [3]] 0
+      );
+    
+    "product_with_one_fixed-4" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
+          [
+            [0; 0; 0; 0];
+            [1; 0; 0; 0];
+            [0; 2; 0; 0];
+            [0; 0; 3; 0];
+            [0; 0; 0; 4];
+            [1; 2; 0; 0];
+            [1; 0; 3; 0];
+            [1; 0; 0; 4];
+            [0; 2; 3; 0];
+            [0; 2; 0; 4];
+            [0; 0; 3; 4];
+            [0; 2; 3; 4];
+            [1; 0; 3; 4];
+            [1; 2; 0; 4];
+            [1; 2; 3; 0]
+          ] @@
+        product_with_one_fixed [[1]; [2]; [3]; [4]] 0
+      );
+  ]
+
+let conversion_test () : test =
+  (* These preterminals are defined in a way so that they should be converted to respective
+     terminals from paper without creating additional terms (such as functions). *)
+  let preserved_preterminals = [
+    Syntax.Terminal ("a", 1, true);
+    Syntax.Terminal ("b", 2, false);
+    Syntax.Terminal ("e", 0, false);
+    Syntax.Terminal ("id", 1, false)
+  ] in
+  (* This grammar aims to test all combinations of applications of terminals a, b, e with
+     all possible numbers of applied arguments. It also tests that not counted terminal
+     with one child is removed when it has an argument (as it is identity). And it also
+     tests built-in br terminal. *)
+  let test_prerules = [
+    ("E", [], Syntax.PApp (Syntax.Name "e", []));
+    ("A", ["x"], Syntax.PApp (Syntax.Name "a", [
+         Syntax.PApp (Syntax.Name "x", [])
+       ]));
+    ("B", [], Syntax.PApp (Syntax.Name "b", []));
+    ("Be", [], Syntax.PApp (Syntax.Name "b", [
+         Syntax.PApp (Syntax.Name "e", [])
+       ]));
+    ("BAee", [], Syntax.PApp (Syntax.Name "b", [
+         Syntax.PApp (Syntax.Name "a", [Syntax.PApp (Syntax.Name "e", [])]);
+         Syntax.PApp (Syntax.Name "e", [])
+       ]));
+    ("X", ["x"], Syntax.PApp (Syntax.Name "x", [
+         Syntax.PApp (Syntax.Name "e", [])
+       ]));
+    ("Xa", [], Syntax.PApp (Syntax.NT "X", [
+         Syntax.PApp (Syntax.Name "a", [])
+       ]));
+    ("IDe", [], Syntax.PApp (Syntax.Name "id", [
+         Syntax.PApp (Syntax.Name "e", [])
+       ]));
+    ("ID", [], Syntax.PApp (Syntax.Name "id", []));
+    ("BR", [], Syntax.PApp (Syntax.Name "br", []));
+    ("BRe", [], Syntax.PApp (Syntax.Name "br", [
+         Syntax.PApp (Syntax.Name "e", [])
+       ]));
+    ("BRxy", ["x"; "y"], Syntax.PApp (Syntax.Name "br", [
+         Syntax.PApp (Syntax.Name "x", []);
+         Syntax.PApp (Syntax.Name "y", [])
+       ]))
+  ] in
+  let gram = Conversion.prerules2gram (test_prerules, preserved_preterminals) in
+  if !Flags.debugging then
+    print_string @@ "Conversion test grammar:\n" ^ gram#report_grammar ^ "\n";
+  "conversion" >::: [
+    (* Terminals
+       a -> 1 $.
+       b -> 2.
+       e -> 0.
+       should be preserved as in the paper, without needless conversion. Therefore, there
+       should be no functions apart from the one from identity without arguments, i.e.,
+       exactly one extra rule. *)
+    "prerules2gram-1" >:: (fun _ ->
+        assert_equal ~printer:string_of_int 13 @@
+        Array.length gram#rules
+      );
+
+    (* Checking that number of leaf terms is correct - nothing extra was added or removed
+       aside from extra rule from identity without arguments. *)
+    "prerules2gram-2" >:: (fun _ ->
+        assert_equal ~printer:string_of_int 23
+        gram#size
+      );
+  ]
 
 let type_test () : test =
   "type" >::: [
@@ -244,13 +434,13 @@ let typing_xyyz_test () =
   ignore @@ typing#add_nt_ty 2 @@ ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr";
   ignore @@ typing#add_nt_ty 3 @@ ty_of_string "(np -> np) -> np -> np";
   let id0_0 = hg#locate_hterms_id 0 [0] in
-  ignore @@ typing#get_htys#add_hty id0_0
+  ignore @@ typing#get_hty_store#add_hty id0_0
     [
       ity_of_string "pr -> pr";
       ity_of_string "np -> np";
       ity_of_string "np -> pr"
     ];
-  ignore @@ typing#get_htys#add_hty id0_0
+  ignore @@ typing#get_hty_store#add_hty id0_0
     [
       ity_of_string "pr -> pr";
       ity_of_string "pr -> pr";
@@ -324,7 +514,7 @@ let typing_xyyz_test () =
           (typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)])) None
              [(0, 0, id0_0)])
       );
-
+(*
     (* Creation of bindings with filtering and fixed var. *)
     "binding2envl-3" >:: (fun _ ->
         assert_equal_envls
@@ -354,6 +544,7 @@ let typing_xyyz_test () =
              (Some ((0, 1), ity_of_string "np -> pr"))
              [(0, 0, id0_0)])
       );
+*)
   ]
 
 (** Grammar that tests typing with duplication in N1 when N2 receives two the same arguments. It
@@ -561,8 +752,7 @@ let cfa_test () : test =
           ]
           (cfa_xyyz#lookup_binding_var (1, 1))
       );
-  ]
-  
+  ]  
 
 let examples_test () : test =
   init_flags ();
@@ -584,6 +774,8 @@ let examples_test () : test =
       fin_filenames]
 
 let tests () = [
+  utilities_test ();
+  conversion_test ();
   cfa_test ();
   type_test ();
   typing_test ();

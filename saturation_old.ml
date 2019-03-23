@@ -1222,7 +1222,7 @@ let rec mk_nt_binding_queue updated_terms =
 (*  print_string "calling mk_worklist\n";*)
   try
      let id = SetQueue.dequeue updated_terms in
-     let bindings = Cfa.lookup_dep_termid_nt id in
+     let bindings = Cfa.get_nt_bindings_applied_to_hterms id in
         List.iter enqueue_nt_binding_queue bindings;
         mk_nt_binding_queue updated_terms
   with SetQueue.Empty -> ()
@@ -1232,7 +1232,7 @@ let rec mk_hterms_queue prop_nt_queue =
   match prop_nt_queue with
     [] -> []
   | f::prop_nt_queue' ->
-      merge_and_unify compare (Cfa.lookup_dep_nt_termid f) (mk_hterms_queue prop_nt_queue')
+      merge_and_unify compare (Cfa.get_hterms_containining_nt f) (mk_hterms_queue prop_nt_queue')
 *)
 
 let report_yes() =
@@ -1257,7 +1257,7 @@ and saturate_vartypes_wo_overwrite() : unit =
              Utilities.debug ("propagating type of id "^(string_of_int id)^" incrementally wo overwrite\n") in
     let ids = Cfa.lookup_dep_id id in
       List.iter (fun id1 -> update_incremental_ty_of_id id1 (id,tys) false) ids;
-      let bindings = Cfa.lookup_dep_termid_nt id in
+      let bindings = Cfa.get_nt_bindings_applied_to_hterms id in
       List.iter (fun binding -> update_incremental_ty_of_nt binding (id,tys)) bindings;
       saturate_vartypes_wo_overwrite()
   with
@@ -1295,28 +1295,28 @@ let rec saturation_loop () : bool =
       (* this generally propagates types forward *)
       let (id,tys) = TwoLayerQueue.dequeue !prop_hterms_ty_queue in (* dequeue from prop_hterms_ty_queue *)
       let _ = if !Flags.debugging then Utilities.debug ("propagating type of id "^(string_of_int id)^" incrementally\n") in
-    let ids = Cfa.lookup_dep_id id in (* ids of hterms that dequeued hterm was applied to
-                                         substituting one or more variables inside (propagating
-                                         types forward) *)
-    (* update type of id1 in envs where there is id, forced to id : tys *)
-    List.iter (fun id1 -> update_incremental_ty_of_id id1 (id,tys) true) ids;
-    let bindings = Cfa.lookup_dep_termid_nt id in (* nonterminals and their bindings that were
-                                                     applied to the hterm id *)
-    List.iter (fun binding -> update_incremental_ty_of_nt binding (id,tys)) bindings
+      let ids = Cfa.lookup_dep_id id in (* ids of hterms that dequeued hterm was applied to
+                                           substituting one or more variables inside (propagating
+                                           types forward) *)
+      (* update type of id1 in envs where there is id, forced to id : tys *)
+      List.iter (fun id1 -> update_incremental_ty_of_id id1 (id,tys) true) ids;
+      let bindings = Cfa.get_nt_bindings_applied_to_hterms id in (* nonterminals and their bindings that were
+                                                       applied to the hterm id *)
+      List.iter (fun binding -> update_incremental_ty_of_nt binding (id,tys)) bindings
     with TwoLayerQueue.Empty ->
     try (* trying nonterminals from prop_nt_ty_queue *)
       let (f,ty) = BatchQueue.dequeue !prop_nt_ty_queue in (* taking care of all new f : ity at once *)
       let _ = if !Flags.debugging then 
           Utilities.debug ("propagating type of nt "^(name_of_nt f)^" incrementally\n") 
       in
-    let nts = Cfa.lookup_dep_nt_nt_lin f in
+    let nts = Cfa.get_nt_containing_nt_lin f in
     List.iter (fun g -> update_ty_of_nt_incremental_for_nt g f ty) nts
     with BatchQueue.Empty ->
     try (* trying nonterminals from prop_nt_queue *)
       let f = SetQueue.dequeue !prop_nt_queue in
-      let ids = Cfa.lookup_dep_nt_termid f in
+      let ids = Cfa.get_hterms_containining_nt f in
       List.iter (SetQueue.enqueue !hterms_queue) ids;
-      let nts = Cfa.lookup_dep_nt_nt f in
+      let nts = Cfa.get_nt_containing_nt f in
     remove_nt_binding_queue nts;
     List.iter (SetQueue.enqueue !nt_queue) nts
     with SetQueue.Empty ->

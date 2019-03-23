@@ -103,7 +103,7 @@ let report_finiteness input : bool =
   let cfa = profile "0CFA" (fun () ->
       let cfa = new Cfa.cfa hgrammar in
       cfa#expand;
-      cfa#mk_binding_depgraph;
+      cfa#compute_dependencies;
       cfa)
   in
   let saturation = profile "initializing saturation" (fun () ->
@@ -125,7 +125,7 @@ let parse_and_report_finiteness (filename : string option) : bool =
     )
   in
   if !Flags.debugging then
-    print_string @@ "Input:\n" ^ string_of_input input;
+    print_string @@ "Input:\n\n" ^ string_of_input input;
   report_finiteness input
   
 let main () : unit =

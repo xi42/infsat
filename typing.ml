@@ -15,7 +15,7 @@ class typing (hg : hgrammar) = object(self)
 
   (** htys[id] contains list of types derived under some environment for
       corresponding terms in the list of terms identified by id. *)
-  val htys : hty_store = new hty_store hg
+  val hty_store : hty_store = new hty_store hg
 
   (* --- printing --- *)
   
@@ -39,12 +39,12 @@ class typing (hg : hgrammar) = object(self)
         x
       ) nt_ity.(nt) ity;
     !new_ity_count <> 0
-  
+
   method add_nt_ty (nt : nt_id) (ty : ty) : bool =
     self#add_nt_ity nt @@ TyList.singleton ty
 
   method add_hterms_hty (id : hterms_id) (hty : hty) : bool =
-    htys#add_hty id hty
+    hty_store#add_hty id hty
 
   (* --- generating envs --- *)
 
@@ -64,7 +64,7 @@ class typing (hg : hgrammar) = object(self)
   (** Converts bindings in the form "hterms identified by id are substituted for arguments i-j"
       into bindings in the form "arguments i-j have the types <list of types>". *)
   method binding2hty_bindings (mask : vars option) (binding : hterms_id binding)
-    (fixed_var_ity : (var_id * ity) option) : hty binding list =
+      (fixed_hterms_hty : (hterms_id * hty) option) : hty binding list =
     let mask, mask_size = match mask with
       | None -> (None, 0)
       | Some mask ->
@@ -84,40 +84,100 @@ class typing (hg : hgrammar) = object(self)
         else
           apply_hty_mask mask (index + 1) (ity :: acc) hty'
     in
-    let rec binding2hty_bindings_aux binding =
+    match fixed_hterms_hty with
+    | Some (fixed_id, fixed_hty) ->
+      let htys_raw_binding : (int * int * hty list * bool) list=
+        fold_left_short_circuit_after_first [] binding [] (fun acc (i, j, id) ->
+            match hty_store#get_htys id with
+            | [] -> []
+            | htys ->
+              let htys, fixed_hty = match j - i - mask_size, mask with
+                | 0, _ | _, None -> htys, fixed_hty
+                | _, Some vars ->
+                  (remove_hty_duplicates @@ List.rev_map (apply_hty_mask vars 0 []) htys,
+                   apply_hty_mask vars 0 [] fixed_hty)
+              in
+              if id = fixed_id then
+                (i, j, htys |> List.filter (fun hty -> not @@ hty_eq hty fixed_hty), true) :: acc
+              else
+                (i, j, htys, false) :: acc
+          )
+      in
+      let fixed_bindings, non_fixed_bindings =
+        htys_raw_binding |> List.partition (fun (_, _, _, fixed) -> fixed)
+      in
+      let fixed_bindings_htys_product : hty list list = product_with_one_fixed
+          (fixed_bindings |> List.rev_map (fun (_, _, htys, _) -> htys))
+          fixed_hty
+      in
+      let fixed_bindings_product : hty binding list =
+        fixed_bindings_htys_product |> List.rev_map (fun htys ->
+            List.rev_map2 (fun hty (i, j, _, _) ->
+                (i, j, hty)
+              ) htys fixed_bindings
+          )
+      in
+      let non_fixed_bindings : hty binding list =
+        List.fold_left (fun acc (i, j, htys, _) ->
+            List.rev_map (fun hty -> (i, j, hty)) htys :: acc
+          ) [] non_fixed_bindings
+      in
+      product @@ non_fixed_bindings @ fixed_bindings_product
+    | None ->
+      product @@ fold_left_short_circuit_after_first [] binding [] (fun acc (i, j, id) ->
+          match hty_store#get_htys id with
+          | [] -> []
+          | htys ->
+            let htys = match j - i - mask_size, mask with
+              | 0, _ | _, None -> htys
+              | _, Some vars ->
+                remove_hty_duplicates @@ List.rev_map (apply_hty_mask vars 0 []) htys
+            in
+            List.rev_map (fun hty -> (i, j, hty)) htys :: acc
+        )
+
+(* TODO move and edit docs to above
+    (* Returns hty bindings and whether fixed typing of a hterms was applied. Takes hterms
+       binding and whether fixed typing was already applied before. If there is fixed typing,
+       it applies it in all combination where it is applied at least once. *)
+    let rec binding2hty_bindings_aux binding force_fixed_binding =
       match binding with
-      | [] -> [[]]
+      | [] -> ([[]], false)
       | [(i, j, id)] ->
-        let htys = htys#get_htys id in
-        let htys = match fixed_var_ity with
-          | Some ((_, ix), ity) ->
-            if i <= ix && ix <= j then
-              htys |> List.map (fun hty -> Utilities.replace_nth hty (ix - i) ity)
+        let htys = hty_store#get_htys id in
+        let htys = match fixed_hterms_binding with
+          | Some (fixed_id, fixed_hty) ->
+            if id = fixed_id then
+              if force_fixed_binding then
+                ([fixed_hty], true)
+              else
+                (fixed_hty :: htys, true)
             else
-              htys
-          | None -> htys
+              (htys, false)
+          | None -> (htys, false)
         in
+****************
         let htys = match j - i - mask_size, mask with
           | 0, _ | _, None -> htys
           | _, Some vars ->
-            remove_hty_duplicates @@ List.map (apply_hty_mask vars 0 []) htys
+            (remove_hty_duplicates @@ List.map (apply_hty_mask vars 0 []) @@ fst htys, snd htys)
+*************
         in
-        List.map (fun hty -> [(i, j, hty)]) htys
+        (List.map (fun hty -> [(i, j, hty)]) @@ fst htys, snd htys)
       | (i, j, id) :: binding' ->
-        match htys#get_htys id with
-        | [] -> [] (* short-circuit *)
+        match hty_store#get_htys id with
+        | [] -> ([], false) (* short-circuit *)
         | htys ->
           (* recursively get all bindings without using current application info *)
-          match binding2hty_bindings_aux binding' with
-          | [] -> [] (* custom to not make many mk_prod_hty_bindings iterations *)
+          match binding2hty_bindings_aux binding' force_fixed_binding with
+          | [], _ -> ([], false) (* custom to not make many mk_prod_hty_bindings iterations *)
           | hty_binding ->
             (* Make product with the current application info - each typing of hterm with
                identifier id is valid for range i-j, so the output is all possible bindings
                constructed by prepending one of possible types for i-j to any of current bindings.
                This may blow up the number of possible type bindings. *)
             self#mk_prod_hty_bindings (i, j) htys hty_binding []
-    in
-    binding2hty_bindings_aux binding
+*)
                                                       
   (** Converts binding to possible environments using information on possible typings of hterms
       flowing into given variables without regard for the context in which they were typed.
@@ -129,10 +189,10 @@ class typing (hg : hgrammar) = object(self)
       If fixed_var_ity is not None, then only bindings with that type for given variables are
       returned. *)
   method binding2envl (var_count : int) (mask : vars option)
-      (fixed_var_ity : (var_id * ity) option) (binding : hterms_id binding) : envl =
+      (fixed_hterms_hty : (hterms_id * hty) option) (binding : hterms_id binding) : envl =
     EnvList.of_list_default_flags @@
     List.map (hty_binding2env var_count) @@
-    self#binding2hty_bindings mask binding fixed_var_ity
+    self#binding2hty_bindings mask binding fixed_hterms_hty
 
   (* --- typing --- *)
   
@@ -205,18 +265,19 @@ class typing (hg : hgrammar) = object(self)
       argument, and each element of outer list corresponds to one of provided types.
       Combines that in a tuple with the rest of the type and a boolean whether the whole type
       is productive. *)
-  method annotate_args : 'a. 'a list -> ity -> (('a * ity) list * ty * bool) list = fun terms ity ->
+  method annotate_args : 'a. 'a list -> ity -> (('a * ity) list * ty * bool) list =
+    fun terms ->
     let rec annotate_args_ty terms ty acc =
       match terms, ty with
       | term :: terms', Fun (_, ity, ty') ->
         annotate_args_ty terms' ty' ((term, ity) :: acc)
       | [], _ ->
         (List.rev acc, ty, is_productive ty)
-      | _ -> failwith "List of terms longer than list of arguments"
+      | _ -> failwith "List of terms longer than list of arguments in the type"
     in
     TyList.map (fun ty ->
         annotate_args_ty terms ty []
-      ) ity
+      )
         
   (** Infer variable environments under which type checking of hterm : target succeeds. If target
       is not specified, environments are inferred for all possible targets. Types of variables
@@ -251,7 +312,7 @@ class typing (hg : hgrammar) = object(self)
     in
     let res = match hterm with
       | HT a, [] ->
-        if not force_pr_var && target |> Utilities.option_map true (fun target ->
+        if not force_pr_var && target |> option_map true (fun target ->
             TyList.exists (fun ty -> eq_ty target ty) (self#terminal_ity a)) then
           TargetEnvl.of_list_default_flags @@
           TyList.map (fun ty -> (ty, [empty_env var_count])) @@
@@ -569,7 +630,7 @@ class typing (hg : hgrammar) = object(self)
       if should_be_printed id then
         begin
           print_string @@ string_of_int id ^ ":\n";
-          let htys = htys#get_htys id in
+          let htys = hty_store#get_htys id in
           List.iter (fun hty ->
               print_string @@ String.concat "; " @@ List.map string_of_ity hty;
               print_string "\n"
@@ -580,5 +641,5 @@ class typing (hg : hgrammar) = object(self)
 
   (* --- debugging --- *)
 
-  method get_htys = htys
+  method get_hty_store = hty_store
 end

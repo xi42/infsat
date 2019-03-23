@@ -88,27 +88,22 @@ class grammar nonterminals var_names rules = object(self)
     | Var x -> self#name_of_var x
     | App (t1, t2) -> "(" ^ self#string_of_term t1 ^ " " ^ self#string_of_term t2 ^ ")"
 
-  method print_term (term : term) =
-    print_string (self#string_of_term term)
+  method to_string : string =
+    String.concat "\n" @@ Array.to_list @@
+    (rules |> Array.mapi (fun i (arity, body) ->
+         self#name_of_nt i ^ " " ^
+         String.concat "" (Utilities.fromto 0 (arity - 1) |> List.map (fun j ->
+             self#name_of_var (i, j) ^ " "
+           )) ^
+         "-> " ^
+         self#string_of_term body
+       )
+    )
 
-  method print_gram =
-    for i = 0 to self#nt_count - 1 do 
-      let arity, body = rules.(i) in
-      begin
-        print_string (self#name_of_nt i ^ " ");
-        for j = 0 to arity - 1 do
-          print_string (self#name_of_var (i, j) ^ " ")
-        done;
-        print_string "-> ";
-        self#print_term body;
-        print_string "\n"
-      end
-    done
-
-  method report_grammar =
-    self#print_gram;
-    print_string ("\nThe number of rewrite rules: " ^ string_of_int self#nt_count ^ "\n"^
-                  "The size of recursion scheme: " ^ string_of_int self#size ^ "\n")
+  method report_grammar : string =
+    self#to_string ^
+    "\nThe number of rewrite rules: " ^ string_of_int self#nt_count ^ "\n" ^
+    "The size of recursion scheme: " ^ string_of_int self#size ^ "\n"
 
   initializer
     if snd nonterminals.(self#start_nt) <> O then

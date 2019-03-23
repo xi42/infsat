@@ -28,6 +28,10 @@ let option_map (default : 'b) (f : 'a -> 'b) : 'a option -> 'b = function
   | Some x -> f x
   | None -> default
 
+let option_get : 'a option -> 'a = function
+  | Some x -> x
+  | None -> failwith "Expected Some"
+
 (* --- printing --- *)
 
 let string_of_bool = function
@@ -58,6 +62,40 @@ let rec fold_left_short_circuit (acc : 'a) (l : 'b list) (bottom : 'a) (f : 'a -
       acc
     else
       fold_left_short_circuit (f acc x) l' bottom f
+
+(** Same as fold_left_short_circuit, but does not check for short-circuit at the very beginning. *)
+let fold_left_short_circuit_after_first (acc : 'a) (l : 'b list) (bottom : 'a)
+    (f : 'a -> 'b -> 'a) : 'a =
+  match l with
+  | [] -> acc
+  | x :: l' ->
+    fold_left_short_circuit (f acc x) l' bottom f
+
+(** Given list of lists (treated as sets) l1, ..., lK, it creates a list with elements of product
+    l1 x ... x lK. *)
+let rec product : 'a list list -> 'a list list = function
+  | [] -> []
+  | [l] -> List.rev_map (fun x -> [x]) l
+  | prefixes :: ls' ->
+    let postfixes = product ls' in
+    List.fold_left (fun acc prefix ->
+        List.fold_left (fun acc postfix ->
+            (prefix :: postfix) :: acc
+          ) acc postfixes
+    ) [] prefixes
+
+(** Given list of lists (treated as sets) l1, ..., lK and fixed element x not present in any of
+    them, it creates a list with sum of elements of products
+    l1 x ... x lN-1 x {x} x lN+1 x ... x lK for N=1..K. *)
+let product_with_one_fixed (ls : 'a list list) (fixed : 'a) : 'a list list =
+  let rec product_with_one_fixed_aux prefix postfix acc =
+    match postfix with
+    | [] -> acc
+    | l :: postfix' ->
+      product_with_one_fixed_aux ((fixed :: l) :: prefix) postfix' @@
+        List.rev_append (product @@ List.rev prefix @ ([fixed] :: postfix')) acc
+  in
+  product_with_one_fixed_aux [] ls []
 
 (** Lexicographical comparison of lists with custom comparison of elements. *)
 let rec compare_lists (cmp : 'a -> 'a -> int) (l1 : 'a list) (l2 : 'a list) : int =

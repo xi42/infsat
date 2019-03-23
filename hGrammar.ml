@@ -152,7 +152,7 @@ class hgrammar (grammar : grammar) = object(self)
     let term = snd @@ grammar#rule nt in
     self#nt_in_term_with_linearity term
 
-  method nts_in_hterm (nt : nt_id) : nts =
+  method nts_in_hterms (nt : nt_id) : nts =
     let terms = self#id2terms nt in (* and is in applicative form list of terms,
                                            and has variables vars *)
     self#nt_in_terms terms
