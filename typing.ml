@@ -48,136 +48,119 @@ class typing (hg : hgrammar) = object(self)
 
   (* --- generating envs --- *)
 
-  (** Returns envs where each env in postfixes is prepended with exactly one hty from prefixes
-      in every combination. *)
-  method private mk_prod_hty_bindings (i, j : int * int) (prefixes : hty list)
-      (postfixes : hty binding list) (acc : hty binding list) : hty binding list =
-    match prefixes with 
-    | [] -> acc
-    | prefix :: prefixes' ->
-      let acc' = List.fold_left (fun acc postfix ->
-          ((i, j, prefix) :: postfix) :: acc
-        ) acc postfixes
-      in
-      self#mk_prod_hty_bindings (i, j) prefixes' postfixes acc'
-
   (** Converts bindings in the form "hterms identified by id are substituted for arguments i-j"
-      into bindings in the form "arguments i-j have the types <list of types>". *)
+      into bindings in the form "arguments i-j have the types <list of types>". If mask is
+      not None then typings of all other variables will be replaced with T. If fixed_hterms_hty
+      = Some (id, hty) then hty is used as a type of hterms identified with id in at least one
+      occurence of id in the binding. *)
   method binding2hty_bindings (mask : vars option) (binding : hterms_id binding)
       (fixed_hterms_hty : (hterms_id * hty) option) : hty binding list =
-    let mask, mask_size = match mask with
-      | None -> (None, 0)
+    (* Ignoring the mask if it contains all variables. *)
+    let mask = match mask with
+      | None -> None
       | Some mask ->
         let mask_size = SortedVars.length mask in
-        if mask_size = 0 || mask_size <> hg#nt_arity (snd @@ SortedVars.hd mask) then
-          (Some mask, mask_size)
+        (* Mask may be ignored if it is equal to all variables. *)
+        if mask_size <> hg#nt_arity (snd @@ SortedVars.hd mask) then
+          Some mask
         else
-          (None, mask_size)
+          None
     in
     (* Replaces hty on indexes not mentioned in vars by T. *)
-    let rec apply_hty_mask mask index acc hty =
-      match hty with
-      | [] -> List.rev acc
-      | ity :: hty' ->
-        if SortedVars.is_empty mask || snd (SortedVars.hd mask) <> index then
-          apply_hty_mask mask (index + 1) (ity_top :: acc) hty'
-        else
-          apply_hty_mask mask (index + 1) (ity :: acc) hty'
+    let apply_hty_mask mask i hty =
+      let rec apply_hty_mask_aux mask index acc hty =
+        match hty with
+        | [] -> List.rev acc
+        | ity :: hty' ->
+          match SortedVars.hd_tl_option mask with
+          | None ->
+            apply_hty_mask_aux mask (index + 1) (ity_top :: acc) hty'
+          | Some ((_, mask_index), mask') ->
+            if mask_index = index then
+              apply_hty_mask_aux mask' (index + 1) (ity :: acc) hty'
+            else if mask_index < index then
+              apply_hty_mask_aux mask' index acc hty
+            else
+              apply_hty_mask_aux mask (index + 1) (ity_top :: acc) hty'
+      in
+      apply_hty_mask_aux mask i [] hty
     in
     match fixed_hterms_hty with
     | Some (fixed_id, fixed_hty) ->
-      let htys_raw_binding : (int * int * hty list * bool) list=
+      (* Preparing types for the product and applying the mask if needed. Specifically,
+         it contains the range of arguments i-j, possible hty without the fixed hty,
+         masked fixed hty (if mask is defined) and information whether arguments i-j have id
+         that can have fixed hty. *)
+      let htys_raw_binding : (int * int * hty list * hty * bool) list =
         fold_left_short_circuit_after_first [] binding [] (fun acc (i, j, id) ->
             match hty_store#get_htys id with
             | [] -> []
             | htys ->
-              let htys, fixed_hty = match j - i - mask_size, mask with
-                | 0, _ | _, None -> htys, fixed_hty
-                | _, Some vars ->
-                  (remove_hty_duplicates @@ List.rev_map (apply_hty_mask vars 0 []) htys,
-                   apply_hty_mask vars 0 [] fixed_hty)
+              (* If there is a fixed_hty, it has to filtered out before applying mask. *)
+              let htys = if id = fixed_id then
+                  remove_first htys @@ hty_eq fixed_hty
+                else
+                  htys
               in
-              if id = fixed_id then
-                (i, j, htys |> List.filter (fun hty -> not @@ hty_eq hty fixed_hty), true) :: acc
-              else
-                (i, j, htys, false) :: acc
+              match mask with
+              | None ->
+                (* When there is no mask. *)
+                (i, j, htys, fixed_hty, id = fixed_id) :: acc
+              | Some vars ->
+                (* When two different hty have a mask applied, they may become the same hty
+                   and can be merged, so duplicates have to be removed. *)
+                (* TODO htys are being sorted here each time, so maybe keep them sorted.
+                   or use a set. *)
+                let masked_htys =
+                  remove_hty_duplicates @@ List.rev_map (apply_hty_mask vars i) htys
+                in
+                (* The mask is applied to fixed_hty only when it is fixed_id, otherwise a dummy
+                   value is used (unmasked fixed_hty). *)
+                let masked_fixed_hty =
+                  if id = fixed_id then
+                    apply_hty_mask vars i fixed_hty
+                  else
+                    fixed_hty
+                in
+                (i, j, masked_htys, masked_fixed_hty, id = fixed_id) :: acc
           )
       in
+      (* Hterms with fixed_id are treated differently. *)
       let fixed_bindings, non_fixed_bindings =
-        htys_raw_binding |> List.partition (fun (_, _, _, fixed) -> fixed)
+        htys_raw_binding |> List.partition (fun (_, _, _, _, fixed) -> fixed)
       in
-      let fixed_bindings_htys_product : hty list list = product_with_one_fixed
-          (fixed_bindings |> List.rev_map (fun (_, _, htys, _) -> htys))
-          fixed_hty
-      in
+      (* Computing product with at least one fixed_hty placed instead of normal types of
+         fixed_id. *)
       let fixed_bindings_product : hty binding list =
-        fixed_bindings_htys_product |> List.rev_map (fun htys ->
-            List.rev_map2 (fun hty (i, j, _, _) ->
-                (i, j, hty)
-              ) htys fixed_bindings
+        product_with_one_fixed
+          (fixed_bindings |> List.rev_map (fun (i, j, htys, _, _) ->
+               htys |> List.rev_map (fun hty -> (i, j, hty))
+             )
           )
+          (fixed_bindings |> List.rev_map (fun (i, j, _, fixed_hty, _) -> (i, j, fixed_hty)))
       in
-      let non_fixed_bindings : hty binding list =
-        List.fold_left (fun acc (i, j, htys, _) ->
+      (* Combinding output of the product for fixed_id with types for the rest of the binding. *)
+      let raw_bindings : hty binding list =
+        List.fold_left (fun acc (i, j, htys, _, _) ->
             List.rev_map (fun hty -> (i, j, hty)) htys :: acc
-          ) [] non_fixed_bindings
+          ) fixed_bindings_product non_fixed_bindings
       in
-      product @@ non_fixed_bindings @ fixed_bindings_product
+      (* Computing the final product. *)
+      product raw_bindings
     | None ->
+      (* Same as all of the above, but without the logic and additional computations for
+         fixed_id. *)
       product @@ fold_left_short_circuit_after_first [] binding [] (fun acc (i, j, id) ->
           match hty_store#get_htys id with
           | [] -> []
           | htys ->
-            let htys = match j - i - mask_size, mask with
-              | 0, _ | _, None -> htys
-              | _, Some vars ->
-                remove_hty_duplicates @@ List.rev_map (apply_hty_mask vars 0 []) htys
+            let htys = match mask with
+              | None -> htys
+              | Some vars ->
+                remove_hty_duplicates @@ List.rev_map (apply_hty_mask vars i) htys
             in
             List.rev_map (fun hty -> (i, j, hty)) htys :: acc
         )
-
-(* TODO move and edit docs to above
-    (* Returns hty bindings and whether fixed typing of a hterms was applied. Takes hterms
-       binding and whether fixed typing was already applied before. If there is fixed typing,
-       it applies it in all combination where it is applied at least once. *)
-    let rec binding2hty_bindings_aux binding force_fixed_binding =
-      match binding with
-      | [] -> ([[]], false)
-      | [(i, j, id)] ->
-        let htys = hty_store#get_htys id in
-        let htys = match fixed_hterms_binding with
-          | Some (fixed_id, fixed_hty) ->
-            if id = fixed_id then
-              if force_fixed_binding then
-                ([fixed_hty], true)
-              else
-                (fixed_hty :: htys, true)
-            else
-              (htys, false)
-          | None -> (htys, false)
-        in
-****************
-        let htys = match j - i - mask_size, mask with
-          | 0, _ | _, None -> htys
-          | _, Some vars ->
-            (remove_hty_duplicates @@ List.map (apply_hty_mask vars 0 []) @@ fst htys, snd htys)
-*************
-        in
-        (List.map (fun hty -> [(i, j, hty)]) @@ fst htys, snd htys)
-      | (i, j, id) :: binding' ->
-        match hty_store#get_htys id with
-        | [] -> ([], false) (* short-circuit *)
-        | htys ->
-          (* recursively get all bindings without using current application info *)
-          match binding2hty_bindings_aux binding' force_fixed_binding with
-          | [], _ -> ([], false) (* custom to not make many mk_prod_hty_bindings iterations *)
-          | hty_binding ->
-            (* Make product with the current application info - each typing of hterm with
-               identifier id is valid for range i-j, so the output is all possible bindings
-               constructed by prepending one of possible types for i-j to any of current bindings.
-               This may blow up the number of possible type bindings. *)
-            self#mk_prod_hty_bindings (i, j) htys hty_binding []
-*)
                                                       
   (** Converts binding to possible environments using information on possible typings of hterms
       flowing into given variables without regard for the context in which they were typed.
@@ -186,8 +169,8 @@ class typing (hg : hgrammar) = object(self)
       replacing types with T can generate duplicates that are removed before computing a product.
       This does not return duplicate environments, as it is the product of unique typings taken
       from htys and hty_store does not store duplicates.
-      If fixed_var_ity is not None, then only bindings with that type for given variables are
-      returned. *)
+      If fixed_hterms_hty is not None, then bindings have at least one of hterms with given
+      id typed as fixed hty. *)
   method binding2envl (var_count : int) (mask : vars option)
       (fixed_hterms_hty : (hterms_id * hty) option) (binding : hterms_id binding) : envl =
     EnvList.of_list_default_flags @@

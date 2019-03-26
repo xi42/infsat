@@ -114,13 +114,13 @@ let utilities_test () : test =
     "product_with_one_fixed-0" >:: (fun _ ->
         assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
           [] @@
-        product_with_one_fixed [] 0
+        product_with_one_fixed [] []
       );
     
     "product_with_one_fixed-1" >:: (fun _ ->
         assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
           [[0]] @@
-        product_with_one_fixed [[1; 2; 3]] 0
+        product_with_one_fixed [[1; 2; 3]] [0]
       );
     
     "product_with_one_fixed-2" >:: (fun _ ->
@@ -132,7 +132,7 @@ let utilities_test () : test =
             [1; 0];
             [11; 0]
           ] @@
-        product_with_one_fixed [[1; 11]; [2; 22]] 0
+        product_with_one_fixed [[1; 11]; [2; 22]] [0; 0]
       );
     
     "product_with_one_fixed-3" >:: (fun _ ->
@@ -152,7 +152,7 @@ let utilities_test () : test =
             [0; 22; 3];
             [0; 222; 3]
           ] @@
-        product_with_one_fixed [[1]; [2; 22; 222]; [3]] 0
+        product_with_one_fixed [[1]; [2; 22; 222]; [3]] [0; 0; 0]
       );
     
     "product_with_one_fixed-4" >:: (fun _ ->
@@ -174,7 +174,7 @@ let utilities_test () : test =
             [1; 2; 0; 4];
             [1; 2; 3; 0]
           ] @@
-        product_with_one_fixed [[1]; [2]; [3]; [4]] 0
+        product_with_one_fixed [[1]; [2]; [3]; [4]] [0; 0; 0; 0]
       );
   ]
 
@@ -455,8 +455,8 @@ let typing_xyyz_test () =
              ity_of_string "pr -> pr";
              ity_of_string "(np -> pr) /\\ (np -> np)";
              ity_of_string "np"
-           |])
-          (type_check_nt_wo_env typing hg 1 PR false false)
+           |]) @@
+        type_check_nt_wo_env typing hg 1 PR false false
       );
 
     (* check that branching works *)
@@ -467,8 +467,8 @@ let typing_xyyz_test () =
                  senv hg 4 0 "pr";
                  senv hg 4 0 "np"
                ])
-            ])
-          (type_check_nt_wo_env typing hg 4 PR false false)
+            ]) @@
+        type_check_nt_wo_env typing hg 4 PR false false
       );
 
     (* check that branching works *)
@@ -479,8 +479,8 @@ let typing_xyyz_test () =
                  senv hg 4 0 "pr";
                  senv hg 4 0 "np"
                ])
-            ])
-          (type_check_nt_wo_env typing hg 4 NP false false)
+            ]) @@
+        type_check_nt_wo_env typing hg 4 NP false false
       );
 
     (* Basic creation of bindings without a product *)
@@ -497,8 +497,8 @@ let typing_xyyz_test () =
                 ity_of_string "np -> np";
                 ity_of_string "np -> pr"
               |]
-            ])
-          (typing#binding2envl (hg#hterm_arity id0_0) None None [(0, 0, id0_0)])
+            ]) @@
+        typing#binding2envl (hg#hterm_arity id0_0) None None [(0, 0, id0_0)]
       );
 
     (* Basic creation of bindings with filtered out all but first variables, without product *)
@@ -510,12 +510,12 @@ let typing_xyyz_test () =
                 ity_of_string "T";
                 ity_of_string "T"
               |]
-            ])
-          (typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)])) None
-             [(0, 0, id0_0)])
+            ]) @@
+        typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)])) None
+          [(0, 0, id0_0)]
       );
-(*
-    (* Creation of bindings with filtering and fixed var. *)
+
+    (* Creation of bindings with filtering and fixed hty of hterms. *)
     "binding2envl-3" >:: (fun _ ->
         assert_equal_envls
           (EnvList.of_list_default_flags [
@@ -524,27 +524,14 @@ let typing_xyyz_test () =
                 ity_of_string "T";
                 ity_of_string "T"
               |]
-            ])
-          (typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)]))
-             (Some ((0, 0), ity_of_string "np -> pr"))
-             [(0, 0, id0_0)])
+            ]) @@
+        typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)]))
+          (Some (id0_0, [ity_of_string "np -> pr"; ity_of_string "pr"; ity_of_string "np"]))
+          [(0, 0, id0_0)]
       );
 
-    (* Creation of bindings with filtering and filtered out fixed var. *)
-    "binding2envl-3" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_default_flags [
-              new env @@ [|
-                ity_of_string "pr -> pr";
-                ity_of_string "T";
-                ity_of_string "T"
-              |]
-            ])
-          (typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)]))
-             (Some ((0, 1), ity_of_string "np -> pr"))
-             [(0, 0, id0_0)])
-      );
-*)
+    (* Creation of bindings with filtering and filtered out fixed hty of hterms. *)
+    (* TODO but need two hterms in binding for that *)
   ]
 
 (** Grammar that tests typing with duplication in N1 when N2 receives two the same arguments. It

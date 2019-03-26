@@ -84,18 +84,19 @@ let rec product : 'a list list -> 'a list list = function
           ) acc postfixes
     ) [] prefixes
 
-(** Given list of lists (treated as sets) l1, ..., lK and fixed element x not present in any of
-    them, it creates a list with sum of elements of products
-    l1 x ... x lN-1 x {x} x lN+1 x ... x lK for N=1..K. *)
-let product_with_one_fixed (ls : 'a list list) (fixed : 'a) : 'a list list =
-  let rec product_with_one_fixed_aux prefix postfix acc =
-    match postfix with
-    | [] -> acc
-    | l :: postfix' ->
-      product_with_one_fixed_aux ((fixed :: l) :: prefix) postfix' @@
-        List.rev_append (product @@ List.rev prefix @ ([fixed] :: postfix')) acc
+(** Given list of lists (treated as sets) l1, ..., lK and fixed list of elements x1, ..., xK,
+    it creates a list with sum of elements of products of at least one of sets {x1}, ..., {xK}
+    and the rest from l1, ..., lK, in the order of ascending index. *)
+let product_with_one_fixed (ls : 'a list list) (fixed : 'a list) : 'a list list =
+  let rec product_with_one_fixed_aux prefix postfix fixed acc =
+    match postfix, fixed with
+    | [], [] -> acc
+    | l :: postfix', f :: fixed' ->
+      product_with_one_fixed_aux ((f :: l) :: prefix) postfix' fixed' @@
+      List.rev_append (product @@ List.rev prefix @ ([f] :: postfix')) acc
+    | _ -> failwith "ls and fixed should have the same length"
   in
-  product_with_one_fixed_aux [] ls []
+  product_with_one_fixed_aux [] ls fixed []
 
 (** Lexicographical comparison of lists with custom comparison of elements. *)
 let rec compare_lists (cmp : 'a -> 'a -> int) (l1 : 'a list) (l2 : 'a list) : int =
@@ -122,6 +123,19 @@ let index_list (l : 'a list) : (int * 'a) list =
   let len = List.length l in
   let indices = fromto 0 len in
   List.combine indices l
+
+(** Removes the first element in list l that satisfies f. *)
+let remove_first (l : 'a list) (f : 'a -> bool) : 'a list =
+  let rec remove_first_aux l acc =
+    match l with
+    | [] -> List.rev acc
+    | x :: l' ->
+      if f x then
+        List.rev_append acc l'
+      else
+        remove_first_aux l' (x :: acc)
+  in
+  remove_first_aux l []
 
 (** Replaces i-th element of list l with r. *)
 let replace_nth (l : 'a list) (i : int) (r : 'a) : 'a list =
