@@ -82,7 +82,20 @@ let rec product : 'a list list -> 'a list list = function
         List.fold_left (fun acc postfix ->
             (prefix :: postfix) :: acc
           ) acc postfixes
-    ) [] prefixes
+      ) [] prefixes
+
+(** Given list of lists (treated as sets) l1, ..., lK, it creates a list with flattened elements
+    of product l1 x ... x lK. *)
+let rec flat_product : 'a list list -> 'a list = function
+  | [] -> []
+  | [l] -> l
+  | prefixes :: ls' ->
+    let postfixes = flat_product ls' in
+    List.fold_left (fun acc prefix ->
+        List.fold_left (fun acc postfix ->
+            (prefix @ postfix) :: acc
+          ) acc postfixes
+      ) [] prefixes
 
 (** Given list of lists (treated as sets) l1, ..., lK and fixed list of elements x1, ..., xK,
     it creates a list with sum of elements of products of at least one of sets {x1}, ..., {xK}

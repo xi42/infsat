@@ -98,6 +98,7 @@ class typing (hg : hgrammar) = object(self)
             | htys ->
               (* If there is a fixed_hty, it has to filtered out before applying mask. *)
               let htys = if id = fixed_id then
+                  (* TODO what if it is the only one? *)
                   remove_first htys @@ hty_eq fixed_hty
                 else
                   htys
@@ -139,14 +140,10 @@ class typing (hg : hgrammar) = object(self)
           )
           (fixed_bindings |> List.rev_map (fun (i, j, _, fixed_hty, _) -> (i, j, fixed_hty)))
       in
-      (* Combinding output of the product for fixed_id with types for the rest of the binding. *)
-      let raw_bindings : hty binding list =
-        List.fold_left (fun acc (i, j, htys, _, _) ->
-            List.rev_map (fun hty -> (i, j, hty)) htys :: acc
-          ) fixed_bindings_product non_fixed_bindings
-      in
-      (* Computing the final product. *)
-      product raw_bindings
+      (* Combining output of the product for fixed_id with types for the rest of the binding. *)
+      flat_product @@ List.fold_left (fun acc (i, j, htys, _, _) ->
+          List.rev_map (fun hty -> [(i, j, hty)]) htys :: acc
+        ) [fixed_bindings_product] non_fixed_bindings
     | None ->
       (* Same as all of the above, but without the logic and additional computations for
          fixed_id. *)

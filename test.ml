@@ -110,6 +110,35 @@ let utilities_test () : test =
           [[1]; [2]] @@
         product [[1; 2]]
       );
+
+    "flat_product-1" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq
+          [] @@
+        flat_product []
+      );
+
+    "flat_product-2" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq
+          [] @@
+        flat_product [[]]
+      );
+
+    "flat_product-3" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq
+          [] @@
+        flat_product [[]; []]
+      );
+
+    "flat_product-4" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq
+          [
+            [1; 2; 5];
+            [1; 2; 6];
+            [3; 4; 5];
+            [3; 4; 6]
+          ] @@
+        flat_product [[[1; 2]; [3; 4]]; [[5]; [6]]]
+      );
     
     "product_with_one_fixed-0" >:: (fun _ ->
         assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
@@ -560,7 +589,6 @@ let grammar_dup () = mk_grammar
 
 let typing_dup_test () =
   let hg, typing = mk_typing @@ grammar_dup () in
-  let id0_0 = hg#locate_hterms_id 0 [0] in
   ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> pr) -> (pr -> pr) -> pr -> np";
   ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> np) -> (pr -> np) -> pr -> np";
   [
@@ -676,39 +704,150 @@ let grammar_double () = mk_grammar
                App (App (NT 1, App (NT 2, Var (1, 1))), Var (1, 1)))
       );
       (* N2 x y -> x
-         0CFA will find a binding N2 [y] [y] *)
+         0CFA will find a binding N2 [y] [y]
+         e.g., np -> T -> np *)
       (2, Var (2, 0))
     |]
 
 let typing_double_test () =
   let hg, typing = mk_typing @@ grammar_double () in
+  let id0_ae = hg#locate_hterms_id 0 [0] in
+  ignore @@ typing#add_hterms_hty id0_ae @@
+  [ity_of_string "np -> pr /\\ pr -> pr"; ity_of_string "np"];
   let id1_y = hg#locate_hterms_id 1 [0; 0; 0] in
-  ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> pr) -> (pr -> pr) -> pr -> np";
-  ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> np) -> (pr -> np) -> pr -> np";
+  ignore @@ typing#add_hterms_hty id1_y @@ [ity_of_string "np"];
   [
-    (* Creation of bindings with mask and fixed hty of hterms. *)
+    (* Creation of bindings with fixed hty of hterms when there are two copies of
+       fixed hterms in a binding and without mask. *)
     "binding2envl-4" >:: (fun _ ->
         assert_equal_envls
           (EnvList.of_list_default_flags [
               new env @@ [|
-                ity_of_string "np -> pr";
-                ity_of_string "T";
-                ity_of_string "T"
+                ity_of_string "pr";
+                ity_of_string "np"
+              |];
+              new env @@ [|
+                ity_of_string "np";
+                ity_of_string "pr"
+              |];
+              new env @@ [|
+                ity_of_string "pr";
+                ity_of_string "pr"
               |]
             ]) @@
-        typing#binding2envl 2 (Some (SortedVars.of_list [(0, 0)]))
-          (Some (id1_y, [ity_of_string "np -> pr"; ity_of_string "pr"; ity_of_string "np"]))
-          [(0, 0, id1_y)]
+        typing#binding2envl 2 None
+          (Some (id1_y, [ity_of_string "pr"]))
+          [(0, 0, id1_y); (1, 1, id1_y)]
       );
 
     (* Creation of bindings with mask and with fixed hty of hterms when there are
        two copies of fixed hterms in a binding. *)
+    "binding2envl-5" >:: (fun _ ->
+        assert_equal_envls
+          (EnvList.of_list_default_flags [
+              new env @@ [|
+                ity_of_string "pr";
+                ity_of_string "T"
+              |];
+              new env @@ [|
+                ity_of_string "np";
+                ity_of_string "T"
+              |]
+            ]) @@
+        typing#binding2envl 2 (Some (SortedVars.singleton (2, 0)))
+          (Some (id1_y, [ity_of_string "pr"]))
+          [(0, 0, id1_y); (1, 1, id1_y)]
+      );
+    
+    (* Creation of bindings without mask or forced hty when there are two copies of same
+       hterms in a binding. *)
+    "binding2envl-6" >:: (fun _ ->
+        assert_equal_envls
+          (EnvList.of_list_default_flags [
+              new env @@ [|
+                ity_of_string "np";
+                ity_of_string "np"
+              |]
+            ]) @@
+        typing#binding2envl 2 None None [(0, 0, id1_y); (1, 1, id1_y)]
+      );
+
+    (* Creation of bindings without mask and without fixed hty of hterms. *)
+    "binding2envl-7" >:: (fun _ ->
+        assert_equal_envls
+          (EnvList.of_list_default_flags [
+              new env @@ [|
+                ity_of_string "np -> pr /\\ pr -> pr";
+                ity_of_string "np"
+              |]
+            ]) @@
+        typing#binding2envl 2 None None [(0, 0, id0_ae)]
+      );
+
+    (* Creation of bindings with mask and fixed hty of hterms. *)
+    "binding2envl-8" >:: (fun _ ->
+        assert_equal_envls
+          (EnvList.of_list_default_flags [
+              new env @@ [|
+                ity_of_string "np -> pr";
+                ity_of_string "T"
+              |]
+            ]) @@
+        typing#binding2envl 2
+          (Some (SortedVars.singleton (1, 0)))
+          (Some (id0_ae, [ity_of_string "np -> pr"; ity_of_string "np"]))
+          [(0, 0, id0_ae)]
+      );
+
+    (* Creation of bindings with mask and fixed hty of hterms. *)
+    "binding2envl-9" >:: (fun _ ->
+        assert_equal_envls
+          (EnvList.of_list_default_flags [
+              new env @@ [|
+                ity_of_string "T";
+                ity_of_string "np"
+              |]
+            ]) @@
+        typing#binding2envl 2
+          (Some (SortedVars.singleton (1, 1)))
+          (Some (id0_ae, [ity_of_string "np -> pr"; ity_of_string "np"]))
+          [(0, 0, id0_ae)]
+      );
 
     (* Creation of bindings with fixed hty of hterms when there are two copies of
        fixed hterms in a binding and without mask. *)
-
-    (* Creation of bindings without mask or forced hty when there are two copies of same
-       hterms in a binding. *)
+    "binding2envl-10" >:: (fun _ ->
+        assert_equal_envls
+          (EnvList.of_list_default_flags [
+              new env @@ [|
+                ity_of_string "pr";
+                ity_of_string "np";
+                ity_of_string "pr -> pr /\\ np -> pr";
+                ity_of_string "np";
+                ity_of_string "pr -> pr /\\ np -> pr";
+                ity_of_string "np"
+              |];
+              new env @@ [|
+                ity_of_string "np";
+                ity_of_string "pr";
+                ity_of_string "pr -> pr /\\ np -> pr";
+                ity_of_string "np";
+                ity_of_string "pr -> pr /\\ np -> pr";
+                ity_of_string "np"
+              |];
+              new env @@ [|
+                ity_of_string "pr";
+                ity_of_string "pr";
+                ity_of_string "pr -> pr /\\ np -> pr";
+                ity_of_string "np";
+                ity_of_string "pr -> pr /\\ np -> pr";
+                ity_of_string "np"
+              |]
+            ]) @@
+        typing#binding2envl 6 None
+          (Some (id1_y, [ity_of_string "pr"]))
+          [(0, 0, id1_y); (1, 1, id1_y); (2, 3, id0_ae); (4, 5, id0_ae)]
+      );
   ]
 
 
@@ -719,7 +858,8 @@ let typing_test () : test =
   typing_e_test () @
   typing_ax_test () @
   typing_xyyz_test () @
-  typing_dup_test ()
+  typing_dup_test () @
+  typing_double_test ()
 
 
 
