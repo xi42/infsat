@@ -498,10 +498,10 @@ let typing_xyyz_test () =
                 ity_of_string "np -> pr"
               |]
             ]) @@
-        typing#binding2envl (hg#hterm_arity id0_0) None None [(0, 0, id0_0)]
+        typing#binding2envl 3 None None [(0, 0, id0_0)]
       );
 
-    (* Basic creation of bindings with filtered out all but first variables, without product *)
+    (* Basic creation of bindings with mask without all but first variables, without product *)
     "binding2envl-2" >:: (fun _ ->
         assert_equal_envls
           (EnvList.of_list_default_flags [
@@ -511,11 +511,11 @@ let typing_xyyz_test () =
                 ity_of_string "T"
               |]
             ]) @@
-        typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)])) None
+        typing#binding2envl 3 (Some (SortedVars.of_list [(0, 0)])) None
           [(0, 0, id0_0)]
       );
 
-    (* Creation of bindings with filtering and fixed hty of hterms. *)
+    (* Creation of bindings with mask and fixed hty of hterms. *)
     "binding2envl-3" >:: (fun _ ->
         assert_equal_envls
           (EnvList.of_list_default_flags [
@@ -525,13 +525,10 @@ let typing_xyyz_test () =
                 ity_of_string "T"
               |]
             ]) @@
-        typing#binding2envl (hg#hterm_arity id0_0) (Some (SortedVars.of_list [(0, 0)]))
+        typing#binding2envl 3 (Some (SortedVars.of_list [(0, 0)]))
           (Some (id0_0, [ity_of_string "np -> pr"; ity_of_string "pr"; ity_of_string "np"]))
           [(0, 0, id0_0)]
       );
-
-    (* Creation of bindings with filtering and filtered out fixed hty of hterms. *)
-    (* TODO but need two hterms in binding for that *)
   ]
 
 (** Grammar that tests typing with duplication in N1 when N2 receives two the same arguments. It
@@ -563,6 +560,7 @@ let grammar_dup () = mk_grammar
 
 let typing_dup_test () =
   let hg, typing = mk_typing @@ grammar_dup () in
+  let id0_0 = hg#locate_hterms_id 0 [0] in
   ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> pr) -> (pr -> pr) -> pr -> np";
   ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> np) -> (pr -> np) -> pr -> np";
   [
@@ -664,6 +662,57 @@ let typing_dup_test () =
       );
   ]
 
+(** Grammar that has nonterminal that has binding in the form N [t] [t] for the same t. Used
+    to test edge cases for bindings. *)
+let grammar_double () = mk_grammar
+    [|
+      (* N0 -> N1 a e *)
+      (0, App (App (NT 1, T A), T E));
+      (* N1 x y -> b (x y) (N1 (N2 y) y)
+         0CFA will find binding and N1 [N2 y; y] and N0 [a; e]. *)
+      (2, App (App (
+           T B,
+           App (Var (1, 0), Var (1, 1))),
+               App (App (NT 1, App (NT 2, Var (1, 1))), Var (1, 1)))
+      );
+      (* N2 x y -> x
+         0CFA will find a binding N2 [y] [y] *)
+      (2, Var (2, 0))
+    |]
+
+let typing_double_test () =
+  let hg, typing = mk_typing @@ grammar_double () in
+  let id1_y = hg#locate_hterms_id 1 [0; 0; 0] in
+  ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> pr) -> (pr -> pr) -> pr -> np";
+  ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> np) -> (pr -> np) -> pr -> np";
+  [
+    (* Creation of bindings with mask and fixed hty of hterms. *)
+    "binding2envl-4" >:: (fun _ ->
+        assert_equal_envls
+          (EnvList.of_list_default_flags [
+              new env @@ [|
+                ity_of_string "np -> pr";
+                ity_of_string "T";
+                ity_of_string "T"
+              |]
+            ]) @@
+        typing#binding2envl 2 (Some (SortedVars.of_list [(0, 0)]))
+          (Some (id1_y, [ity_of_string "np -> pr"; ity_of_string "pr"; ity_of_string "np"]))
+          [(0, 0, id1_y)]
+      );
+
+    (* Creation of bindings with mask and with fixed hty of hterms when there are
+       two copies of fixed hterms in a binding. *)
+
+    (* Creation of bindings with fixed hty of hterms when there are two copies of
+       fixed hterms in a binding and without mask. *)
+
+    (* Creation of bindings without mask or forced hty when there are two copies of same
+       hterms in a binding. *)
+  ]
+
+
+
 let typing_test () : test =
   init_flags ();
   "typing" >:::
@@ -672,12 +721,16 @@ let typing_test () : test =
   typing_xyyz_test () @
   typing_dup_test ()
 
+
+
 let cfa_test () : test =
   init_flags ();
   let hg_xyyz = mk_hgrammar @@ grammar_xyyz () in
   let cfa_xyyz = mk_cfa hg_xyyz in
   let hg_dup = mk_hgrammar @@ grammar_dup () in
   let cfa_dup = mk_cfa hg_dup in
+  let hg_double = mk_hgrammar @@ grammar_double () in
+  let cfa_double = mk_cfa hg_double in
   "cfa" >:::
   [
     (* empty binding with no variables *)
@@ -731,6 +784,33 @@ let cfa_test () : test =
           (cfa_dup#lookup_nt_bindings 4)
       );
 
+    (* Two bindings for N1 in grammar_double. *)
+    "nt_binding-6" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq
+          [
+            [
+              (0, 1, hg_double#locate_hterms_id 0 [0])
+            ];
+            [
+              (0, 1, hg_double#locate_hterms_id 1 [0; 1; 0])
+            ]
+          ]
+          (cfa_double#lookup_nt_bindings 1)
+      );
+    
+    (* One binding for N2 in grammar_double, a binding with two identical hterms. *)
+    "nt_binding-7" >:: (fun _ ->
+        assert_equal ~cmp:list_sort_eq
+          [
+            [
+              (* N2 [y] [y] after substitution in N1 *)
+              (0, 0, hg_double#locate_hterms_id 1 [0; 0; 0]);
+              (1, 1, hg_double#locate_hterms_id 1 [0; 0; 0])
+            ]
+          ]
+          (cfa_double#lookup_nt_bindings 2)
+      );
+    
     (* checking that cfa detected that in N0 nonterminal N1 was applied to N4 *)
     "var_binding-1" >:: (fun _ ->
         assert_equal
