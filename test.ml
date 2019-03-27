@@ -848,6 +848,27 @@ let typing_double_test () =
           (Some (id1_y, [ity_of_string "pr"]))
           [(0, 0, id1_y); (1, 1, id1_y); (2, 3, id0_ae); (4, 5, id0_ae)]
       );
+
+    (* Creation of bindings fixed hty of hterms, but no variables. *)
+    "binding2envl-11" >:: (fun _ ->
+        assert_equal_envls
+          (EnvList.of_list_default_flags [
+              empty_env 0
+            ]) @@
+        typing#binding2envl 0
+          None
+          (Some (id0_ae, [ity_of_string "np -> pr"; ity_of_string "np"]))
+          []
+      );
+
+    (* Creation of bindings with no variables. *)
+    "binding2envl-12" >:: (fun _ ->
+        assert_equal_envls
+          (EnvList.of_list_default_flags [
+              empty_env 0
+            ]) @@
+        typing#binding2envl 0 None None []
+      );
   ]
 
 

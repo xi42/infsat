@@ -85,8 +85,9 @@ class typing (hg : hgrammar) = object(self)
       in
       apply_hty_mask_aux mask i [] hty
     in
-    match fixed_hterms_hty with
-    | Some (fixed_id, fixed_hty) ->
+    match binding, fixed_hterms_hty with
+    | [], _ -> [[]]
+    | _, Some (fixed_id, fixed_hty) ->
       (* Preparing types for the product and applying the mask if needed. Specifically,
          it contains the range of arguments i-j, possible hty without the fixed hty,
          masked fixed hty (if mask is defined) and information whether arguments i-j have id
@@ -98,7 +99,6 @@ class typing (hg : hgrammar) = object(self)
             | htys ->
               (* If there is a fixed_hty, it has to filtered out before applying mask. *)
               let htys = if id = fixed_id then
-                  (* TODO what if it is the only one? *)
                   remove_first htys @@ hty_eq fixed_hty
                 else
                   htys
@@ -144,7 +144,7 @@ class typing (hg : hgrammar) = object(self)
       flat_product @@ List.fold_left (fun acc (i, j, htys, _, _) ->
           List.rev_map (fun hty -> [(i, j, hty)]) htys :: acc
         ) [fixed_bindings_product] non_fixed_bindings
-    | None ->
+    | _, None ->
       (* Same as all of the above, but without the logic and additional computations for
          fixed_id. *)
       product @@ fold_left_short_circuit_after_first [] binding [] (fun acc (i, j, id) ->
