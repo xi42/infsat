@@ -97,15 +97,15 @@ class typing (hg : hgrammar) = object(self)
             match hty_store#get_htys id with
             | [] -> []
             | htys ->
-              (* If there is a fixed_hty, it has to filtered out before applying mask. *)
-              let htys = if id = fixed_id then
-                  remove_first htys @@ hty_eq fixed_hty
-                else
-                  htys
-              in
               match mask with
               | None ->
-                (* When there is no mask. *)
+                (* When there is no mask.
+                   If there is a fixed_hty, it has to filtered out. *)
+                let htys = if id = fixed_id then
+                    remove_first htys @@ hty_eq fixed_hty
+                  else
+                    htys
+                in
                 (i, j, htys, fixed_hty, id = fixed_id) :: acc
               | Some vars ->
                 (* When two different hty have a mask applied, they may become the same hty
@@ -116,12 +116,20 @@ class typing (hg : hgrammar) = object(self)
                   remove_hty_duplicates @@ List.rev_map (apply_hty_mask vars i) htys
                 in
                 (* The mask is applied to fixed_hty only when it is fixed_id, otherwise a dummy
-                   value is used (unmasked fixed_hty). *)
+                   value is used. *)
                 let masked_fixed_hty =
                   if id = fixed_id then
                     apply_hty_mask vars i fixed_hty
                   else
-                    fixed_hty
+                    []
+                in
+                (* If there is a fixed_hty, it has to filtered out after applying mask
+                   because it will be present there in the product anyway and not removing it
+                   would create duplicates. *)
+                let masked_htys = if id = fixed_id then
+                    remove_first masked_htys @@ hty_eq masked_fixed_hty
+                  else
+                    masked_htys
                 in
                 (i, j, masked_htys, masked_fixed_hty, id = fixed_id) :: acc
           )
