@@ -18,6 +18,9 @@ class env (var_itys : ity array) = object(self)
 
   method get_var_ity (_, i : var_id) : ity = var_itys.(i)
 
+  method mk_fun (codomain : ty) : ty =
+    Array.fold_right (fun domain codomain -> mk_fun domain codomain) var_itys codomain
+
   method mem (v : var_id) (ty : ty) : bool =
     TyList.mem ty @@ self#get_var_ity v
 

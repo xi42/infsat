@@ -61,7 +61,7 @@ class typing (hg : hgrammar) = object(self)
       | Some mask ->
         let mask_size = SortedVars.length mask in
         (* Mask may be ignored if it is equal to all variables. *)
-        if mask_size <> hg#nt_arity (snd @@ SortedVars.hd mask) then
+        if mask_size = 0 || mask_size <> hg#nt_arity (snd @@ SortedVars.hd mask) then
           Some mask
         else
           None
@@ -364,8 +364,7 @@ class typing (hg : hgrammar) = object(self)
           print_string " does not type check\n"
         else
           print_string @@ " type checks with the following targets and environments: " ^
-                          TargetEnvl.to_string res ^
-                          "\n"
+                          TargetEnvl.to_string res ^ "\n"
       end;
     res
 
@@ -605,10 +604,7 @@ class typing (hg : hgrammar) = object(self)
     print_string @@ "Types of nt:\n" ^
                     "============\n";
     for nt = 0 to hg#nt_count - 1 do
-      print_string @@ hg#nt_name nt ^ ":\n";
-      TyList.iter (fun ty ->
-          print_string @@ string_of_ty ty ^ "\n"
-        ) nt_ity.(nt)
+      print_string @@ hg#nt_name nt ^ ": " ^ string_of_ity nt_ity.(nt) ^ "\n"
     done
 
   method print_hterms_hty (should_be_printed : hterms_id -> bool) =
@@ -620,8 +616,7 @@ class typing (hg : hgrammar) = object(self)
           print_string @@ string_of_int id ^ ":\n";
           let htys = hty_store#get_htys id in
           List.iter (fun hty ->
-              print_string @@ String.concat "; " @@ List.map string_of_ity hty;
-              print_string "\n"
+              print_string @@ string_of_list string_of_ity hty ^ "\n"
             ) htys;
           print_string "\n"
         end

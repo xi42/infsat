@@ -45,6 +45,8 @@ class hgrammar (grammar : grammar) = object(self)
 
   (* --- access --- *)
 
+  method start_nt : nt_id = 0
+  
   method nt_count : int = Array.length nt_bodies
 
   method nt_arity (nt : nt_id) : int = grammar#arity_of_nt nt

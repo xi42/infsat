@@ -523,7 +523,6 @@ class cfa (hg : hgrammar) = object(self)
     if !Flags.debugging then
       begin
         self#print_hterms_bindings;
-        print_string "\n";
         (* TODO print_nt_containing_nt ? *)
         (*
         self#print_dep_nt_nt_lin

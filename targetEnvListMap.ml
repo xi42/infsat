@@ -32,7 +32,10 @@ module EnvList = struct
     filter_duplicates @@ map_monotonic (fun envm -> mk_envm envm.env) envl
 
   let to_string (envl : t) : string =
-    String.concat " | " @@ map string_of_envm envl
+    if is_empty envl then
+      "()"
+    else
+      String.concat " | " @@ map string_of_envm envl
 end
 
 type envl = EnvList.t
@@ -166,6 +169,13 @@ module TargetEnvl = struct
 
   let targets (tel : t) : ity =
     TyList.of_list @@ TargetEnvlListBase.map fst tel
+
+  let to_fun_ity (tel : t) : ity =
+    TyList.of_list @@ TargetEnvlListBase.fold_left (fun acc (target, envl) ->
+        EnvList.fold_left (fun acc envm ->
+            envm.env#mk_fun target :: acc
+          ) acc envl
+      ) [] tel
 
   let compare : t -> t -> int =
     TargetEnvlListBase.compare_custom @@ Utilities.compare_pair Ty.compare EnvList.compare

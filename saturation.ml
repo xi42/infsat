@@ -63,8 +63,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       else
         "ITERATION " ^ string_of_int iteration
     in
-    print_string @@ "================ " ^ title ^
-                    "================ \n";
+    print_string @@ "\n================ " ^ title ^
+                    " ================ \n";
     typing#print_nt_ity;
     print_string "\n";
     typing#print_hterms_hty cfa#hterms_are_arg
@@ -78,6 +78,9 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         if !Flags.verbose then
           print_string @@ "Registering new typing of nonterminal " ^ string_of_int nt ^ " : " ^
                           string_of_ity ity ^ "\n";
+        (* TODO result should be only after graph is analyzed *)
+        if nt = hg#start_nt && TyList.mem PR ity then
+          result <- Some true;
         SetQueue.enqueue prop_nt_queue nt
       end
   
@@ -100,13 +103,12 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     let envl = typing#binding2envl var_count None fixed_hterms_hty binding in
     let ity = EnvList.fold_left (fun ity envm ->
         let tel = typing#type_check body None (Left envm.env) false false in
-        TyList.merge ity @@ TargetEnvl.targets tel
+        TyList.merge ity @@ TargetEnvl.to_fun_ity tel
       ) TyList.empty envl
     in
     self#register_nt_ity nt ity
   
   (** Infers type of given hterm under given bindings. If the type is new, it is registered. *)
-  (* TODO this was update_ty_of_id *)
   method infer_hterms_hty (id : hterms_id) (fixed_hterms_hty : (hterms_id * hty) option)
       (binding : hterms_id binding) =
     let mask = hg#id2vars id in
