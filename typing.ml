@@ -203,17 +203,29 @@ class typing (hg : hgrammar) = object(self)
     | B -> b_ity
     | E -> e_ity
 
+  method private var_count : (env, int) either -> int = function
+    | Left env -> env#var_count
+    | Right var_count -> var_count
+
   (** Returns sorted list of typings available for given head term. *)
-  method infer_head_ity (h : head) (env_data : (env, int) either) : ity =
+  method infer_head_ity (h : head) (env_data : (env, int) either) : (ty * env) list =
     match h with
-    | HNT nt -> nt_ity.(nt)
+    | HNT nt ->
+      let empty = empty_env @@ self#var_count env_data in
+      nt_ity.(nt) |> TyList.map (fun ty -> (ty, empty))
     | HVar v ->
       begin
+        (* TODO should it really return the var without modifying the productivity? *)
         match env_data with
-        | Left env -> env#get_var_ity v
+        | Left env ->
+          env#get_var_ity v |> TyList.map (fun ty ->
+              (with_productivity NP ty, singleton_env (self#var_count env_data) v @@ sty ty)
+            )
         | Right _ -> failwith "Expected environment provided for a term with head variables"
       end
-    | HT a -> self#terminal_ity a
+    | HT a ->
+      let empty = empty_env @@ self#var_count env_data in
+      self#terminal_ity a |> TyList.map (fun ty -> (ty, empty))
 
   method is_nonproductive_app_head_ty (ty : ty) (arity : int) : bool =
     let arg_itys, res_ty = ty2list ty arity in
@@ -227,10 +239,11 @@ class typing (hg : hgrammar) = object(self)
       with some restrictions. If target = NP then t = np, but any * could be valid without
       additional information about duplication. If t = PR then t = pr or at least one of * is
       pr. *)
-  method filter_compatible_heads (ity : ity) (arity : int) (target : ty) : ity =
+  method filter_compatible_heads (ity_data : (ty * env) list) (arity : int)
+      (target : ty) : (ty * env) list =
     if is_productive target then
       let flipped_target = flip_productivity target in
-      TyList.filter (fun ty ->
+      ity_data |> List.filter (fun (ty, _) ->
           let arg_itys, res_ty = ty2list ty arity in
           eq_ty res_ty target ||
           eq_ty res_ty flipped_target &&
@@ -242,29 +255,30 @@ class typing (hg : hgrammar) = object(self)
                     acc
                 ) acc ity
             ) 0 arg_itys >= 1
-        ) ity
+        )
     else
-      TyList.filter (fun ty ->
+      ity_data |> List.filter (fun (ty, _) ->
           let res_ty = remove_args ty arity in
           eq_ty res_ty target
-        ) ity
+        )
 
-  (** Creates a list of arrays of pairs (term, ity) with ity being intersection type for given
+  (** Creates a list of pairs (term, ity) with ity being intersection type for given
       argument, and each element of outer list corresponds to one of provided types.
-      Combines that in a tuple with the rest of the type and a boolean whether the whole type
-      is productive. *)
-  method annotate_args : 'a. 'a list -> ity -> (('a * ity) list * ty * bool) list =
+      Combines that in a tuple with the rest of the type, metadata, and a boolean whether
+      the whole type is productive. *)
+  method annotate_args : 'a 'b. 'a list -> (ty * 'b) list ->
+    (('a * ity) list * ty * 'b * bool) list =
     fun terms ->
-    let rec annotate_args_ty terms ty acc =
+    let rec annotate_args_ty x terms ty acc =
       match terms, ty with
       | term :: terms', Fun (_, ity, ty') ->
-        annotate_args_ty terms' ty' ((term, ity) :: acc)
+        annotate_args_ty x terms' ty' ((term, ity) :: acc)
       | [], _ ->
-        (List.rev acc, ty, is_productive ty)
+        (List.rev acc, ty, x, is_productive ty)
       | _ -> failwith "List of terms longer than list of arguments in the type"
     in
-    TyList.map (fun ty ->
-        annotate_args_ty terms ty []
+    List.map (fun (ty, x) ->
+        annotate_args_ty x terms ty []
       )
         
   (** Infer variable environments under which type checking of hterm : target succeeds. If target
@@ -298,23 +312,25 @@ class typing (hg : hgrammar) = object(self)
       | Left env -> env#var_count
       | Right var_count -> var_count
     in
+    (* It is not possible to force a productive variable when there are no variables.
+       If a target is given, checking if there is a terminal with maching types. *)
+    let filter_ity_list ity =
+      if not force_pr_var then
+        let filtered =
+          match target with
+          | Some target ->
+            ity |> TyList.filter (eq_ty target)
+          | None -> ity
+        in
+        TargetEnvl.of_list_default_flags @@
+        TyList.map (fun ty -> (ty, [empty_env var_count])) @@
+        filtered
+      else
+        TargetEnvl.empty
+    in
     let res = match hterm with
-      | HT a, [] ->
-        if not force_pr_var && target |> option_map true (fun target ->
-            TyList.exists (fun ty -> eq_ty target ty) (self#terminal_ity a)) then
-          TargetEnvl.of_list_default_flags @@
-          TyList.map (fun ty -> (ty, [empty_env var_count])) @@
-          self#terminal_ity a
-        else
-          TargetEnvl.empty
-      | HNT nt, [] ->
-        if not force_pr_var && target |> option_map true (fun target ->
-            self#nt_ty_exists nt target) then
-          TargetEnvl.of_list_default_flags @@
-          TyList.map (fun ty -> (ty, [empty_env var_count])) @@
-          self#nt_ity nt
-        else
-          TargetEnvl.empty
+      | HT a, [] -> filter_ity_list @@ self#terminal_ity a
+      | HNT nt, [] -> filter_ity_list @@ self#nt_ity nt
       | HVar v, [] ->
         begin
           match target, env_data with
@@ -357,6 +373,7 @@ class typing (hg : hgrammar) = object(self)
         let h, args = hg#decompose_hterm hterm in
         self#type_check_app h args target env_data no_pr_vars force_pr_var
     in
+    assert (target = None || TargetEnvl.targets_count res <= 1);
     if !Flags.verbose then
       begin
         print_string @@ String.make indent ' ' ^ hg#string_of_hterm hterm;
@@ -379,22 +396,18 @@ class typing (hg : hgrammar) = object(self)
        * head's type is the type of h, where h is a variable, terminal, or nonterminal *)
     let h_arity = List.length args in
     (* Get all h typings *)
-    let all_h_ity = self#infer_head_ity h env_data in
+    let all_h_data = self#infer_head_ity h env_data in
+    (* TODO var in head does not get into the env *)
     (* filtering compatible head types assuming head is not a variable *)
-    let h_ity = target |> option_map all_h_ity
-                  (self#filter_compatible_heads all_h_ity h_arity)
+    let h_data = target |> option_map all_h_data
+                  (self#filter_compatible_heads all_h_data h_arity)
     in
     if !Flags.verbose then
-      begin
-        print_string @@ String.make indent ' ' ^ "head_ity " ^ string_of_ity all_h_ity ^ "\n";
-        print_string @@ String.make indent ' ' ^ "compatible head_ity " ^ string_of_ity h_ity ^
-                        "\n"
-      end;
-    let h_ity = self#annotate_args args h_ity in
-    let var_count = match env_data with
-      | Left env -> env#var_count
-      | Right var_count -> var_count
-    in
+      print_string @@ String.make indent ' ' ^ "head_ity " ^
+                      string_of_ity (TyList.of_list (List.map fst all_h_data)) ^ "\n" ^
+                      String.make indent ' ' ^ "compatible head_ity " ^
+                      string_of_ity (TyList.of_list (List.map fst h_data)) ^
+                      "\n";
     (* TODO optimizations:
        * caching argument index * argument required productivity -> envl
        * computing terms without variables first and short circuit after for all terms
@@ -405,7 +418,7 @@ class typing (hg : hgrammar) = object(self)
        * flag to choose optimization in order to benchmark them later *)
     (* Iteration over each possible typing of the head *)
     List.fold_left TargetEnvl.merge TargetEnvl.empty @@
-    (h_ity |> List.map (fun (args, h_target, head_pr) ->
+    (self#annotate_args args h_data |> List.map (fun (args, h_target, env, head_pr) ->
          (* computing targets *)
          let pr_target, np_target = match target with
            | Some target ->
@@ -423,12 +436,12 @@ class typing (hg : hgrammar) = object(self)
          (* construction of a TEL with no variables for each target *)
          let pr_start_tel =
            pr_target |> option_map TargetEnvl.empty (fun target ->
-               TargetEnvl.singleton target @@ empty_env var_count
+               TargetEnvl.singleton target env
              )
          in
          let np_start_tel =
            np_target |> option_map TargetEnvl.empty (fun target ->
-               TargetEnvl.singleton target @@ empty_env var_count
+               TargetEnvl.singleton target env
              )
          in
          let start_tel = TargetEnvl.merge pr_start_tel np_start_tel in

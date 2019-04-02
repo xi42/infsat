@@ -29,7 +29,7 @@ let mk_grammar rules =
   let nonterminals = Array.mapi (fun i _ -> ("N" ^ string_of_int i, O)) rules in
   let g = new grammar nonterminals [||] rules in
   print_string @@ "Creating grammar:\n" ^
-                  g#report_grammar;
+                  g#grammar_info;
   EtaExpansion.eta_expand g;
   g
 
@@ -65,6 +65,18 @@ let string_of_ll = string_of_list (string_of_list string_of_int)
 
 let utilities_test () : test =
   "utilities" >::: [
+    "range-0" >:: (fun _ ->
+        assert_equal
+          [0; 1; 2] @@
+        range 0 3
+      );
+
+    "range-1" >:: (fun _ ->
+        assert_equal
+          [] @@
+        range 1 1
+      );
+    
     "product-0" >:: (fun _ ->
         assert_equal ~cmp:list_sort_eq ~printer:string_of_ll
           [] @@
@@ -254,7 +266,7 @@ let conversion_test () : test =
   ] in
   let gram = Conversion.prerules2gram (test_prerules, preserved_preterminals) in
   if !Flags.debugging then
-    print_string @@ "Conversion test grammar:\n" ^ gram#report_grammar ^ "\n";
+    print_string @@ "Conversion test grammar:\n" ^ gram#grammar_info ^ "\n";
   "conversion" >::: [
     (* Terminals
        a -> 1 $.
@@ -366,22 +378,23 @@ let typing_e_test () =
   let hg, typing = mk_typing @@ grammar_e () in
   [
     (* checking if matching arguments to their types works *)
-    "annotate_args" >:: (fun _ ->
+    "annotate_args-0" >:: (fun _ ->
         assert_equal
           [
-            ([(1, TyList.singleton NP); (2, TyList.singleton PR)], Fun (4, TyList.empty, PR), true)
+            ([(1, TyList.singleton NP); (2, TyList.singleton PR)], Fun (4, TyList.empty, PR),
+             42, true)
+          ] @@
+        typing#annotate_args
+          [1; 2]
+          [
+            (Fun (2, TyList.singleton NP,
+                  Fun (3, TyList.singleton PR,
+                       Fun (4, TyList.empty, PR)
+                      )
+                 ),
+             42
+            )
           ]
-          (typing#annotate_args
-             [1; 2]
-             (TyList.singleton
-                (Fun (2, TyList.singleton NP,
-                      Fun (3, TyList.singleton PR,
-                           Fun (4, TyList.empty, PR)
-                          )
-                     )
-                )
-             )
-          )
       );
     
     (* check if e : np type checks *)

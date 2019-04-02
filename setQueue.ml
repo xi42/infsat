@@ -6,7 +6,7 @@ exception Empty
 let make n : t = (ref [], Array.make n false)
 
 (** LIFO queue filled with values from 0 to n-1, with 0 on the top. *)
-let makeall n : t = (ref (Utilities.fromto 0 n), Array.make n true)
+let makeall n : t = (ref (Utilities.range 0 n), Array.make n true)
 
 (** Dequeues an integer or raises Empty. *)
 let rec dequeue (qref, bitmap) =
@@ -56,3 +56,6 @@ let rec iter f queue =
 
 let size (qref, bitmap : t) : int =
   List.length !qref
+
+let string_of_queue (qref, bitmap : t) : string =
+  Utilities.string_of_list string_of_int !qref

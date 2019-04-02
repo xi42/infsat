@@ -32,10 +32,7 @@ module EnvList = struct
     filter_duplicates @@ map_monotonic (fun envm -> mk_envm envm.env) envl
 
   let to_string (envl : t) : string =
-    if is_empty envl then
-      "()"
-    else
-      String.concat " | " @@ map string_of_envm envl
+    String.concat " \\/ " @@ map string_of_envm envl
 end
 
 type envl = EnvList.t
@@ -169,6 +166,9 @@ module TargetEnvl = struct
 
   let targets (tel : t) : ity =
     TyList.of_list @@ TargetEnvlListBase.map fst tel
+
+  let targets_count (tel : t) : int =
+    TargetEnvlListBase.length tel
 
   let to_fun_ity (tel : t) : ity =
     TyList.of_list @@ TargetEnvlListBase.fold_left (fun acc (target, envl) ->

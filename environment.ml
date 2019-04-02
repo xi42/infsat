@@ -66,9 +66,12 @@ class env (var_itys : ity array) = object(self)
   (* --- printing --- *)
   
   method to_string : string =
-    String.concat ", " @@
-    List.mapi (fun i ity -> string_of_int i ^ " : " ^ string_of_ity ity) @@
-    Array.to_list var_itys
+    if self#var_count = 0 then
+      "*"
+    else
+      String.concat ", " @@
+      List.mapi (fun i ity -> string_of_int i ^ " : " ^ string_of_ity ity) @@
+      Array.to_list var_itys
 end
 
 let empty_env (var_count : int) : env =

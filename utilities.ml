@@ -125,16 +125,16 @@ let rec compare_lists (cmp : 'a -> 'a -> int) (l1 : 'a list) (l2 : 'a list) : in
   | _, [] -> 1
 
 (** A list of integers from m to n - 1 (empty if m >= n). *)
-let rec fromto (m : int) (n : int) : int list =
+let rec range (m : int) (n : int) : int list =
   if m >= n then
     []
   else
-    m :: fromto (m + 1) n
+    m :: range (m + 1) n
 
 (** Puts 0-based index in a pair with each element of the input list. *)
 let index_list (l : 'a list) : (int * 'a) list =
   let len = List.length l in
-  let indices = fromto 0 len in
+  let indices = range 0 len in
   List.combine indices l
 
 (** Removes the first element in list l that satisfies f. *)

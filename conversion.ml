@@ -76,7 +76,7 @@ and normalize_term term =
       let arity = List.length vars in
       let nt = new_ntaux () in
       let subst = List.combine vars
-          (List.map (fun i-> Var (nt, i)) (fromto 0 arity))
+          (List.map (fun i-> Var (nt, i)) (range 0 arity))
       in
       let term' = Grammar.subst_term subst term in
       register_new_rule nt arity term';
@@ -313,5 +313,5 @@ let prerules2gram
   (* saving grammar in a global variable *)
   if !Flags.debugging then
     print_string @@ "Grammar after conversion from prerules:\n" ^
-                    g#report_grammar;
+                    g#grammar_info;
   g

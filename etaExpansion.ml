@@ -216,7 +216,7 @@ let update_arity_of_nt gram nste =
     let arity = sty2arity sty in
     let arity', body = gram#rule nt in
     if arity > arity' then (* add dummy argument *)
-      let vars = List.map (fun i-> Var (nt, i)) (fromto arity' arity) in
+      let vars = List.map (fun i-> Var (nt, i)) (range arity' arity) in
       let body' = Grammar.mk_app body vars in (* add explicit arguments to rules so that the kind of the term inside is o *)
       gram#replace_rule nt (arity, body')
   done

@@ -92,7 +92,7 @@ class grammar nonterminals var_names rules = object(self)
     String.concat "\n" @@ Array.to_list @@
     (rules |> Array.mapi (fun i (arity, body) ->
          self#name_of_nt i ^ " " ^
-         String.concat "" (Utilities.fromto 0 (arity - 1) |> List.map (fun j ->
+         String.concat "" (Utilities.range 0 arity |> List.map (fun j ->
              self#name_of_var (i, j) ^ " "
            )) ^
          "-> " ^
@@ -100,7 +100,7 @@ class grammar nonterminals var_names rules = object(self)
        )
     )
 
-  method report_grammar : string =
+  method grammar_info : string =
     self#to_string ^
     "\nThe number of rewrite rules: " ^ string_of_int self#nt_count ^ "\n" ^
     "The size of recursion scheme: " ^ string_of_int self#size ^ "\n"

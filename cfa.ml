@@ -139,10 +139,11 @@ class cfa (hg : hgrammar) = object(self)
       let j = i+n in
       (i, j - 1, ids) :: self#add_index rho' j (* each termsid is converted to (first_term_number, last_term_number, termsid), like (0, 3, ...);(4, 5, ...);(6, 11, ...), i.e., start and end positions on a concatenated list of all terms *)
 
-  method register_nt_bindings_applied_to_hterms (id : hterms_id) (nt : nt_id) (termss : hterms_id binding) =
+  method register_nt_bindings_applied_to_hterms (id : hterms_id) (nt : nt_id)
+      (binding : hterms_id binding) =
     let x = nt_bindings_applied_to_hterms.(id) in
     (* TODO make sure there are no copies *)
-    nt_bindings_applied_to_hterms.(id) <- (nt, termss) :: x
+    nt_bindings_applied_to_hterms.(id) <- (nt, binding) :: x
 
   method get_nt_bindings_applied_to_hterms (id : hterms_id) : (nt_id * hterms_id binding) list =
     nt_bindings_applied_to_hterms.(id) 
@@ -475,6 +476,7 @@ class cfa (hg : hgrammar) = object(self)
     *)
     List.iter (fun binding ->
         binding |> List.iter (
+          (* TODO possible duplicates when a binding has two same hterms *)
           fun (_, _, id) -> self#register_nt_bindings_applied_to_hterms id nt binding
         )
       )

@@ -34,3 +34,9 @@ let size (firsts, seconds : 'a t) : int =
   List.fold_left (fun acc first ->
       acc + (List.length seconds.(first))
     ) 0 !firsts
+
+let string_of_queue (s : 'a -> string) (firsts, seconds : 'a t) : string =
+  Utilities.string_of_list Utilities.id @@
+  List.map (fun first ->
+      string_of_int first ^ " -> " ^ (String.concat ", " @@ List.map s seconds.(first))
+    ) !firsts
