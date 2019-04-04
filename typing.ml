@@ -178,7 +178,7 @@ class typing (hg : hgrammar) = object(self)
       id typed as fixed hty. *)
   method binding2envl (var_count : int) (mask : vars option)
       (fixed_hterms_hty : (hterms_id * hty) option) (binding : hterms_id binding) : envl =
-    EnvList.of_list_default_flags @@
+    EnvList.of_list_empty_flags @@
     List.map (hty_binding2env var_count) @@
     self#binding2hty_bindings mask binding fixed_hterms_hty
 
@@ -208,24 +208,31 @@ class typing (hg : hgrammar) = object(self)
     | Right var_count -> var_count
 
   (** Returns sorted list of typings available for given head term. *)
-  method infer_head_ity (h : head) (env_data : (env, int) either) : (ty * env) list =
+  method infer_head_ity (h : head) (env_data : (env, int) either) : (ty * envm) list =
     match h with
     | HNT nt ->
-      let empty = empty_env @@ self#var_count env_data in
-      nt_ity.(nt) |> TyList.map (fun ty -> (ty, empty))
+      let empty = mk_envm_empty_flags @@ empty_env @@ self#var_count env_data in
+      nt_ity.(nt) |> TyList.map (fun ty ->
+          (ty, {
+              empty with used_nts = NTTypings.singleton (nt, ty)
+            })
+        )
     | HVar v ->
       begin
         (* TODO should it really return the var without modifying the productivity? *)
         match env_data with
         | Left env ->
           env#get_var_ity v |> TyList.map (fun ty ->
-              (with_productivity NP ty, singleton_env (self#var_count env_data) v @@ sty ty)
+              (with_productivity NP ty,
+               mk_envm_empty_flags @@ singleton_env (self#var_count env_data) v @@ sty ty)
             )
         | Right _ -> failwith "Expected environment provided for a term with head variables"
       end
     | HT a ->
       let empty = empty_env @@ self#var_count env_data in
-      self#terminal_ity a |> TyList.map (fun ty -> (ty, empty))
+      self#terminal_ity a |> TyList.map (fun ty -> (ty,
+          mk_envm NTTypings.empty (is_productive ty) empty
+        ))
 
   method is_nonproductive_app_head_ty (ty : ty) (arity : int) : bool =
     let arg_itys, res_ty = ty2list ty arity in
@@ -239,8 +246,8 @@ class typing (hg : hgrammar) = object(self)
       with some restrictions. If target = NP then t = np, but any * could be valid without
       additional information about duplication. If t = PR then t = pr or at least one of * is
       pr. *)
-  method filter_compatible_heads (ity_data : (ty * env) list) (arity : int)
-      (target : ty) : (ty * env) list =
+  method filter_compatible_heads (ity_data : (ty * 'a) list) (arity : int)
+      (target : ty) : (ty * 'a) list =
     if is_productive target then
       let flipped_target = flip_productivity target in
       ity_data |> List.filter (fun (ty, _) ->
@@ -314,7 +321,7 @@ class typing (hg : hgrammar) = object(self)
     in
     (* It is not possible to force a productive variable when there are no variables.
        If a target is given, checking if there is a terminal with maching types. *)
-    let filter_ity_list ity =
+    let filter_ity_list ity mod_env =
       if not force_pr_var then
         let filtered =
           match target with
@@ -322,15 +329,21 @@ class typing (hg : hgrammar) = object(self)
             ity |> TyList.filter (eq_ty target)
           | None -> ity
         in
-        TargetEnvl.of_list_default_flags @@
-        TyList.map (fun ty -> (ty, [empty_env var_count])) @@
+        TargetEnvl.of_list @@
+        TyList.map (fun ty -> (ty, [mod_env ty @@ mk_envm_empty_flags @@ empty_env var_count])) @@
         filtered
       else
         TargetEnvl.empty
     in
     let res = match hterm with
-      | HT a, [] -> filter_ity_list @@ self#terminal_ity a
-      | HNT nt, [] -> filter_ity_list @@ self#nt_ity nt
+      | HT a, [] ->
+        filter_ity_list (self#terminal_ity a) (fun ty envm ->
+            {envm with positive = is_productive ty}
+          )
+      | HNT nt, [] ->
+        filter_ity_list (self#nt_ity nt) (fun ty envm ->
+            {envm with used_nts = NTTypings.singleton (nt, ty)}
+          )
       | HVar v, [] ->
         begin
           match target, env_data with
@@ -363,7 +376,7 @@ class typing (hg : hgrammar) = object(self)
             (* if we're in this branch with None target then this must be a head variable or the
                whole term is a variable *)
             (* TODO maybe change definition of headvar to include var-only terms *)
-            TargetEnvl.of_list_default_flags @@
+            TargetEnvl.of_list_empty_flags @@
             TyList.map (fun ty -> (ty, [singleton_env var_count v @@ sty ty])) @@
             env#get_var_ity v
           | None, Right _ -> failwith @@ "Type checking of terms with head variables or " ^
@@ -418,7 +431,7 @@ class typing (hg : hgrammar) = object(self)
        * flag to choose optimization in order to benchmark them later *)
     (* Iteration over each possible typing of the head *)
     List.fold_left TargetEnvl.merge TargetEnvl.empty @@
-    (self#annotate_args args h_data |> List.map (fun (args, h_target, env, head_pr) ->
+    (self#annotate_args args h_data |> List.map (fun (args, h_target, envm, head_pr) ->
          (* computing targets *)
          let pr_target, np_target = match target with
            | Some target ->
@@ -436,12 +449,12 @@ class typing (hg : hgrammar) = object(self)
          (* construction of a TEL with no variables for each target *)
          let pr_start_tel =
            pr_target |> option_map TargetEnvl.empty (fun target ->
-               TargetEnvl.singleton target env
+               TargetEnvl.singleton_of_envm target envm
              )
          in
          let np_start_tel =
            np_target |> option_map TargetEnvl.empty (fun target ->
-               TargetEnvl.singleton target env
+               TargetEnvl.singleton_of_envm target envm
              )
          in
          let start_tel = TargetEnvl.merge pr_start_tel np_start_tel in

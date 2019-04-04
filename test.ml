@@ -19,11 +19,11 @@ let init_flags () =
 
 let assert_equal_envls envl1 envl2 =
   assert_equal ~printer:EnvList.to_string ~cmp:EnvList.equal
-    (EnvList.with_default_flags envl1) (EnvList.with_default_flags envl2)
+    (EnvList.with_empty_temp_flags envl1) (EnvList.with_empty_temp_flags envl2)
 
 let assert_equal_tels tel1 tel2 =
   assert_equal ~printer:TargetEnvl.to_string ~cmp:TargetEnvl.equal
-    (TargetEnvl.with_default_flags tel1) (TargetEnvl.with_default_flags tel2)
+    (TargetEnvl.with_empty_temp_flags tel1) (TargetEnvl.with_empty_temp_flags tel2)
 
 let mk_grammar rules =
   let nonterminals = Array.mapi (fun i _ -> ("N" ^ string_of_int i, O)) rules in
@@ -432,11 +432,11 @@ let typing_ax_test () =
     (* check that a x : pr accepts both productivities of x *)
     "type_check-4" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list_default_flags
+          (TargetEnvl.of_list
            [
              (PR, [
-                senv hg 1 0 "pr";
-                senv hg 1 0 "np"
+                 mk_envm NTTypings.empty true @@ senv hg 1 0 "pr";
+                 mk_envm NTTypings.empty true @@ senv hg 1 0 "np"
               ])
            ])
           (type_check_nt_wo_env typing hg 1 PR false false)
@@ -492,7 +492,11 @@ let typing_xyyz_test () =
     (* check that intersection of common types from different arguments works *)
     "type_check-6" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.singleton PR @@
+          (TargetEnvl.singleton_of_envm PR @@
+           mk_envm (NTTypings.of_list [
+               (2, ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr");
+               (3, ty_of_string "(np -> np) -> np -> np")
+             ]) false @@
            new env [|
              ity_of_string "pr -> pr";
              ity_of_string "(np -> pr) /\\ (np -> np)";
@@ -504,10 +508,10 @@ let typing_xyyz_test () =
     (* check that branching works *)
     "type_check-7" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list_default_flags [
+          (TargetEnvl.of_list [
               (PR, [
-                 senv hg 4 0 "pr";
-                 senv hg 4 0 "np"
+                 mk_envm NTTypings.empty true @@ senv hg 4 0 "pr";
+                 mk_envm NTTypings.empty true @@ senv hg 4 0 "np"
                ])
             ]) @@
         type_check_nt_wo_env typing hg 4 PR false false
@@ -516,10 +520,10 @@ let typing_xyyz_test () =
     (* check that branching works *)
     "type_check-8" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list_default_flags [
+          (TargetEnvl.of_list [
               (NP, [
-                 senv hg 4 0 "pr";
-                 senv hg 4 0 "np"
+                 mk_envm NTTypings.empty false @@ senv hg 4 0 "pr";
+                 mk_envm NTTypings.empty false @@ senv hg 4 0 "np"
                ])
             ]) @@
         type_check_nt_wo_env typing hg 4 NP false false
@@ -528,7 +532,7 @@ let typing_xyyz_test () =
     (* Basic creation of bindings without a product *)
     "binding2envl-1" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "pr -> pr";
                 ity_of_string "pr -> pr";
@@ -546,7 +550,7 @@ let typing_xyyz_test () =
     (* Basic creation of bindings with mask without all but first variables, without product *)
     "binding2envl-2" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "pr -> pr";
                 ity_of_string "T";
@@ -560,7 +564,7 @@ let typing_xyyz_test () =
     (* Creation of bindings with mask and fixed hty of hterms. *)
     "binding2envl-3" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "np -> pr";
                 ity_of_string "T";
@@ -602,18 +606,24 @@ let grammar_dup () = mk_grammar
 
 let typing_dup_test () =
   let hg, typing = mk_typing @@ grammar_dup () in
-  ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> pr) -> (pr -> pr) -> pr -> np";
-  ignore @@ typing#add_nt_ty 1 @@ ty_of_string  "(pr -> np) -> (pr -> np) -> pr -> np";
+  ignore @@ typing#add_nt_ty 1 @@ ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np";
+  ignore @@ typing#add_nt_ty 1 @@ ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np";
   [
     (* All valid typings of x type check, because the application is already productive due to
        a e being productive. *)
     "type_check-9" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list_default_flags [
+          (TargetEnvl.of_list [
               (PR, [
-                 senv hg 2 0 "pr -> pr";
-                 senv hg 2 0 "pr -> np"
-               ])
+                  mk_envm (NTTypings.singleton
+                             (1, ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
+                          ) true @@
+                  senv hg 2 0 "pr -> pr";
+                  mk_envm (NTTypings.singleton
+                             (1, ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np")
+                          ) true @@
+                  senv hg 2 0 "pr -> np"
+                ])
             ])
           (type_check_nt_wo_env typing hg 2 PR false false)
       );
@@ -633,10 +643,14 @@ let typing_dup_test () =
        known typing of the head with unproductive last argument. *)
     "type_check-11" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.singleton PR @@ new env [|
-              ity_of_string "pr -> pr";
-              ity_of_string "pr"
-            |])
+          (TargetEnvl.singleton_of_envm PR @@
+           mk_envm (NTTypings.singleton
+                      (1, ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
+                   ) true @@
+           new env [|
+             ity_of_string "pr -> pr";
+             ity_of_string "pr"
+           |])
           (type_check_nt_wo_env typing hg 3 PR false false)
       );
 
@@ -644,10 +658,14 @@ let typing_dup_test () =
        above with x : pr -> np passing and x : pr -> pr failing and y : pr being forced. *)
     "type_check-12" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.singleton NP @@ new env [|
-              ity_of_string "pr -> np";
-              ity_of_string "pr"
-            |])
+          (TargetEnvl.singleton_of_envm NP @@
+           mk_envm (NTTypings.singleton
+                      (1, ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np")
+                   ) false @@
+           new env [|
+             ity_of_string "pr -> np";
+             ity_of_string "pr"
+           |])
           (type_check_nt_wo_env typing hg 3 NP false false)
       );
 
@@ -660,16 +678,23 @@ let typing_dup_test () =
           (type_check_nt_wo_env typing hg 4 PR false false)
       );
 
+    (* TODO update tests from here *)
     (* Similar to test 12, but this time the duplication cannot happen. *)
     "type_check-14" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list_default_flags @@ [
+          (TargetEnvl.of_list @@ [
               (NP, [
+                  mk_envm (NTTypings.singleton
+                             (1, ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
+                          ) false @@
                   new env [|
                     ity_of_string "pr -> pr";
                     ity_of_string "pr -> pr";
                     ity_of_string "pr"
                   |];
+                  mk_envm (NTTypings.singleton
+                             (1, ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np")
+                          ) false @@
                   new env [|
                     ity_of_string "pr -> np";
                     ity_of_string "pr -> np";
@@ -684,14 +709,20 @@ let typing_dup_test () =
     (* Typing without target *)
     "type_check-15" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list_default_flags @@ [
+          (TargetEnvl.of_list @@ [
               (PR, [
+                  mk_envm (NTTypings.singleton
+                             (1, ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
+                          ) true @@
                   new env [|
                     ity_of_string "pr -> pr";
                     ity_of_string "pr"
                   |]
                 ]);
               (NP, [
+                  mk_envm (NTTypings.singleton
+                             (1, ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np")
+                          ) false @@
                   new env [|
                     ity_of_string "pr -> np";
                     ity_of_string "pr"
@@ -734,7 +765,7 @@ let typing_double_test () =
        fixed hterms in a binding and without mask. *)
     "binding2envl-4" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "pr";
                 ity_of_string "np"
@@ -757,7 +788,7 @@ let typing_double_test () =
        two copies of fixed hterms in a binding. *)
     "binding2envl-5" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "pr";
                 ity_of_string "T"
@@ -776,7 +807,7 @@ let typing_double_test () =
        hterms in a binding. *)
     "binding2envl-6" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "np";
                 ity_of_string "np"
@@ -788,7 +819,7 @@ let typing_double_test () =
     (* Creation of bindings without mask and without fixed hty of hterms. *)
     "binding2envl-7" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "np -> pr /\\ pr -> pr";
                 ity_of_string "np"
@@ -800,7 +831,7 @@ let typing_double_test () =
     (* Creation of bindings with mask and fixed hty of hterms. *)
     "binding2envl-8" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "np -> pr";
                 ity_of_string "T"
@@ -815,7 +846,7 @@ let typing_double_test () =
     (* Creation of bindings with mask and fixed hty of hterms. *)
     "binding2envl-9" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "T";
                 ity_of_string "np"
@@ -831,7 +862,7 @@ let typing_double_test () =
        fixed hterms in a binding and without mask. *)
     "binding2envl-10" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "pr";
                 ity_of_string "np";
@@ -865,7 +896,7 @@ let typing_double_test () =
     (* Creation of bindings fixed hty of hterms, but no variables. *)
     "binding2envl-11" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               empty_env 0
             ]) @@
         typing#binding2envl 0
@@ -877,7 +908,7 @@ let typing_double_test () =
     (* Creation of bindings with no variables. *)
     "binding2envl-12" >:: (fun _ ->
         assert_equal_envls
-          (EnvList.of_list_default_flags [
+          (EnvList.of_list_empty_flags [
               empty_env 0
             ]) @@
         typing#binding2envl 0 None None []

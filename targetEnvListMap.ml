@@ -1,16 +1,38 @@
+open GrammarCommon
 open Environment
 open Type
 
+module NTTypings = SortedList.Make(struct
+    type t = nt_id * ty
+    let compare = Utilities.compare_pair Pervasives.compare Ty.compare
+  end)
+
+type nt_tys = NTTypings.t
+
 (** Environment with metadata - whether a duplication occured and whether a productive
     actual argument was used when computing a given environment. *)
-type envm = { env : env; dup : bool; pr_arg : bool }
+(* TODO actually use two new parameters *)
+type envm = { env : env; dup : bool; pr_arg : bool; used_nts : nt_tys; positive : bool }
 
-let mk_envm (env : env) : envm = { env = env; dup = false; pr_arg = false }
+let mk_envm_empty_flags (env : env) : envm =
+  { env = env; dup = false; pr_arg = false; used_nts = NTTypings.empty; positive = false }
+
+let mk_envm (used_nts : NTTypings.t) (positive : bool) (env : env) : envm =
+  { env = env; dup = false; pr_arg = false; used_nts = used_nts; positive = positive }
 
 let string_of_envm (envm : envm) : string =
   let dup_info = if envm.dup then " DUP" else "" in
   let pr_arg_info = if envm.pr_arg then " PR_ARG" else "" in
-  envm.env#to_string ^ dup_info ^ pr_arg_info
+  let nts_info =
+    if NTTypings.is_empty envm.used_nts then
+      ""
+    else
+      " NTS " ^ (envm.used_nts |> NTTypings.to_string (fun (nt, ty) ->
+          string_of_int nt ^ " : " ^ string_of_ty ty
+        ))
+  in
+  let positive_info = if envm.positive then " POS" else "" in
+  envm.env#to_string ^ dup_info ^ pr_arg_info ^ nts_info ^ positive_info
 
 (** A sorted list of environments and information whether a duplication occured when computing
     them. In other words, list of possible typings of variables delimited by ANDs, treated as
@@ -19,17 +41,22 @@ module EnvList = struct
   include SortedList.Make(struct
       type t = envm
       let compare envm1 envm2 =
-        Utilities.compare_pair env_compare Pervasives.compare
-          (envm1.env, (envm1.dup, envm1.pr_arg)) (envm2.env, (envm2.dup, envm2.pr_arg))
+        Utilities.compare_pair
+          (Utilities.compare_pair env_compare NTTypings.compare)
+          Pervasives.compare
+          ((envm1.env, envm1.used_nts), (envm1.dup, envm1.pr_arg, envm1.positive))
+          ((envm2.env, envm2.used_nts), (envm2.dup, envm2.pr_arg, envm2.positive))
     end)
 
   (** Conversion of list of envs to an envl assuming default flags. *)
-  let of_list_default_flags (l : env list) : t =
-    of_list @@ List.map (fun env -> mk_envm env) l
+  let of_list_empty_flags (l : env list) : t =
+    of_list @@ List.map (fun env -> mk_envm_empty_flags env) l
 
   (** Returns the same envl with flags set to default values. *)
-  let with_default_flags (envl : t) : t =
-    filter_duplicates @@ map_monotonic (fun envm -> mk_envm envm.env) envl
+  let with_empty_temp_flags (envl : t) : t =
+    filter_duplicates @@ map_monotonic (fun envm -> {
+          envm with dup = false; pr_arg = false
+        }) envl
 
   let to_string (envl : t) : string =
     String.concat " \\/ " @@ map string_of_envm envl
@@ -53,18 +80,22 @@ module TargetEnvl = struct
   (** Empty TEL. *)
   let empty : t = TargetEnvlListBase.empty
 
+  (** Singleton TEL with mapping from target to envm *)
+  let singleton_of_envm (target : ty) (envm : envm) =
+    TargetEnvlListBase.singleton (target, EnvList.singleton envm)
+
   (** Singleton TEL with mapping from target to env with no duplication *)
   let singleton (target : ty) (env : env) =
-    TargetEnvlListBase.singleton (target, EnvList.singleton @@ mk_envm env)
+    singleton_of_envm target @@ mk_envm_empty_flags env
 
   let of_list (l : (ty * envm list) list) : t =
     TargetEnvlListBase.of_list @@ List.map (fun (target, envl) ->
         (target, EnvList.of_list envl)) l
 
   (** Conversion of list of pairs target-envl to respective tel assuming default flags. *)
-  let of_list_default_flags (l : (ty * env list) list) : t =
+  let of_list_empty_flags (l : (ty * env list) list) : t =
     TargetEnvlListBase.of_list @@ (l |> List.map (fun (target, envl) ->
-        (target, EnvList.of_list_default_flags envl)))
+        (target, EnvList.of_list_empty_flags envl)))
 
   let to_list : t -> (ty * envm list) list =
     TargetEnvlListBase.map (fun (target, envl) -> (target, EnvList.to_list envl))
@@ -94,9 +125,9 @@ module TargetEnvl = struct
     TargetEnvlListBase.filter (fun (target, envl) -> not @@ EnvList.is_empty envl)
 
   (** Returns TEL with flags of environments set to default values and removes duplicates. *)
-  let with_default_flags (tel : t) : t =
+  let with_empty_temp_flags (tel : t) : t =
     tel |> TargetEnvlListBase.map_monotonic (fun (target, envl) ->
-        (target, EnvList.with_default_flags envl)
+        (target, EnvList.with_empty_temp_flags envl)
       )
 
   (** Changes target of the sole element of TEL. Requires TEL to have exactly one target.
@@ -105,7 +136,9 @@ module TargetEnvl = struct
   let retarget (target : ty) (tel : t) : t =
     assert (TargetEnvlListBase.length tel <= 1);
     tel |> TargetEnvlListBase.map_monotonic (fun (target', envl) ->
-        (target, EnvList.filter_duplicates (envl |>EnvList.map_monotonic (fun envm -> {
+        (target, EnvList.filter_duplicates (envl |> EnvList.map_monotonic (fun envm -> {
+               (* note that does not touch used_nts and positive so that this information is
+                  carried over *)
                envm with dup = false; pr_arg = is_productive target'
              })))
       )
@@ -141,7 +174,6 @@ module TargetEnvl = struct
       unique in inner list variables. Flattening means moving outer intersection (AND) inside. *)
   let intersect (tel1 : t) (tel2 : t) : t =
     (* separately for each target *)
-    (* TODO intersect or merge? *)
     TargetEnvlListBase.intersect_custom (fun (target1, envl1) (_, envl2) ->
         (* for each env1 in envs in tel1 *)
         let merged_envl = EnvList.fold_left (fun acc envm1 ->
@@ -149,12 +181,17 @@ module TargetEnvl = struct
             EnvList.filter_duplicates @@
             EnvList.of_list @@
             EnvList.map (fun envm2 ->
-                (* merge them together, compute duplication, and reshape the list result into
-                   a TEL *)
+                (* Merge them together, compute duplication, and reshape the list result into
+                   a TEL. This is the only place where duplication flag is set. If there was a
+                   duplication, positive flag is updated to true too. *)
                 let env, merge_dup = envm1.env#merge envm2.env in
-                { env = env;
+                {
+                  env = env;
                   dup = envm1.dup || envm2.dup || merge_dup;
-                  pr_arg = envm1.pr_arg || envm2.pr_arg }
+                  pr_arg = envm1.pr_arg || envm2.pr_arg;
+                  used_nts = NTTypings.merge envm1.used_nts envm2.used_nts;
+                  positive = envm1.positive || envm2.positive || merge_dup
+                }
               ) envl2
           ) EnvList.empty envl1
         in
