@@ -11,7 +11,7 @@ let makeall n : t = (ref (Utilities.range 0 n), Array.make n true)
 (** Dequeues an integer or raises Empty. *)
 let rec dequeue (qref, bitmap) =
   match !qref with
-  | [] -> raise Empty
+  | [] -> raise_notrace Empty
   | n :: ns ->
     qref := ns;
     if bitmap.(n) then

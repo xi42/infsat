@@ -13,7 +13,7 @@ exception Empty
 
 let dequeue (firsts, seconds : 'a t) : int * 'a =
   match !firsts with
-  | [] -> raise Empty
+  | [] -> raise_notrace Empty
   | first :: firsts' ->
     match seconds.(first) with
     | [] -> failwith "Empty seconds"

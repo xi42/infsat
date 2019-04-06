@@ -1,4 +1,5 @@
 open Binding
+open DuplicationFactorGraph
 open Environment
 open Grammar
 open GrammarCommon
@@ -216,6 +217,116 @@ let utilities_test () : test =
             [1; 2; 3; 0]
           ] @@
         product_with_one_fixed [[1]; [2]; [3]; [4]] [0; 0; 0; 0]
+      );
+  ]
+
+let dfg_test () : test =
+  "dfg" >::: [
+    (* one node, no edges *)
+    "dfg-0" >:: (fun _ ->
+        assert_equal false @@
+        (
+          let dfg = new dfg in
+          dfg#register_vertex 0 NP NTTypings.empty false;
+          dfg
+        )#has_positive_cycle 0 NP
+      );
+
+    (* unreachable loop *)
+    "dfg-1" >:: (fun _ ->
+        assert_equal false @@
+        (
+          let dfg = new dfg in
+          dfg#register_vertex 0 NP NTTypings.empty false;
+          dfg#register_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          dfg
+        )#has_positive_cycle 0 NP
+      );
+
+    (* positive loop at start *)
+    "dfg-2" >:: (fun _ ->
+        assert_equal true @@
+        (
+          let dfg = new dfg in
+          dfg#register_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          dfg
+        )#has_positive_cycle 0 PR
+      );
+
+    (* non-positive loop at start *)
+    "dfg-3" >:: (fun _ ->
+        assert_equal false @@
+        (
+          let dfg = new dfg in
+          dfg#register_vertex 0 NP (NTTypings.singleton (0, NP)) false;
+          dfg
+        )#has_positive_cycle 0 NP
+      );
+
+    (* non-positive and positive interconnected loops *)
+    "dfg-4" >:: (fun _ ->
+        assert_equal true @@
+        (
+          let dfg = new dfg in
+          dfg#register_vertex 0 NP (NTTypings.singleton (1, NP)) false;
+          dfg#register_vertex 1 NP (NTTypings.singleton (2, PR)) true;
+          dfg#register_vertex 2 PR (NTTypings.singleton (3, NP)) false;
+          dfg#register_vertex 3 NP (NTTypings.singleton (1, NP)) false;
+          dfg#register_vertex 1 NP (NTTypings.singleton (4, NP)) false;
+          dfg#register_vertex 4 NP (NTTypings.singleton (3, NP)) false;
+          dfg
+        )#has_positive_cycle 0 NP
+      );
+
+    (* non-positive and positive interconnected loops - another order *)
+    "dfg-5" >:: (fun _ ->
+        assert_equal true @@
+        (
+          let dfg = new dfg in
+          dfg#register_vertex 0 NP (NTTypings.singleton (1, NP)) false;
+          dfg#register_vertex 1 NP (NTTypings.singleton (2, PR)) false;
+          dfg#register_vertex 2 PR (NTTypings.singleton (3, NP)) false;
+          dfg#register_vertex 3 NP (NTTypings.singleton (1, NP)) false;
+          dfg#register_vertex 1 NP (NTTypings.singleton (4, NP)) true;
+          dfg#register_vertex 4 NP (NTTypings.singleton (3, NP)) false;
+          dfg
+        )#has_positive_cycle 0 NP
+      );
+
+    (* non-positive loop and positive path *)
+    "dfg-6" >:: (fun _ ->
+        assert_equal false @@
+        (
+          let dfg = new dfg in
+          dfg#register_vertex 0 NP (NTTypings.singleton (1, NP)) false;
+          dfg#register_vertex 1 NP (NTTypings.singleton (2, PR)) true;
+          dfg#register_vertex 2 PR (NTTypings.singleton (3, NP)) false;
+          dfg#register_vertex 1 NP (NTTypings.singleton (4, NP)) false;
+          dfg#register_vertex 4 NP (NTTypings.singleton (5, NP)) false;
+          dfg#register_vertex 5 NP (NTTypings.singleton (1, NP)) false;
+          dfg
+        )#has_positive_cycle 0 NP
+      );
+
+    (* registering twice the same vertex *)
+    "dfg-7" >:: (fun _ ->
+        assert_equal true @@
+        (
+          let dfg = new dfg in
+          dfg#register_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          dfg#register_vertex 0 PR (NTTypings.singleton (0, PR)) false;
+          dfg
+        )#has_positive_cycle 0 PR
+      );
+
+    (* checking for not registered vertex *)
+    "dfg-7" >:: (fun _ ->
+        assert_equal false @@
+        (
+          let dfg = new dfg in
+          dfg#register_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          dfg
+        )#has_positive_cycle 0 NP
       );
   ]
 
@@ -1047,6 +1158,7 @@ let examples_test () : test =
 
 let tests () = [
   utilities_test ();
+  dfg_test ();
   conversion_test ();
   cfa_test ();
   type_test ();

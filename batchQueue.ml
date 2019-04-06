@@ -13,7 +13,7 @@ exception Empty
 
 let dequeue (firsts, seconds : 'a t) : int * 'a list =
   match !firsts with
-  | [] -> raise Empty
+  | [] -> raise_notrace Empty
   | first :: firsts' ->
     firsts := firsts';
     let sec = seconds.(first) in

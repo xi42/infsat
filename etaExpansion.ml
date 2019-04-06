@@ -84,19 +84,19 @@ let rec unify_sty sty1 sty2 =
       v1 := Some sty2'
   | STvar v1, _ ->
     if occur v1 sty2' then
-      raise (UnifFailure (sty1', sty2'))
+      raise_notrace (UnifFailure (sty1', sty2'))
     else
       v1 := Some sty2'
   | _, STvar v2 -> 
     if occur v2 sty1' then
-      raise (UnifFailure (sty1', sty2'))
+      raise_notrace (UnifFailure (sty1', sty2'))
     else
       v2 := Some sty1'
   | STfun (st11, st12), STfun (st21, st22) ->
     unify_sty st11 st21;
     unify_sty st12 st22
   | STbase, STbase -> ()
-  | _ -> raise (UnifFailure (sty1, sty2))
+  | _ -> raise_notrace (UnifFailure (sty1, sty2))
 
 (** Starting with pairs like tvar P ~ fun X Y or any type ~ type, it updates what vars actually point at through unification, i.e., vars' contents will be equal to appropriate type. Some vars may remain if we unify two vars. *)
 let rec unify_all c =

@@ -86,7 +86,7 @@ let parse_stdin() =
     try
       InfSatParser.main InfSatLexer.token lexbuf
     with 
-    | Failure _ -> exit(-1) (* exception raised by the lexical analyer *)
+    | Failure _ -> exit (-1) (* exception raised by the lexical analyer *)
     | Parsing.Parse_error -> (print_string "Parse error\n";exit(-1)) 
   in
     result

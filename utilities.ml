@@ -32,6 +32,11 @@ let option_get : 'a option -> 'a = function
   | Some x -> x
   | None -> failwith "Expected Some"
 
+let option_default (default : 'a) (o : 'a option) : 'a =
+  match o with
+  | Some x -> x
+  | None -> default
+
 (* --- printing --- *)
 
 let string_of_bool = function
@@ -238,6 +243,10 @@ let rec is_sorted cmp l =
     cmp x y < 0 && is_sorted cmp yl
 
 (* --- ? --- *)
+
+let int_of_bool : bool -> int = function
+  | true -> 1
+  | false -> 0
 
 let id (x : 'a) : 'a = x
 
