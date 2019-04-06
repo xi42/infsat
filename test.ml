@@ -227,7 +227,7 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          dfg#register_vertex 0 NP NTTypings.empty false;
+          dfg#add_vertex 0 NP NTTypings.empty false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -237,8 +237,8 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          dfg#register_vertex 0 NP NTTypings.empty false;
-          dfg#register_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          dfg#add_vertex 0 NP NTTypings.empty false;
+          dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -248,7 +248,7 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          dfg#register_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
           dfg
         )#has_positive_cycle 0 PR
       );
@@ -258,7 +258,7 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          dfg#register_vertex 0 NP (NTTypings.singleton (0, NP)) false;
+          dfg#add_vertex 0 NP (NTTypings.singleton (0, NP)) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -268,12 +268,12 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          dfg#register_vertex 0 NP (NTTypings.singleton (1, NP)) false;
-          dfg#register_vertex 1 NP (NTTypings.singleton (2, PR)) true;
-          dfg#register_vertex 2 PR (NTTypings.singleton (3, NP)) false;
-          dfg#register_vertex 3 NP (NTTypings.singleton (1, NP)) false;
-          dfg#register_vertex 1 NP (NTTypings.singleton (4, NP)) false;
-          dfg#register_vertex 4 NP (NTTypings.singleton (3, NP)) false;
+          dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
+          dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) true;
+          dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
+          dfg#add_vertex 3 NP (NTTypings.singleton (1, NP)) false;
+          dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) false;
+          dfg#add_vertex 4 NP (NTTypings.singleton (3, NP)) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -283,12 +283,12 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          dfg#register_vertex 0 NP (NTTypings.singleton (1, NP)) false;
-          dfg#register_vertex 1 NP (NTTypings.singleton (2, PR)) false;
-          dfg#register_vertex 2 PR (NTTypings.singleton (3, NP)) false;
-          dfg#register_vertex 3 NP (NTTypings.singleton (1, NP)) false;
-          dfg#register_vertex 1 NP (NTTypings.singleton (4, NP)) true;
-          dfg#register_vertex 4 NP (NTTypings.singleton (3, NP)) false;
+          dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
+          dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) false;
+          dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
+          dfg#add_vertex 3 NP (NTTypings.singleton (1, NP)) false;
+          dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) true;
+          dfg#add_vertex 4 NP (NTTypings.singleton (3, NP)) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -298,12 +298,12 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          dfg#register_vertex 0 NP (NTTypings.singleton (1, NP)) false;
-          dfg#register_vertex 1 NP (NTTypings.singleton (2, PR)) true;
-          dfg#register_vertex 2 PR (NTTypings.singleton (3, NP)) false;
-          dfg#register_vertex 1 NP (NTTypings.singleton (4, NP)) false;
-          dfg#register_vertex 4 NP (NTTypings.singleton (5, NP)) false;
-          dfg#register_vertex 5 NP (NTTypings.singleton (1, NP)) false;
+          dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
+          dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) true;
+          dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
+          dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) false;
+          dfg#add_vertex 4 NP (NTTypings.singleton (5, NP)) false;
+          dfg#add_vertex 5 NP (NTTypings.singleton (1, NP)) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -313,8 +313,8 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          dfg#register_vertex 0 PR (NTTypings.singleton (0, PR)) true;
-          dfg#register_vertex 0 PR (NTTypings.singleton (0, PR)) false;
+          dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) false;
           dfg
         )#has_positive_cycle 0 PR
       );
@@ -324,7 +324,7 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          dfg#register_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
           dfg
         )#has_positive_cycle 0 NP
       );

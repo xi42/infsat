@@ -23,6 +23,9 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   (** Part that stores types and types specific terms and nonterminals. *)
   val typing = new Typing.typing hg
 
+  (** Duplication Factor graph. *)
+  val dfg = new DuplicationFactorGraph.dfg
+
   (* --- queues --- *)
 
   (* the queues below are defined in the order they are dequeued (the next one on the list is
@@ -86,15 +89,15 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
 
   (* --- processing results of typing --- *)
 
-  method register_nt_ity (nt : nt_id) (ity : ity) =
-    (* TODO subtyping and overwriting logic *)
-    if typing#add_nt_ity nt ity then
+  method register_nt_ty (nt : nt_id) (ty : ty) (used_nts : nt_tys) (positive : bool) =
+    if typing#add_nt_ty nt ty then
       begin
         if !Flags.verbose then
           print_string @@ "Registering new typing of nonterminal " ^ string_of_int nt ^ " : " ^
-                          string_of_ity ity ^ "\n";
-        (* TODO result should be only after graph is analyzed *)
-        if nt = hg#start_nt && TyList.mem PR ity then
+                          string_of_ty ty ^ "\n";
+        (* adding the new typing to the graph and checking for positive cycle *)
+        dfg#add_vertex nt ty used_nts positive;
+        if dfg#has_positive_cycle hg#start_nt PR then
           result <- Some true;
         SetQueue.enqueue prop_nt_queue nt
       end
@@ -127,12 +130,12 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     let body = hg#nt_body nt in
     let var_count = hg#nt_arity nt in
     let envl = typing#binding2envl var_count None fixed_hterms_hty binding in
-    let ity = EnvList.fold_left (fun ity envm ->
+    EnvList.iter (fun envm ->
         let tel = typing#type_check body None (Left envm.env) false false in
-        TyList.merge ity @@ TargetEnvl.to_fun_ity tel
-      ) TyList.empty envl
-    in
-    self#register_nt_ity nt ity
+        tel |> TargetEnvl.iter_fun_ty (fun ty used_nts positive ->
+            self#register_nt_ty nt ty used_nts positive
+          )
+      ) envl
   
   (** Infers type of given hterm under given bindings. If the type is new, it is registered. *)
   method infer_hterms_hty (id : hterms_id) (fixed_hterms_hty : (hterms_id * hty) option)

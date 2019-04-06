@@ -35,7 +35,7 @@ class dfg = object(self)
       DFGVertexHash.add rev_graph vertex in_edges;
       (out_edges, in_edges)
   
-  method register_vertex (nt : nt_id) (ty : ty) (used_nts : NTTypings.t) (positive : bool) : unit =
+  method add_vertex (nt : nt_id) (ty : ty) (used_nts : nt_tys) (positive : bool) : unit =
     let vertex = (nt, ty) in
     (* computing minimum of 2 and number of productive used nonterminals *)
     let pr_nts = NTTypings.fold_left_short_circuit 0 used_nts 2 (fun acc vertex' ->

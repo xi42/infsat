@@ -17,7 +17,7 @@ type envm = { env : env; dup : bool; pr_arg : bool; used_nts : nt_tys; positive 
 let mk_envm_empty_flags (env : env) : envm =
   { env = env; dup = false; pr_arg = false; used_nts = NTTypings.empty; positive = false }
 
-let mk_envm (used_nts : NTTypings.t) (positive : bool) (env : env) : envm =
+let mk_envm (used_nts : nt_tys) (positive : bool) (env : env) : envm =
   { env = env; dup = false; pr_arg = false; used_nts = used_nts; positive = positive }
 
 let string_of_envm (envm : envm) : string =
@@ -207,12 +207,16 @@ module TargetEnvl = struct
   let targets_count (tel : t) : int =
     TargetEnvlListBase.length tel
 
-  let to_fun_ity (tel : t) : ity =
-    TyList.of_list @@ TargetEnvlListBase.fold_left (fun acc (target, envl) ->
-        EnvList.fold_left (fun acc envm ->
-            envm.env#mk_fun target :: acc
-          ) acc envl
-      ) [] tel
+  (** Creates function types from targets and variables in their environments and iterates over
+      all resulting function types along with nonterminal typings used to create them and
+      boolean whether duplication factor increased while computing them. *)
+  let iter_fun_ty (f : ty -> nt_tys -> bool -> unit) (tel : t) : unit =
+    tel |> TargetEnvlListBase.iter (fun (target, envl) ->
+        EnvList.iter (fun envm ->
+            let ty = envm.env#mk_fun target in
+            f ty envm.used_nts envm.positive
+          ) envl
+      )
 
   let compare : t -> t -> int =
     TargetEnvlListBase.compare_custom @@ Utilities.compare_pair Ty.compare EnvList.compare
