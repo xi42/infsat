@@ -7,32 +7,27 @@ and midterm = MApp of midhead * midterm list
 type midrule = string * string list * midterm
 type midrules = midrule list
 
-let nt_kinds = ref (Array.make 0 ("", O))
-let ntid = ref 0
-let new_nt () =
-  let x = !ntid in
-  ntid := x + 1;
+let new_nt_id nt_counter =
+  let x = !nt_counter in
+  nt_counter := x + 1;
   x
 
-let ntauxid = ref 0
-let new_ntaux () =
-  let x = !ntauxid in
-  ntauxid := x + 1;
-  x
+let new_fun_name fun_counter =
+  let x = !fun_counter in
+  fun_counter := !fun_counter + 1;
+  "_fun" ^ string_of_int x
 
-(** Maps nonterminal names to fresh ids. *)
-let tab_nt_name2id = Hashtbl.create 1000
-
-let register_nt ntname =
-  if Hashtbl.mem tab_nt_name2id ntname then
-    failwith @@ "Duplicated nonterminal " ^ ntname
+let register_nt nt_counter nt_kinds nt_names nt_name =
+  if Hashtbl.mem nt_names nt_name then
+    failwith @@ "Duplicated nonterminal " ^ nt_name
   else 
-    let nt = new_nt() in 
-    Hashtbl.add tab_nt_name2id ntname nt;
-    (!nt_kinds).(nt) <- (ntname, O) (* for the moment, ignore the kind *)
+    let nt = new_nt_id nt_counter in 
+    Hashtbl.add nt_names nt_name nt;
+    (* setting dummy kind *)
+    nt_kinds.(nt) <- (nt_name, O)
 
-let lookup_nt_id nt_name =
-  try Hashtbl.find tab_nt_name2id nt_name
+let lookup_nt_id nt_names nt_name =
+  try Hashtbl.find nt_names nt_name
   with Not_found -> failwith @@ "Undefined nonterminal " ^ nt_name
 
 let aux_rules = ref []
@@ -44,7 +39,7 @@ let rec depth_of_term term =
   | T _ | NT _ | Var _ -> 0
   | App (t1, t2) -> max (depth_of_term t1) (depth_of_term t2 + 1)
 
-let rec midterm2term vmap pterm =
+let rec midterm2term nt_counter nt_names vmap pterm =
   match pterm with
   | MApp (h, pterms) ->
     let h' = 
@@ -56,25 +51,25 @@ let rec midterm2term vmap pterm =
           with
           | Not_found -> failwith @@ "Undefined variable " ^ s ^ " used"
         end
-      | MNT s -> NT (lookup_nt_id s)
+      | MNT s -> NT (lookup_nt_id nt_names s)
       | MFun _ -> failwith "Expected no functions at this point"
       | MT a -> T a
     in
-    let terms = List.map (midterm2term vmap) pterms in
+    let terms = List.map (midterm2term nt_counter nt_names vmap) pterms in
     let terms' = if !Flags.normalize then
-        List.map normalize_term terms
+        List.map (normalize_term nt_counter) terms
       else
         terms
     in
     mk_app h' terms'
 
-and normalize_term term =
+and normalize_term nt_counter term =
   match term with
   | App _ -> (* reduces outer applications *)
     if depth_of_term term > !Flags.normalization_depth then
       let vars = SortedVars.to_list @@ vars_in_term term in
       let arity = List.length vars in
-      let nt = new_ntaux () in
+      let nt = new_nt_id nt_counter in
       let subst = List.combine vars
           (List.map (fun i-> Var (nt, i)) (range 0 arity))
       in
@@ -89,22 +84,22 @@ let dummy_vname = "dummy_var"
 let dummy_term = NT 0
 let dummy_ntname = "DummyNT"
 
-let midrule2rule rules vinfo (f, (_, ss, pterm)) =
+let midrule2rule nt_counter nt_names rules vinfo (f, (_, ss, pterm)) =
   let ss' = index_list ss in
   let arity = List.length ss in
   let vmap = List.map (fun (i, v) -> (v, (f, i))) ss' in (* [(arg name, (nonterm ix, arg ix)) *)
   vinfo.(f) <- Array.make arity dummy_vname;
   List.iter (fun (i,v) -> (vinfo.(f).(i) <- v)) ss'; (* vinfo[nonterm id][arg ix] = arg name *)
-  let term = midterm2term vmap pterm in
+  let term = midterm2term nt_counter nt_names vmap pterm in
   rules.(f) <- (arity, term) (* F x_1 .. x_n = t => rules[F] = (n, potentially normalized term with names changed either to var or to terminal) *)
 
-let midrules2rules rules vinfo (midrules : midrules) =
+let midrules2rules nt_counter nt_names rules vinfo (midrules : midrules) =
   let midrules_indexed = index_list midrules in
-  List.iter (midrule2rule rules vinfo) midrules_indexed
+  List.iter (midrule2rule nt_counter nt_names rules vinfo) midrules_indexed
 
 
 let add_auxiliary_rules nt_kinds rules =
-  let num_of_nts = !ntauxid in
+  let num_of_nts = Array.length rules in
   let nt_kinds' = Array.make num_of_nts ("", O) in
   let rules' = Array.make num_of_nts (0, dummy_term) in
    for i = 0 to Array.length rules - 1 do
@@ -117,41 +112,41 @@ let add_auxiliary_rules nt_kinds rules =
     ) !aux_rules;
    (nt_kinds', rules')
 
-let rec elim_fun_from_midterm vl (term : midterm) newrules : midterm * midrules =
+let rec elim_fun_from_midterm fun_counter vl (term : midterm) newrules : midterm * midrules =
   let MApp (h, pterms) = term in
-  let pterms', newrules' = elim_fun_from_midterms vl pterms newrules in
-  let MApp (h', pterms''), newrules'' = elim_fun_from_head vl h newrules' in
+  let pterms', newrules' = elim_fun_from_midterms fun_counter vl pterms newrules in
+  let MApp (h', pterms''), newrules'' = elim_fun_from_head fun_counter vl h newrules' in
   (MApp (h', pterms'' @ pterms'), newrules'')
   
-and elim_fun_from_midterms vl (terms : midterm list) newrules =
+and elim_fun_from_midterms fun_counter vl (terms : midterm list) newrules =
   match terms with
   | [] -> ([], newrules)
   | pterm :: pterms ->
-    let pterms',newrules' = elim_fun_from_midterms vl pterms newrules in
-    let pterm', newrules'' = elim_fun_from_midterm vl pterm newrules' in
+    let pterms',newrules' = elim_fun_from_midterms fun_counter vl pterms newrules in
+    let pterm', newrules'' = elim_fun_from_midterm fun_counter vl pterm newrules' in
     (pterm' :: pterms', newrules'')
     
-and elim_fun_from_head vl (h : midhead) newrules : midterm * midrules =
+and elim_fun_from_head fun_counter vl (h : midhead) newrules : midterm * midrules =
   match h with
   | MT _ | MNT _ | MVar _ -> (MApp (h, []), newrules)
   | MFun (vl1, pterm) ->
     let vl' = vl @ vl1 in (* what if names in vl and vl1 clashe? *)
-    let pterm', newrules' = elim_fun_from_midterm vl' pterm newrules in
-    let f = Syntax.new_ntname () in
+    let pterm', newrules' = elim_fun_from_midterm fun_counter vl' pterm newrules in
+    let f = new_fun_name fun_counter in
     let terms1 = List.map (fun v -> MApp (MVar v, [])) vl in
     (MApp (MNT f, terms1), (f, vl', pterm') :: newrules')
 
-let elim_fun_from_midrule (rule : midrule) newrules : midrule * midrules =
+let elim_fun_from_midrule fun_counter (rule : midrule) newrules : midrule * midrules =
   let f, vl, term = rule in
-  let term', newrules' = elim_fun_from_midterm vl term newrules in
+  let term', newrules' = elim_fun_from_midterm fun_counter vl term newrules in
   ((f, vl, term'), newrules')
   
 (** Removes lambdas from bodies of nonterminals. *)
-let elim_fun_from_midrules (rules : midrules) : midrules =
+let elim_fun_from_midrules fun_counter (rules : midrules) : midrules =
   let rules', newrules =
     List.fold_left
       (fun (rules', newrules) rule ->
-         let rule', newrules' = elim_fun_from_midrule rule newrules in
+         let rule', newrules' = elim_fun_from_midrule fun_counter rule newrules in
          (rule' :: rules', newrules')
       ) ([], []) rules
   in
@@ -291,23 +286,25 @@ let prerules2gram
      * Rules are rules in the format as in the output grammar.
   *)
   let midrules : midrules = prerules2midrules prerules preterminals in
-  let midrules = elim_fun_from_midrules midrules in
-  let nt_names = List.map (fun (x, _, _) -> x) midrules in
-  let num_of_nts = List.length nt_names in
-  ntauxid := num_of_nts;
+  let fun_counter = ref 0 in
+  let midrules = elim_fun_from_midrules fun_counter midrules in
+  let nt_names_list = List.map (fun (x, _, _) -> x) midrules in
+  let num_of_nts = List.length nt_names_list in
   (* map nt id -> nt name, nt kind *)
-  nt_kinds := Array.make num_of_nts (dummy_ntname, O);
+  let nt_kinds = Array.make num_of_nts (dummy_ntname, O) in
   (* assigning a unique number to each nonterminal *)
-  List.iter register_nt nt_names;
+  let nt_counter = ref 0 in
+  let nt_names = Hashtbl.create 1000 in
+  List.iter (register_nt nt_counter nt_kinds nt_names) nt_names_list;
   (* map nt id -> arity, term *)
   let rules = Array.make num_of_nts (0, dummy_term) in
   let vinfo = Array.make num_of_nts [||] in
-  midrules2rules rules vinfo midrules;
+  midrules2rules nt_counter nt_names rules vinfo midrules;
   let nt', rules' = 
     if !Flags.normalize then
-      add_auxiliary_rules !nt_kinds rules
+      add_auxiliary_rules nt_kinds rules
     else
-      (!nt_kinds, rules)
+      (nt_kinds, rules)
   in
   let g = new Grammar.grammar nt' vinfo rules' in
   (* saving grammar in a global variable *)

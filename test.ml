@@ -1163,5 +1163,5 @@ let tests () = [
   cfa_test ();
   type_test ();
   typing_test ();
-  (* examples_test () *)
+  examples_test ()
 ]

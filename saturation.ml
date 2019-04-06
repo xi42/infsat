@@ -98,7 +98,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         (* adding the new typing to the graph and checking for positive cycle *)
         dfg#add_vertex nt ty used_nts positive;
         if dfg#has_positive_cycle hg#start_nt PR then
-          result <- Some true;
+          result <- Some false;
         SetQueue.enqueue prop_nt_queue nt
       end
   
@@ -292,17 +292,17 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     | Some r ->
       if !Flags.debugging then
         if r then
-          print_string "The input HORS contains paths with arbitrarily many counted terminals.\n"
-        else
           print_string @@ "The input HORS contains only paths with uniformly bounded number " ^
-                          "of counted terminals (result obtained before fixpoint).\n";
+                          "of counted terminals (result obtained before fixpoint).\n"
+        else
+          print_string "The input HORS contains paths with arbitrarily many counted terminals.\n";
       r
     | None ->
       if !Flags.debugging then
           print_string @@ "The input HORS contains only paths with uniformly bounded number " ^
                           "of counted terminals (result obtained after fixpoint).\n";
-      result <- Some false;
-      false
+      result <- Some true;
+      true
 
   initializer
     (* initializing queues *)

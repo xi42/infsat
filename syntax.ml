@@ -66,9 +66,3 @@ let rec string_of_preterminals pts =
     | pt :: pts' -> string_of_preterminal pt ^ ".\n" ^ string_of_preterminals_aux pts'
   in
   "Terminals.\n" ^ string_of_preterminals_aux pts ^ "End.\n"
-
-let ntid = ref 0
-let new_ntname() =
-  let x = !ntid in
-  ntid := !ntid + 1;
-  "_fun" ^ string_of_int x
