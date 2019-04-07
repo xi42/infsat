@@ -85,7 +85,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     print_string "\n";
     typing#print_hterms_hty cfa#hterms_are_arg;
     self#print_queues;
-    print_string "\n"
+    print_string @@ "\nDuplication Factor Graph:\n" ^
+                    dfg#to_string ^ "\n"
 
   (* --- processing results of typing --- *)
 
@@ -95,12 +96,13 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         if !Flags.verbose then
           print_string @@ "Registering new typing of nonterminal " ^ string_of_int nt ^ " : " ^
                           string_of_ty ty ^ "\n";
-        (* adding the new typing to the graph and checking for positive cycle *)
-        dfg#add_vertex nt ty used_nts positive;
-        if dfg#has_positive_cycle hg#start_nt PR then
-          result <- Some false;
         SetQueue.enqueue prop_nt_queue nt
-      end
+      end;
+    (* Adding the new typing to the graph and checking for positive cycle. This should
+       be performed even if the typing is not new, since set of used nonterminals may be new. *)
+    dfg#add_vertex nt ty used_nts positive;
+    if dfg#has_positive_cycle hg#start_nt PR then
+      result <- Some false
   
   method register_hterms_hty (id : hterms_id) (hty : hty) =
     (* TODO subtyping and overwriting logic *)
