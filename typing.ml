@@ -19,8 +19,7 @@ class typing (hg : hgrammar) = object(self)
 
   (* --- printing --- *)
   
-  (** Used only for verbose printing; global in order to not pass additional argument when not
-      verbose printing. *)
+  (** Used only for debug printing. *)
   val mutable indent = 0
 
   (* --- getting registered typings --- *)
@@ -61,7 +60,7 @@ class typing (hg : hgrammar) = object(self)
       | Some mask ->
         let mask_size = SortedVars.length mask in
         (* Mask may be ignored if it is equal to all variables. *)
-        if mask_size = 0 || mask_size <> hg#nt_arity (snd @@ SortedVars.hd mask) then
+        if mask_size = 0 || mask_size <> hg#nt_arity (fst @@ SortedVars.hd mask) then
           Some mask
         else
           None
@@ -292,7 +291,7 @@ class typing (hg : hgrammar) = object(self)
   method type_check (hterm : hterm) (target : ty option) (env_data : (env, int) either)
       (no_pr_vars : bool) (force_pr_var : bool) : tel =
     assert (not (no_pr_vars && force_pr_var));
-    if !Flags.verbose then
+    if !Flags.debugging then
       begin
         let vars_info = match no_pr_vars, force_pr_var with
           | true, false -> " (no pr vars)"
@@ -383,7 +382,7 @@ class typing (hg : hgrammar) = object(self)
         self#type_check_app h args target env_data no_pr_vars force_pr_var
     in
     assert (target = None || TargetEnvl.targets_count res <= 1);
-    if !Flags.verbose then
+    if !Flags.debugging then
       begin
         print_string @@ String.make indent ' ' ^ hg#string_of_hterm hterm;
         if TargetEnvl.is_empty res then
@@ -411,7 +410,7 @@ class typing (hg : hgrammar) = object(self)
     let h_data = target |> option_map all_h_data
                   (self#filter_compatible_heads all_h_data h_arity)
     in
-    if !Flags.verbose then
+    if !Flags.debugging then
       print_string @@ String.make indent ' ' ^ "head_ity " ^
                       string_of_ity (TyList.of_list (List.map fst all_h_data)) ^ "\n" ^
                       String.make indent ' ' ^ "compatible head_ity " ^
@@ -454,7 +453,7 @@ class typing (hg : hgrammar) = object(self)
              )
          in
          let start_tel = TargetEnvl.merge pr_start_tel np_start_tel in
-         if !Flags.verbose then
+         if !Flags.debugging then
            begin
              print_string @@ String.make indent ' ' ^ "* Type checking ";
              print_string @@ String.concat " -> " @@ List.map (fun (arg_term, arg_ity) ->
@@ -489,7 +488,7 @@ class typing (hg : hgrammar) = object(self)
                    was used (for (3)). *)
                 TyList.fold_left_short_circuit tel arg_ity TargetEnvl.empty
                   (fun tel arg_ty ->
-                     if !Flags.verbose then
+                     if !Flags.debugging then
                        begin
                          print_string @@ String.make indent ' ' ^ "* Typing argument " ^
                                          hg#string_of_hterm arg_term ^ " : " ^
@@ -562,7 +561,7 @@ class typing (hg : hgrammar) = object(self)
                          TargetEnvl.merge pr_target_arg_tel np_target_arg_tel
                      in
                      let intersection = TargetEnvl.intersect tel arg_tel in
-                     if !Flags.verbose then
+                     if !Flags.debugging then
                        begin
                          indent <- indent - 2;
                          print_string @@ String.make indent ' ' ^
@@ -576,7 +575,7 @@ class typing (hg : hgrammar) = object(self)
                         be checked at the end. (or TODO optimization in argument order).
                         Nonproductive target requires no duplication. *)
                      let res = TargetEnvl.filter_no_dup_for_np_targets intersection in
-                     if !Flags.verbose then
+                     if !Flags.debugging then
                        print_string @@ String.make indent ' ' ^
                                        "  env count after no duplication filtering: " ^
                                        string_of_int (TargetEnvl.size res) ^ "\n";
@@ -584,7 +583,7 @@ class typing (hg : hgrammar) = object(self)
                   )
              )
          in
-         if !Flags.verbose then
+         if !Flags.debugging then
            print_string @@ String.make indent ' ' ^
                            "* Intersected envs before duplication filtering:\n" ^
                            String.make (indent + 2) ' ' ^ TargetEnvl.to_string tel ^ "\n";
@@ -594,7 +593,7 @@ class typing (hg : hgrammar) = object(self)
                (* a duplication or productive actual argument is required when head is not
                   productive and target is productive *)
                let tel = TargetEnvl.filter_dup_or_pr_arg_for_pr_targets tel in
-               if !Flags.verbose then
+               if !Flags.debugging then
                  print_string @@ String.make indent ' ' ^
                                  "* env count after duplication or pr arg filtering: " ^
                                  string_of_int (TargetEnvl.size tel) ^ "\n";
@@ -605,7 +604,7 @@ class typing (hg : hgrammar) = object(self)
          in
          if force_pr_var then
            let tel = TargetEnvl.filter_pr_vars tel in
-           if !Flags.verbose then
+           if !Flags.debugging then
              begin
                print_string @@ String.make indent ' ' ^ "* env count after pr var filtering: " ^
                                string_of_int (TargetEnvl.size tel) ^ "\n";

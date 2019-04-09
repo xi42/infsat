@@ -9,7 +9,7 @@ let report_usage () =
 
 let rec read_options index =
   match Sys.argv.(index) with
-  | "-r" -> (Flags.return := true; read_options (index + 1))
+  | "-q" -> (Flags.quiet := true; read_options (index + 1))
   | "-d" -> (Flags.debugging := true; read_options (index + 1))
   | "-v" -> (Flags.verbose := true; read_options (index + 1))
   | "-n" -> (Flags.normalize := true;
@@ -151,7 +151,7 @@ let main () : unit =
   let end_t = Sys.time () in
   report_timings start_t end_t;
   (* return value indicates finiteness only when return flag is on *)
-  if res || not !Flags.return then
+  if res || not !Flags.quiet then
     exit 0
   else
     exit 1

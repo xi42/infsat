@@ -143,6 +143,7 @@ let elim_fun_from_midrule fun_counter (rule : midrule) newrules : midrule * midr
   
 (** Removes lambdas from bodies of nonterminals. *)
 let elim_fun_from_midrules fun_counter (rules : midrules) : midrules =
+  (* TODO fun nts should take only used part of the environment *)
   let rules', newrules =
     List.fold_left
       (fun (rules', newrules) rule ->

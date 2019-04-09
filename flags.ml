@@ -2,7 +2,7 @@ let debugging = ref false (* TODO this should be for stuff not needed for users 
 let verbose = ref false (* TODO this should be fore stuff intended for users, change to verbosity level *)
 let normalize = ref false
 let normalization_depth = ref 1
-let return = ref false
+let quiet = ref false
 (*
 let emptiness_check = ref true 
 let certificate = ref false
