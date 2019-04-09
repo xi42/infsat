@@ -34,8 +34,10 @@ class dfg = object(self)
       let in_edges = DFGVertexHash.create 8192 in
       DFGVertexHash.add rev_graph vertex in_edges;
       (out_edges, in_edges)
-  
-  method add_vertex (nt : nt_id) (ty : ty) (used_nts : nt_tys) (positive : bool) : unit =
+
+  (** Adds edges from nt : ty to typings of used nonterminals and adds missing vertices. Returns
+      whether an edge was added or updated. *)
+  method add_vertex (nt : nt_id) (ty : ty) (used_nts : nt_tys) (positive : bool) : bool =
     let vertex = (nt, ty) in
     (* computing minimum of 2 and number of productive used nonterminals *)
     let pr_nts = NTTypings.fold_left_short_circuit 0 used_nts 2 (fun acc vertex' ->
@@ -43,7 +45,7 @@ class dfg = object(self)
       ) in
     (* updating out edges of current vertex *)
     let out_edges, _ = self#get_or_create_edges vertex in
-    used_nts |> NTTypings.iter (fun vertex' ->
+    used_nts |> NTTypings.exists (fun vertex' ->
         try
           (* updating the edge and reverse edge if the edge already exists *)
           if not @@ DFGVertexHash.find out_edges vertex' then
@@ -51,10 +53,18 @@ class dfg = object(self)
               let edge =
                 positive || pr_nts > 1 || pr_nts = 1 && not @@ is_productive @@ snd vertex'
               in
-              DFGVertexHash.replace out_edges vertex' edge;
-              (* should exist *)
-              DFGVertexHash.replace (DFGVertexHash.find rev_graph vertex') vertex edge
+              if edge then
+                begin
+                  DFGVertexHash.replace out_edges vertex' edge;
+                  (* should exist *)
+                  DFGVertexHash.replace (DFGVertexHash.find rev_graph vertex') vertex edge;
+                  true
+                end
+              else
+                false
             end
+          else
+            false
         with
         | Not_found ->
           let edge =
@@ -62,7 +72,8 @@ class dfg = object(self)
           in
           DFGVertexHash.replace out_edges vertex' edge;
           let _, in_edges = self#get_or_create_edges vertex' in
-          DFGVertexHash.add in_edges vertex edge
+          DFGVertexHash.add in_edges vertex edge;
+          true
       )
 
   (** DFS with checking for existence of positive edge in a cycle reachable from
@@ -120,14 +131,14 @@ class dfg = object(self)
       false
 
   (** The graph in printable form. *)
-  method to_string : string =
+  method to_string (string_of_nt : nt_id -> string) : string =
     DFGVertexHash.fold (fun (nt, ty) out_edges acc ->
         let edges_str =
           String.concat "; " @@ DFGVertexHash.fold (fun (nt', ty') edge acc ->
-              (string_of_int nt' ^ " : " ^ string_of_ty ty' ^ " (" ^
+              (string_of_nt nt' ^ " : " ^ string_of_ty ty' ^ " (" ^
                string_of_int (int_of_bool edge) ^ ")") :: acc
             ) out_edges []
         in
-        acc ^ string_of_int nt ^ " : " ^ string_of_ty ty ^ " -> " ^ edges_str ^ "\n"
+        acc ^ string_of_nt nt ^ " : " ^ string_of_ty ty ^ " -> " ^ edges_str ^ "\n"
       ) graph ""
 end

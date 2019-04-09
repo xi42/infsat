@@ -255,12 +255,8 @@ class hgrammar (grammar : grammar) = object(self)
     for id = 0 to next_hterms_id - 1 do
       let terms = self#id2terms id in
       if terms <> [] then
-        begin
-          print_int id;
-          print_string ": ";
-          print_string (String.concat ", " (List.map grammar#string_of_term terms));
-          print_string "\n"
-        end
+        print_string @@ string_of_int id ^ ": " ^
+                        String.concat ", " (List.map grammar#string_of_term terms) ^ "\n"
     done
 
   (* --- debugging --- *)

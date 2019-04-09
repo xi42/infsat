@@ -54,7 +54,7 @@ module EnvList = struct
 
   (** Returns the same envl with flags set to default values. *)
   let with_empty_temp_flags (envl : t) : t =
-    filter_duplicates @@ map_monotonic (fun envm -> {
+    remove_duplicates @@ map_monotonic (fun envm -> {
           envm with dup = false; pr_arg = false
         }) envl
 
@@ -89,7 +89,11 @@ module TargetEnvl = struct
     singleton_of_envm target @@ mk_envm_empty_flags env
 
   let of_list (l : (ty * envm list) list) : t =
-    TargetEnvlListBase.of_list @@ List.map (fun (target, envl) ->
+    TargetEnvlListBase.merge_duplicates (fun (target1, envl1) (_, envl2) ->
+        (target1, EnvList.merge envl1 envl2)
+      ) @@
+    TargetEnvlListBase.of_list @@
+    List.map (fun (target, envl) ->
         (target, EnvList.of_list envl)) l
 
   (** Conversion of list of pairs target-envl to respective tel assuming default flags. *)
@@ -136,7 +140,7 @@ module TargetEnvl = struct
   let retarget (target : ty) (tel : t) : t =
     assert (TargetEnvlListBase.length tel <= 1);
     tel |> TargetEnvlListBase.map_monotonic (fun (target', envl) ->
-        (target, EnvList.filter_duplicates (envl |> EnvList.map_monotonic (fun envm -> {
+        (target, EnvList.remove_duplicates (envl |> EnvList.map_monotonic (fun envm -> {
                (* note that does not touch used_nts and positive so that this information is
                   carried over *)
                envm with dup = false; pr_arg = is_productive target'
@@ -169,7 +173,8 @@ module TargetEnvl = struct
         (target, EnvList.filter (fun envm -> envm.env#has_pr_vars) envl)
       ) tel
 
-  (** Flatten an intersection of variable environment lists, intersected separately for each target.
+  (** Flatten an intersection of variable environment lists, intersected separately for each
+      target.
       Environment lists are essentially OR-separated lists of AND-separated lists of typings of
       unique in inner list variables. Flattening means moving outer intersection (AND) inside. *)
   let intersect (tel1 : t) (tel2 : t) : t =
@@ -178,21 +183,21 @@ module TargetEnvl = struct
         (* for each env1 in envs in tel1 *)
         let merged_envl = EnvList.fold_left (fun acc envm1 ->
             (* for each env2 in envs in tel2 *)
-            EnvList.filter_duplicates @@
+            EnvList.remove_duplicates @@
             EnvList.of_list @@
-            EnvList.map (fun envm2 ->
-                (* Merge them together, compute duplication, and reshape the list result into
-                   a TEL. This is the only place where duplication flag is set. If there was a
-                   duplication, positive flag is updated to true too. *)
-                let env, merge_dup = envm1.env#merge envm2.env in
-                {
-                  env = env;
-                  dup = envm1.dup || envm2.dup || merge_dup;
-                  pr_arg = envm1.pr_arg || envm2.pr_arg;
-                  used_nts = NTTypings.merge envm1.used_nts envm2.used_nts;
-                  positive = envm1.positive || envm2.positive || merge_dup
-                }
-              ) envl2
+            (envl2 |> EnvList.map (fun envm2 ->
+                 (* Merge them together, compute duplication, and reshape the list result into
+                    a TEL. This is the only place where duplication flag is set. If there was a
+                    duplication, positive flag is updated to true too. *)
+                 let env, merge_dup = envm1.env#merge envm2.env in
+                 {
+                   env = env;
+                   dup = envm1.dup || envm2.dup || merge_dup;
+                   pr_arg = envm1.pr_arg || envm2.pr_arg;
+                   used_nts = NTTypings.merge envm1.used_nts envm2.used_nts;
+                   positive = envm1.positive || envm2.positive || merge_dup
+                 }
+               ))
           ) EnvList.empty envl1
         in
         (target1, merged_envl)
@@ -201,8 +206,29 @@ module TargetEnvl = struct
   let map (f : ty -> envl -> 'a) (tel : t) : 'a list =
     TargetEnvlListBase.map (fun (target, envl) -> f target envl) tel
 
-  let targets (tel : t) : ity =
-    TyList.of_list @@ TargetEnvlListBase.map fst tel
+  (** Returns the types of arguments to which terms typed as targets can be applied in
+      variable environments of the target. *)
+  let targets_as_args (tel : t) : ity =
+    TyList.remove_duplicates @@ TyList.of_list @@ List.concat @@
+    (tel |> TargetEnvlListBase.map (fun (ty, envl) ->
+         if is_productive ty then
+           [ty]
+         else
+           let env_with_pr_vars =
+             EnvList.fold_left_short_circuit (false, false) envl (true, true)
+               (fun (pr_env, np_env) envm ->
+                  if envm.env#has_pr_vars then
+                    (true, np_env)
+                  else
+                    (pr_env, true)
+               )
+           in
+           match env_with_pr_vars with
+           | true, true -> [with_productivity PR ty; ty]
+           | true, false -> [with_productivity PR ty]
+           | false, true -> [ty]
+           | false, false -> failwith "Encountered a target with no environments"
+       ))
 
   let targets_count (tel : t) : int =
     TargetEnvlListBase.length tel

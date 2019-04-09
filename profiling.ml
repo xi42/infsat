@@ -23,6 +23,6 @@ let report_timings start_t end_t =
           print_string ("  "^name^": "^(string_of_float time)^"s\n")
         ) (List.rev !timings);
       let total_timings = List.fold_left (fun acc (_, time) -> acc +. time) 0.0 !timings in
-      let other_time = end_t -. start_t -. total_timings in
+      let other_time = max 0.0 @@ end_t -. start_t -. total_timings in
       print_string ("  other: "^(string_of_float other_time)^"s\n")
     end

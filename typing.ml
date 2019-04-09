@@ -219,7 +219,6 @@ class typing (hg : hgrammar) = object(self)
         )
     | HVar v ->
       begin
-        (* TODO should it really return the var without modifying the productivity? *)
         match env_data with
         | Left env ->
           env#get_var_ity v |> TyList.map (fun ty ->
@@ -233,11 +232,6 @@ class typing (hg : hgrammar) = object(self)
       self#terminal_ity a |> TyList.map (fun ty -> (ty,
           mk_envm NTTypings.empty (is_productive ty) empty
         ))
-
-  method is_nonproductive_app_head_ty (ty : ty) (arity : int) : bool =
-    let arg_itys, res_ty = ty2list ty arity in
-    not (is_productive res_ty) &&
-    not (List.exists (fun ity -> TyList.exists is_productive ity) arg_itys)
 
   (** Assume that the target is
       /\_i t_1i -> .. -> /\_i t_ki -> t
@@ -377,7 +371,9 @@ class typing (hg : hgrammar) = object(self)
                whole term is a variable *)
             (* TODO maybe change definition of headvar to include var-only terms *)
             TargetEnvl.of_list_empty_flags @@
-            TyList.map (fun ty -> (ty, [singleton_env var_count v @@ sty ty])) @@
+            TyList.map (fun ty ->
+                (with_productivity NP ty, [singleton_env var_count v @@ sty ty])
+              ) @@
             env#get_var_ity v
           | None, Right _ -> failwith @@ "Type checking of terms with head variables or " ^
                                          "variable-only terms needs an environment"
@@ -441,12 +437,12 @@ class typing (hg : hgrammar) = object(self)
                (None, Some target)
            | None ->
              if head_pr then
-               (* TODO not possible to get np target with pr head?? *)
-               (Some h_target, Some (with_productivity NP h_target))
+               (Some h_target, None)
              else
                (Some (with_productivity PR h_target), Some h_target)
          in
-         (* construction of a TEL with no variables for each target *)
+         (* construction of a TEL with starting variables for each target (i.e., the variable from
+            head if there is one) *)
          let pr_start_tel =
            pr_target |> option_map TargetEnvl.empty (fun target ->
                TargetEnvl.singleton_of_envm target envm
@@ -514,10 +510,10 @@ class typing (hg : hgrammar) = object(self)
                            (* productive actual argument implies productive target *)
                            match pr_target with
                            | Some pr_target ->
-                             (* retarget also marks these environments with information that
+                             (* Retarget also marks these environments with information that
                                 productive actual argument was used and removes duplication
-                                flags *)
-                             (* TODO check if false flag for force_pr_var *)
+                                flags. Not passing the force_pr_var flag, since this is one of
+                                many arguments. *)
                              TargetEnvl.retarget pr_target @@
                              self#type_check arg_term (Some arg_ty) env_data no_pr_vars false
                            | None -> TargetEnvl.empty

@@ -24,10 +24,11 @@ module type SL = sig
   val intersect_custom : (elt -> elt -> elt) -> t -> t -> t
   val merge_custom : (elt -> elt -> elt) -> t -> t -> t
   val merge : t -> t -> t
+  val merge_duplicates : (elt -> elt -> elt) -> t -> t
   val for_all : (elt -> bool) -> t -> bool
   val exists : (elt -> bool) -> t -> bool
 
-  val filter_duplicates : t -> t
+  val remove_duplicates : t -> t
   val fold_left : ('a -> elt -> 'a) -> 'a -> t -> 'a
   val fold_left_short_circuit : 'a -> t -> 'a -> ('a -> elt -> 'a) -> 'a
   val fold_right : (elt -> 'a -> 'a) -> t -> 'a -> 'a
@@ -172,6 +173,20 @@ struct
   let merge sl1 sl2 =
     merge_custom (fun x _ -> x) sl1 sl2
 
+  (** Merges consecutive duplicates. merge_fun x y must be equal to y according to given
+      ordering. *)
+  let merge_duplicates merge_fun (L l) =
+    let rec merge_duplicates_aux acc = function
+      | [] -> []
+      | ([x] as l') -> List.rev_append acc l'
+      | x :: (y :: l' as yl) ->
+        if Ord.compare x y = 0 then
+          merge_duplicates_aux acc @@ (merge_fun x y) :: l'
+        else
+          merge_duplicates_aux (x :: acc) yl
+    in
+    L (merge_duplicates_aux [] l)
+
   let for_all f (L l) = List.for_all f l
   
   let exists f (L l) = List.exists f l
@@ -179,7 +194,7 @@ struct
   (* iteration *)
 
   (** Returns the same list without duplicates. *)
-  let filter_duplicates (L l) =
+  let remove_duplicates (L l) =
     L (Utilities.delete_consecutive_duplicates Ord.compare l)
   
   let fold_left f acc (L l) = List.fold_left f acc l

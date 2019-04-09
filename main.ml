@@ -150,7 +150,7 @@ let main () : unit =
   let res = parse_and_report_finiteness filename in
   let end_t = Sys.time () in
   report_timings start_t end_t;
-  (* return value indicates success only when return flag is on *)
+  (* return value indicates finiteness only when return flag is on *)
   if res || not !Flags.return then
     exit 0
   else

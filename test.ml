@@ -227,7 +227,7 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          dfg#add_vertex 0 NP NTTypings.empty false;
+          ignore @@ dfg#add_vertex 0 NP NTTypings.empty false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -237,8 +237,8 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          dfg#add_vertex 0 NP NTTypings.empty false;
-          dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          ignore @@ dfg#add_vertex 0 NP NTTypings.empty false;
+          ignore @@ dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -248,7 +248,7 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          ignore @@ dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
           dfg
         )#has_positive_cycle 0 PR
       );
@@ -258,7 +258,7 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          dfg#add_vertex 0 NP (NTTypings.singleton (0, NP)) false;
+          ignore @@ dfg#add_vertex 0 NP (NTTypings.singleton (0, NP)) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -268,12 +268,12 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
-          dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) true;
-          dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
-          dfg#add_vertex 3 NP (NTTypings.singleton (1, NP)) false;
-          dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) false;
-          dfg#add_vertex 4 NP (NTTypings.singleton (3, NP)) false;
+          ignore @@ dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
+          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) true;
+          ignore @@ dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
+          ignore @@ dfg#add_vertex 3 NP (NTTypings.singleton (1, NP)) false;
+          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) false;
+          ignore @@ dfg#add_vertex 4 NP (NTTypings.singleton (3, NP)) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -283,12 +283,12 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
-          dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) false;
-          dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
-          dfg#add_vertex 3 NP (NTTypings.singleton (1, NP)) false;
-          dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) true;
-          dfg#add_vertex 4 NP (NTTypings.singleton (3, NP)) false;
+          ignore @@ dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
+          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) false;
+          ignore @@ dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
+          ignore @@ dfg#add_vertex 3 NP (NTTypings.singleton (1, NP)) false;
+          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) true;
+          ignore @@ dfg#add_vertex 4 NP (NTTypings.singleton (3, NP)) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -298,12 +298,12 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
-          dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) true;
-          dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
-          dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) false;
-          dfg#add_vertex 4 NP (NTTypings.singleton (5, NP)) false;
-          dfg#add_vertex 5 NP (NTTypings.singleton (1, NP)) false;
+          ignore @@ dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
+          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) true;
+          ignore @@ dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
+          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) false;
+          ignore @@ dfg#add_vertex 4 NP (NTTypings.singleton (5, NP)) false;
+          ignore @@ dfg#add_vertex 5 NP (NTTypings.singleton (1, NP)) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -313,8 +313,8 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
-          dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) false;
+          ignore @@ dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          ignore @@ dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) false;
           dfg
         )#has_positive_cycle 0 PR
       );
@@ -324,7 +324,7 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          ignore @@ dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -1028,6 +1028,72 @@ let typing_double_test () =
 
 
 
+(** Grammar to test uncategorized typing schemes. *)
+let grammar_misc () = mk_grammar
+    [|
+      (* N0 -> N1 e *)
+      (0, App (NT 1, T E));
+      (* N1 x -> a x *)
+      (1, App (T A, Var (1, 0)))
+    |]
+
+let typing_misc_test () =
+  let hg, typing = mk_typing @@ grammar_misc () in
+  [
+    (* Typing a x without target should not yield np target. *)
+    "type_check-16" >:: (fun _ ->
+        assert_equal_tels
+          (TargetEnvl.of_list @@ [
+              (PR, [
+                  mk_envm NTTypings.empty true @@
+                  new env [|
+                    ity_of_string "pr"
+                  |]
+                ])
+            ]
+          )
+          (typing#type_check (hg#nt_body 1) None (Left (senv hg 1 0 "pr")) false false)
+      );
+
+    (* Typing a x without target should not yield np target. *)
+    "type_check-17" >:: (fun _ ->
+        assert_equal_tels
+          (TargetEnvl.of_list @@ [
+              (PR, [
+                  mk_envm NTTypings.empty true @@
+                  new env [|
+                    ity_of_string "np"
+                  |]
+                ])
+            ]
+          )
+          (typing#type_check (hg#nt_body 1) None (Left (senv hg 1 0 "np")) false false)
+      );
+
+    (* Typing a x without target should not yield np target. *)
+    "type_check-18" >:: (fun _ ->
+        assert_equal_tels
+          (TargetEnvl.of_list @@ [
+              (PR, [
+                  mk_envm NTTypings.empty true @@
+                  new env [|
+                    ity_of_string "pr"
+                  |]
+                ]);
+              (PR, [
+                  mk_envm NTTypings.empty true @@
+                  new env [|
+                    ity_of_string "np"
+                  |]
+                ])
+            ]
+          )
+          (typing#type_check (hg#nt_body 1) None (Right (hg#nt_arity 1)) false false)
+      );
+  ]
+
+
+
 let typing_test () : test =
   init_flags ();
   "typing" >:::
@@ -1035,7 +1101,8 @@ let typing_test () : test =
   typing_ax_test () @
   typing_xyyz_test () @
   typing_dup_test () @
-  typing_double_test ()
+  typing_double_test () @
+  typing_misc_test ()
 
 
 
@@ -1149,11 +1216,13 @@ let examples_test () : test =
   "Examples" >::: [
     "Infinite examples" >::: List.map (fun filename ->
         filename >:: (fun _ ->
-            assert_equal (Main.parse_and_report_finiteness (path filename)) false))
+            assert_equal ~printer:string_of_bool false
+              (Main.parse_and_report_finiteness (path filename))))
       inf_filenames;
     "Finite examples" >::: List.map (fun filename ->
         filename >:: (fun _ ->
-            assert_equal (Main.parse_and_report_finiteness (path filename)) true))
+            assert_equal ~printer:string_of_bool true
+              (Main.parse_and_report_finiteness (path filename))))
       fin_filenames]
 
 let tests () = [

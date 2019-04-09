@@ -1,0 +1,12 @@
+Grammar.
+S -> b e (C D S).
+C x y -> x y.
+D x -> a x.
+End.
+
+(* a, b, e terminals correspond directly to the ones from the paper. *)
+Terminals.
+a -> 1 $.
+b -> 2.
+e -> 0.
+End.

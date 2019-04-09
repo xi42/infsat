@@ -72,21 +72,15 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
                     "nt_queue: " ^ SetQueue.string_of_queue nt_queue ^ "\n" ^
                     "hterms_queue: " ^ SetQueue.string_of_queue hterms_queue ^ "\n"
   
-  method print_status (is_finished : bool) =
-    let title =
-      if is_finished then
-        "FINISHED AFTER " ^ string_of_int iteration ^ " ITERATIONS"
-      else
-        "ITERATION " ^ string_of_int iteration
-    in
-    print_string @@ "\n================ " ^ title ^
+  method print_status =
+    print_string @@ "\n================ ITERATION " ^ string_of_int iteration ^
                     " ================ \n";
     typing#print_nt_ity;
     print_string "\n";
     typing#print_hterms_hty cfa#hterms_are_arg;
     self#print_queues;
     print_string @@ "\nDuplication Factor Graph:\n" ^
-                    dfg#to_string ^ "\n"
+                    dfg#to_string hg#nt_name ^ "\n"
 
   (* --- processing results of typing --- *)
 
@@ -94,22 +88,46 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     if typing#add_nt_ty nt ty then
       begin
         if !Flags.verbose then
-          print_string @@ "Registering new typing of nonterminal " ^ string_of_int nt ^ " : " ^
-                          string_of_ty ty ^ "\n";
+          begin
+            let positive_info =
+              if positive then
+                " with positive duplication factor"
+              else
+                " without positive duplication factor"
+            in
+            let used_nts_info =
+              if NTTypings.is_empty used_nts then
+                " and no used nonterminals"
+              else
+                " and the following used nonterminal typings: " ^
+                String.concat ", " (used_nts |> NTTypings.map (fun (nt', ty') ->
+                    hg#nt_name nt' ^ " : " ^ string_of_ty ty'
+                  ))
+            in
+            print_string @@ "Registering new typing of nonterminal " ^ string_of_int nt ^ ": " ^
+                            hg#nt_name nt ^ " : " ^ string_of_ty ty ^ positive_info ^
+                            used_nts_info ^ ".\n";
+          end;
         SetQueue.enqueue prop_nt_queue nt
       end;
     (* Adding the new typing to the graph and checking for positive cycle. This should
        be performed even if the typing is not new, since set of used nonterminals may be new. *)
-    dfg#add_vertex nt ty used_nts positive;
-    if dfg#has_positive_cycle hg#start_nt PR then
-      result <- Some false
-  
+    if dfg#add_vertex nt ty used_nts positive then
+      begin
+        if !Flags.debugging then
+          print_string @@ "The duplication factor graph was updated by adding or modifying " ^
+                          "an edge.\n";
+        if dfg#has_positive_cycle hg#start_nt PR then
+          result <- Some false
+      end
+
   method register_hterms_hty (id : hterms_id) (hty : hty) =
     (* TODO subtyping and overwriting logic *)
     if typing#add_hterms_hty id hty then
       begin
         if !Flags.verbose then
-          print_string @@ "Registering new typing of hterms " ^ string_of_int id ^ " : " ^
+          print_string @@ "Registering new typing of hterms " ^ string_of_int id ^ ": " ^
+                          hg#string_of_hterms id ^ " : " ^
                           string_of_hty hty ^ "\n";
         TwoLayerQueue.enqueue prop_hterms_hty_queue id hty
       end
@@ -165,7 +183,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
             typing#type_check hterm None (Left envm.env) false false
           )
         in
-        let hty = tels |> List.map TargetEnvl.targets in
+        let hty = tels |> List.map TargetEnvl.targets_as_args in
         self#register_hterms_hty id hty
       )
 
@@ -275,7 +293,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       Returns whether at least one of the queues was not empty. *)
   method process_queues : bool =
     if !Flags.debugging then
-      self#print_status false;
+      self#print_status;
     self#process_prop_hterms_hty_queue ||
     self#process_prop_nt_ty_queue ||
     self#process_prop_nt_queue ||
@@ -288,11 +306,11 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     while self#process_queues && result = None do
       iteration <- iteration + 1
     done;
-    if !Flags.debugging then
-      self#print_status true;
     match result with
     | Some r ->
-      if !Flags.debugging then
+      print_string @@ "\nDuplication Factor Graph:\n" ^
+                      dfg#to_string hg#nt_name ^ "\n";
+      if !Flags.verbose then
         if r then
           print_string @@ "The input HORS contains only paths with uniformly bounded number " ^
                           "of counted terminals (result obtained before fixpoint).\n"
@@ -300,7 +318,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
           print_string "The input HORS contains paths with arbitrarily many counted terminals.\n";
       r
     | None ->
-      if !Flags.debugging then
+      if !Flags.verbose then
           print_string @@ "The input HORS contains only paths with uniformly bounded number " ^
                           "of counted terminals (result obtained after fixpoint).\n";
       result <- Some true;
