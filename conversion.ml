@@ -36,7 +36,7 @@ let register_new_rule f arity body =
 
 let rec depth_of_term term =
   match term with
-  | T _ | NT _ | Var _ -> 0
+  | TE _ | NT _ | Var _ -> 0
   | App (t1, t2) -> max (depth_of_term t1) (depth_of_term t2 + 1)
 
 let rec midterm2term nt_counter nt_names vmap pterm =
@@ -53,7 +53,7 @@ let rec midterm2term nt_counter nt_names vmap pterm =
         end
       | MNT s -> NT (lookup_nt_id nt_names s)
       | MFun _ -> failwith "Expected no functions at this point"
-      | MT a -> T a
+      | MT a -> TE a
     in
     let terms = List.map (midterm2term nt_counter nt_names vmap) pterms in
     let terms' = if !Flags.normalize then
@@ -200,11 +200,12 @@ let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
     else
       body
 
-(** Replaces preterminals with minimal set of standard terminals - _a, _b, _e.
-    Checks for name conflicts between variables, terminals, and br. Replacing is done by changing
-    terminals of arity k with a lambda-term with _b-tree (with branches) with all k arguments of
+(** Replaces preterminals with minimal set of standard terminals - a, b, e, t. a, b, e are like
+    in paper, t is a terminal that has type * -> * -> np for * = np or pr.
+    Checks for name conflicts between variables, terminals, and br/tr. Replacing is done by changing
+    terminals of arity k with a lambda-term with b-tree (with branches) with all k arguments of
     height log2(k)+1. If k=0, the terminal is replaced with _e instead. If the terminal is
-    counted, _a is added above that tree. *)
+    counted, a is added above that tree. *)
 let prerules2midrules (prerules : Syntax.prerules)
     (preterminals : Syntax.preterminals) : midrules =
   (* hashmap for fast access, also checking for conflicts *)
@@ -216,6 +217,8 @@ let prerules2midrules (prerules : Syntax.prerules)
           failwith @@ "Terminal " ^ name ^ " defined twice"
         else if name = "br" then
           failwith "Terminal br is reserved for nondeterministic choice"
+        else if name = "tr" then
+          failwith "Terminal tr is reserved for binary tree node"
         else
           Hashtbl.add preterminals_map name (arity, counted)) preterminals;
   let prerule2midrule (nt, args_list, preterm) : midrule =
@@ -230,7 +233,10 @@ let prerules2midrules (prerules : Syntax.prerules)
             MApp (MVar name, arg_preterms)
           else if name = "br" then
             (* converting br *)
-            MApp(MT B, arg_preterms)
+            MApp (MT B, arg_preterms)
+          else if name = "tr" then
+            (* converting tr *)
+            MApp (MT T, arg_preterms)
           else
             (* converting terminals *)
             begin
@@ -250,7 +256,7 @@ let prerules2midrules (prerules : Syntax.prerules)
           let fun_args = List.fold_left (fun acc arg ->
               if SS.mem arg acc then
                 failwith @@ "Variable " ^ arg ^ " defined twice in function in nonterminal " ^ nt
-              else if Hashtbl.mem preterminals_map arg || arg = "br" then
+              else if Hashtbl.mem preterminals_map arg || arg = "br" || arg = "tr" then
                 failwith @@ "Variable " ^ arg ^ " in function in nonterminal " ^ nt ^
                             " conflicts with a terminal with the same name"
               else
@@ -264,7 +270,7 @@ let prerules2midrules (prerules : Syntax.prerules)
     let args = List.fold_left (fun acc arg ->
         if SS.mem arg acc then
           failwith @@ "Variable " ^ arg ^ " defined twice in nonterminal " ^ nt
-        else if Hashtbl.mem preterminals_map arg || arg = "br" then
+        else if Hashtbl.mem preterminals_map arg || arg = "br" || arg = "tr" then
           failwith @@ "Variable " ^ arg ^ " in nonterminal " ^ nt ^
                       " conflicts with a terminal with the same name"
         else

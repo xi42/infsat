@@ -124,7 +124,7 @@ class hgrammar (grammar : grammar) = object(self)
       nonterminals on the right. *)
   method nt_in_term_with_linearity (term : term) : nts * nts =
     match term with
-    | T _ | Var _ -> (SortedNTs.empty, SortedNTs.empty)
+    | TE _ | Var _ -> (SortedNTs.empty, SortedNTs.empty)
     | NT f -> (SortedNTs.singleton f, SortedNTs.empty)
     | App _ ->
       let h, terms = decompose_term term in
@@ -135,7 +135,7 @@ class hgrammar (grammar : grammar) = object(self)
         else
           (SortedNTs.singleton f, nts) (* if head nt used once *)
       | Var _ -> (SortedNTs.empty, self#nt_in_terms terms)
-      | T _ ->
+      | TE _ ->
         (* c has no children. a has a single child, so it is linear. b has two children, but only
            one at a time is used. Even if we do b (N ..) (N ..) that yield different types, only
            one N is used as long as there is no other N present. Therefore, b is also linear. *)
@@ -168,7 +168,7 @@ class hgrammar (grammar : grammar) = object(self)
 
   method private term2head h =
     match h with
-    | T a -> HT a
+    | TE a -> HT a
     | NT(f) -> HNT(f)
     | Var(x) -> HVar(x)
     | _ -> assert false

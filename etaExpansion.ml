@@ -150,9 +150,10 @@ let lookup_stype_var v vste = vste.(snd v)
     address effectively becomes its id. *)
 let rec tcheck_term t vte nte =
   match t with
-  | T A -> (arity2sty 1, [])
-  | T B -> (arity2sty 2, [])
-  | T E -> (arity2sty 0, [])
+  | TE A -> (arity2sty 1, [])
+  | TE B -> (arity2sty 2, [])
+  | TE E -> (arity2sty 0, [])
+  | TE T -> (arity2sty 2, [])
   | NT f -> (lookup_stype_nt f nte, [])
   | Var v -> (lookup_stype_var v vte, [])
   | App (t1,t2) ->

@@ -5,7 +5,7 @@ type nt_id = int
     index *)
 type var_id = nt_id * int
 
-type terminal = A | B | E
+type terminal = A | B | E | T
 
 module SortedVars = SortedList.Make(struct
     type t = var_id
@@ -26,9 +26,11 @@ let arity_of_terminal (a : terminal) : int =
   | A -> 1
   | B -> 2
   | E -> 0
+  | T -> 2
 
 let string_of_terminal (a : terminal) : string =
   match a with
   | A -> "a"
   | B -> "b"
   | E -> "e"
+  | T -> "t"

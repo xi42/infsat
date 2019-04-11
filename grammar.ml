@@ -1,7 +1,7 @@
 open GrammarCommon
 open Utilities
 
-type term = T of terminal | NT of nt_id | Var of var_id | App of term * term
+type term = TE of terminal | NT of nt_id | Var of var_id | App of term * term
 type sort = O | KFun of sort * sort
 
 type nonterminal = (string * sort)
@@ -14,7 +14,7 @@ type rule = int * term
 
 let rec subst_term s term =
   match term with
-  | T _ | NT _ -> term
+  | TE _ | NT _ -> term
   | Var x ->
     begin
       try 
@@ -25,7 +25,7 @@ let rec subst_term s term =
 
 let rec subst_nt_in_term s term =
   match term with
-  | T _ | Var _ -> term
+  | TE _ | Var _ -> term
   | NT x ->
     begin
       try 
@@ -39,7 +39,7 @@ let rec arity2sort k =
    
 let rec size_of_term t =
   match t with
-  | T _ | NT _ | Var _ -> 1
+  | TE _ | NT _ | Var _ -> 1
   | App (t1, t2) -> (size_of_term t1) + (size_of_term t2)
 
 let rec size_of_rule r = size_of_term (snd r)
@@ -83,7 +83,7 @@ class grammar nonterminals var_names rules = object(self)
 
   method string_of_term (term : term) : string =
     match term with
-    | T a -> string_of_terminal a
+    | TE a -> string_of_terminal a
     | NT f -> self#name_of_nt f
     | Var x -> self#name_of_var x
     | App (t1, t2) -> "(" ^ self#string_of_term t1 ^ " " ^ self#string_of_term t2 ^ ")"
@@ -113,7 +113,7 @@ end
 (** change normal tree with app nodes to tree with (head, list-of-arg-terms) nodes *)
 let rec decompose_term (t : term) : term * term list =
   match t with
-  | T _ | NT _ | Var _ -> (t, [])
+  | TE _ | NT _ | Var _ -> (t, [])
   | App (t1, t2) ->
     let h, ts = decompose_term t1 in
     (h, ts @ [t2])
@@ -133,7 +133,7 @@ let rec mk_app h terms =
 
 let rec occur_nt_in_term nt term =
   match term with
-  | T _ | Var _ -> false
+  | TE _ | Var _ -> false
   | NT f -> nt = f
   | App (t1, t2) -> (occur_nt_in_term nt t1) ||(occur_nt_in_term nt t2)
 
@@ -146,7 +146,7 @@ let rec contains_vars_in_term (term : term) : bool =
 
 let rec vars_in_term (term : term) : vars = 
   match term with
-  | T _ | NT _ -> SortedVars.empty
+  | TE _ | NT _ -> SortedVars.empty
   | Var v -> SortedVars.singleton v
   | App (t1, t2) ->
     SortedVars.merge (vars_in_term t1) (vars_in_term t2) 
@@ -161,7 +161,7 @@ let rec vars_in_terms (terms : term list) : vars =
     a terminal and are applied to something. *)
 let rec headvars_in_term (term : term) : vars =
   match term with
-  | T _ | NT _ -> SortedVars.empty
+  | TE _ | NT _ -> SortedVars.empty
   | Var _ -> SortedVars.empty
   | App (Var x, t2) ->
     SortedVars.merge (SortedVars.singleton x) (headvars_in_term t2)
@@ -171,7 +171,7 @@ let rec headvars_in_term (term : term) : vars =
 (** List of nonterminals used in term. *)
 let rec nt_in_term (term : term) : SortedNTs.t =
   match term with
-  | T _ | Var _ -> SortedNTs.empty
+  | TE _ | Var _ -> SortedNTs.empty
   | NT x -> SortedNTs.singleton x
   | App (t1, t2) ->
     SortedNTs.merge (nt_in_term t1)  (nt_in_term t2) 

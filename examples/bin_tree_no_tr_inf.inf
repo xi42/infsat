@@ -1,0 +1,15 @@
+Grammar.
+(* S : pr *)
+S -> T (a e).
+(* T : pr -> pr *)
+T x -> br (a x) (TR T T x).
+(* TR : (pr -> pr) -> (pr -> pr) -> pr -> np *)
+TR x y z -> x (y z).
+End.
+
+(* a, b, e terminals correspond directly to the ones from the paper. *)
+Terminals.
+a -> 1 $.
+b -> 2.
+e -> 0.
+End.

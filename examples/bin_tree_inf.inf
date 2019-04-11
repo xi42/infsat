@@ -1,0 +1,13 @@
+(*
+it does not detect loop since with tree there should be side-duplication from any of sides.
+*)
+Grammar.
+T -> br (a e) (tr T T).
+End.
+
+(* a, b, e terminals correspond directly to the ones from the paper. *)
+Terminals.
+a -> 1 $.
+b -> 2.
+e -> 0.
+End.

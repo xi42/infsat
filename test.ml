@@ -482,7 +482,7 @@ let type_test () : test =
 (** The smallest possible grammar. *)
 let grammar_e () = mk_grammar
     [|
-      (0, T E) (* N0 -> e *)
+      (0, TE E) (* N0 -> e *)
     |]
 
 let typing_e_test () =
@@ -533,8 +533,8 @@ let typing_e_test () =
 (** Grammar that tests usage of a variable. *)
 let grammar_ax () = mk_grammar
     [|
-      (0, App (NT 1, T E)); (* N0 -> N1 e *)
-      (1, App (T A, Var (1, 0))) (* N1 x -> a x *)
+      (0, App (NT 1, TE E)); (* N0 -> N1 e *)
+      (1, App (TE A, Var (1, 0))) (* N1 x -> a x *)
     |]
 
 let typing_ax_test () =
@@ -566,7 +566,7 @@ let typing_ax_test () =
 let grammar_xyyz () = mk_grammar
     [|
       (* N0 -> N1 a N4 e *)
-      (0, App (App (App (NT 1, T A), NT 4), T E));
+      (0, App (App (App (NT 1, TE A), NT 4), TE E));
       (* N1 x y z -> N2 x y (N3 y z) *)
       (3, App (
           App (App (NT 2, Var (1, 0)), Var (1, 1)),
@@ -577,7 +577,7 @@ let grammar_xyyz () = mk_grammar
       (* N3 y z -> y z *)
       (2, App (Var (3, 0), Var (3, 1)));
       (* N4 x -> b (a x) x *)
-      (1, App (App (T B, App (T A, Var (4, 0))), Var (4, 0)));
+      (1, App (App (TE B, App (TE A, Var (4, 0))), Var (4, 0)));
       (* N5 -> N5 *)
       (0, NT 5)
     |]
@@ -695,24 +695,24 @@ let grammar_dup () = mk_grammar
     [|
       (* N0 -> b (b (N1 a) (N3 a a)) (N5 N4 (a e)) *)
       (0, App (App (
-           T B,
+           TE B,
            App (App (
-               T B,
-               App (NT 2, T A)),
-                App (App (NT 3, T A), App (T A, T E)))),
-               App (App (NT 5, NT 4), App (T A, T E))));
+               TE B,
+               App (NT 2, TE A)),
+                App (App (NT 3, TE A), App (TE A, TE E)))),
+               App (App (NT 5, NT 4), App (TE A, TE E))));
       (* N1 x y z -> x (y z) *)
       (3, App (Var (1, 0), App  (Var (1, 1), Var (1, 2))));
       (* N2 x -> N1 x x (a e) *)
-      (1, App (App (App (NT 1, Var (2, 0)), Var (2, 0)), App (T A, T E)));
+      (1, App (App (App (NT 1, Var (2, 0)), Var (2, 0)), App (TE A, TE E)));
       (* N3 x y -> N1 x x y *)
       (2, App (App (App (NT 1, Var (3, 0)), Var (3, 0)), Var (3, 1)));
       (* N4 x y z -> N1 x y z *)
       (3, App (App (App (NT 1, Var (4, 0)), Var (4, 1)), Var (4, 2)));
       (* N5 x -> N6 (x a) *)
-      (1, App (NT 6, App (Var (5, 0), T A)));
+      (1, App (NT 6, App (Var (5, 0), TE A)));
       (* N6 x -> x a *)
-      (1, App (Var (6, 0), T A))
+      (1, App (Var (6, 0), TE A))
     |]
 
 let typing_dup_test () =
@@ -850,11 +850,11 @@ let typing_dup_test () =
 let grammar_double () = mk_grammar
     [|
       (* N0 -> N1 a e *)
-      (0, App (App (NT 1, T A), T E));
+      (0, App (App (NT 1, TE A), TE E));
       (* N1 x y -> b (x y) (N1 (N2 y) y)
          0CFA will find binding and N1 [N2 y; y] and N0 [a; e]. *)
       (2, App (App (
-           T B,
+           TE B,
            App (Var (1, 0), Var (1, 1))),
                App (App (NT 1, App (NT 2, Var (1, 1))), Var (1, 1)))
       );
@@ -1032,9 +1032,9 @@ let typing_double_test () =
 let grammar_misc () = mk_grammar
     [|
       (* N0 -> N1 e *)
-      (0, App (NT 1, T E));
+      (0, App (NT 1, TE E));
       (* N1 x -> a x *)
-      (1, App (T A, Var (1, 0)))
+      (1, App (TE A, Var (1, 0)))
     |]
 
 let typing_misc_test () =

@@ -189,18 +189,28 @@ class typing (hg : hgrammar) = object(self)
     let a_ity = TyList.of_list [
         mk_fun np PR;
         mk_fun pr PR
-      ] in
+      ]
+    in
     let b_ity = TyList.of_list [
         mk_fun np (mk_fun TyList.empty NP);
         mk_fun pr (mk_fun TyList.empty NP);
         mk_fun TyList.empty (mk_fun np NP);
         mk_fun TyList.empty (mk_fun pr NP)
-      ] in
+      ]
+    in
     let e_ity = np in
+    let t_ity = TyList.of_list [
+        mk_fun np (mk_fun np NP);
+        mk_fun pr (mk_fun np NP);
+        mk_fun np (mk_fun pr NP);
+        mk_fun pr (mk_fun pr NP)
+      ]
+    in
     function
     | A -> a_ity
     | B -> b_ity
     | E -> e_ity
+    | T -> t_ity
 
   method private var_count : (env, int) either -> int = function
     | Left env -> env#var_count
