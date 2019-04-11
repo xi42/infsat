@@ -3,7 +3,7 @@ let timings : (string * float) list ref = ref []
 let add_timing name time =
   timings := (name, time)::!timings
 
-let profile (name : string) (f : unit -> 'a) : 'a =
+let time (name : string) (f : unit -> 'a) : 'a =
   let start_t = Sys.time() in
   if !Flags.debugging then
     begin

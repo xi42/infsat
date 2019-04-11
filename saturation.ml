@@ -306,18 +306,18 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     while self#process_queues && result = None do
       iteration <- iteration + 1
     done;
-    if !Flags.verbose then
-      print_string @@ "\nComputed result after " ^ string_of_int iteration ^ " iterations.\n";
     match result with
     | Some r ->
       if !Flags.verbose then
         print_string @@ "\nDuplication Factor Graph:\n" ^
                         dfg#to_string hg#nt_name ^ "\n";
+      if !Flags.verbose then
+        print_string @@ "\nComputed result after " ^ string_of_int iteration ^ " iterations.\n";
       if not !Flags.quiet then
         if r then
           (* should not happen with the current implementation *)
           print_string @@ "The input HORS contains only paths with uniformly bounded number " ^
-                          "of counted terminals (result obtained before fixpoint).\n"
+                          "of counted terminals.\n"
         else
           print_string "The input HORS contains paths with arbitrarily many counted terminals.\n";
       r
@@ -325,9 +325,11 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       if !Flags.verbose && not !Flags.debugging then
         print_string @@ "\nDuplication Factor Graph:\n" ^
                         dfg#to_string hg#nt_name ^ "\n";
+      if !Flags.verbose then
+        print_string @@ "\nComputed result after " ^ string_of_int iteration ^ " iterations.\n";
       if not !Flags.quiet then
           print_string @@ "The input HORS contains only paths with uniformly bounded number " ^
-                          "of counted terminals (result obtained after fixpoint).\n";
+                          "of counted terminals.\n";
       result <- Some true;
       true
 

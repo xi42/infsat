@@ -7,6 +7,10 @@
 *.log
 infsat
 infsat-debug
+infsat-prof
+*.out
+*.callgrind
+*.cpuprofile
 top
 test
 oUnit-*
