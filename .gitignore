@@ -5,12 +5,16 @@
 *.cmti
 *.exe
 *.log
+*.prof.ml
 infsat
+infsat-g
 infsat-debug
-infsat-prof
+infsat-prof-debug
 *.out
 *.callgrind
 *.cpuprofile
+ocamlprof.dump
+ocamlprof.bak
 top
 test
 oUnit-*
