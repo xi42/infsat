@@ -5,7 +5,7 @@ open GrammarCommon
 open HGrammar
 open Profiling
 open Sort
-open TargetEnvListMap
+open TargetEnvms
 open Type
 open Utilities
 
@@ -84,7 +84,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
 
   (* --- processing results of typing --- *)
 
-  method register_nt_ty (nt : nt_id) (ty : ty) (used_nts : nt_tys) (positive : bool) =
+  method register_nt_ty (nt : nt_id) (ty : ty) (used_nts : used_nts) (positive : bool) =
     if typing#add_nt_ty nt ty then
       begin
         if !Flags.verbose then
@@ -96,13 +96,19 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
                 " without positive duplication factor"
             in
             let used_nts_info =
-              if NTTypings.is_empty used_nts then
+              if NTTyMap.is_empty used_nts then
                 " and no used nonterminals"
               else
                 " and the following used nonterminal typings: " ^
-                String.concat ", " (used_nts |> NTTypings.map (fun (nt', ty') ->
-                    hg#nt_name nt' ^ " : " ^ string_of_ty ty'
-                  ))
+                (NTTyMap.to_seq used_nts |> concat_map_seq ", " (fun ((nt', ty'), multi) ->
+                     let multi_info =
+                       if multi then
+                         " (multiple)"
+                       else
+                         ""
+                     in
+                     hg#nt_name nt' ^ " : " ^ string_of_ty ty' ^ multi_info
+                   ))
             in
             print_string @@ "Registering new typing of nonterminal " ^ string_of_int nt ^ ": " ^
                             hg#nt_name nt ^ " : " ^ string_of_ty ty ^ positive_info ^
@@ -149,13 +155,13 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       end;
     let body = hg#nt_body nt in
     let var_count = hg#nt_arity nt in
-    let envl = typing#binding2envl var_count None fixed_hterms_hty binding in
-    EnvList.iter (fun envm ->
+    let envms = typing#binding2envms var_count None fixed_hterms_hty binding in
+    Envms.iter (fun envm ->
         let tel = typing#type_check body None (Left envm.env) false false in
-        tel |> TargetEnvl.iter_fun_ty (fun ty used_nts positive ->
+        tel |> TargetEnvms.iter_fun_ty (fun ty used_nts positive ->
             self#register_nt_ty nt ty used_nts positive
           )
-      ) envl
+      ) envms
   
   (** Infers type of given hterm under given bindings. If the type is new, it is registered. *)
   method infer_hterms_hty (id : hterms_id) (fixed_hterms_hty : (hterms_id * hty) option)
@@ -177,13 +183,13 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       | None -> 0
     in
     let hterms = hg#id2hterms id in
-    let envl = typing#binding2envl var_count (Some mask) None binding in
-    envl |> EnvList.iter (fun envm ->
+    let envms = typing#binding2envms var_count (Some mask) None binding in
+    envms |> Envms.iter (fun envm ->
         let tels = hterms |> List.map (fun hterm ->
             typing#type_check hterm None (Left envm.env) false false
           )
         in
-        let hty = tels |> List.map TargetEnvl.targets_as_args in
+        let hty = tels |> List.map TargetEnvms.targets_as_args in
         self#register_hterms_hty id hty
       )
 

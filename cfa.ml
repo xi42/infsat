@@ -15,7 +15,7 @@ module SortedHTermsIds = SortedList.Make(struct
 
 type hterms_ids = SortedHTermsIds.t
 
-module HTermSet = Set.Make(struct
+module HTermSet = Set.Make (struct
     type t = hterm
     let compare = Pervasives.compare
   end)

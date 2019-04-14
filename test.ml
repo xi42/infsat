@@ -7,7 +7,7 @@ open HGrammar
 open HtyStore
 open Main
 open OUnit2
-open TargetEnvListMap
+open TargetEnvms
 open Type
 open Typing
 open Utilities
@@ -18,13 +18,13 @@ let init_flags () =
   Flags.debugging := true;
   Flags.verbose := !Flags.debugging
 
-let assert_equal_envls envl1 envl2 =
-  assert_equal ~printer:EnvList.to_string ~cmp:EnvList.equal
-    (EnvList.with_empty_temp_flags envl1) (EnvList.with_empty_temp_flags envl2)
+let assert_equal_envms envms1 envms2 =
+  assert_equal ~printer:Envms.to_string ~cmp:Envms.equal
+    (Envms.with_empty_temp_flags envms1) (Envms.with_empty_temp_flags envms2)
 
 let assert_equal_tels tel1 tel2 =
-  assert_equal ~printer:TargetEnvl.to_string ~cmp:TargetEnvl.equal
-    (TargetEnvl.with_empty_temp_flags tel1) (TargetEnvl.with_empty_temp_flags tel2)
+  assert_equal ~printer:TargetEnvms.to_string ~cmp:TargetEnvms.equal
+    (TargetEnvms.with_empty_temp_flags tel1) (TargetEnvms.with_empty_temp_flags tel2)
 
 let mk_grammar rules =
   let nonterminals = Array.mapi (fun i _ -> ("N" ^ string_of_int i, O)) rules in
@@ -227,7 +227,7 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP NTTypings.empty false;
+          ignore @@ dfg#add_vertex 0 NP empty_used_nts false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -237,8 +237,8 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP NTTypings.empty false;
-          ignore @@ dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          ignore @@ dfg#add_vertex 0 NP empty_used_nts false;
+          ignore @@ dfg#add_vertex 0 PR (nt_ty_used_once 0 PR) true;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -248,7 +248,7 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          ignore @@ dfg#add_vertex 0 PR (nt_ty_used_once 0 PR) true;
           dfg
         )#has_positive_cycle 0 PR
       );
@@ -258,7 +258,7 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP (NTTypings.singleton (0, NP)) false;
+          ignore @@ dfg#add_vertex 0 NP (nt_ty_used_once 0 NP) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -268,12 +268,12 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
-          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) true;
-          ignore @@ dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
-          ignore @@ dfg#add_vertex 3 NP (NTTypings.singleton (1, NP)) false;
-          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) false;
-          ignore @@ dfg#add_vertex 4 NP (NTTypings.singleton (3, NP)) false;
+          ignore @@ dfg#add_vertex 0 NP (nt_ty_used_once 1 NP) false;
+          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 2 PR) true;
+          ignore @@ dfg#add_vertex 2 PR (nt_ty_used_once 3 NP) false;
+          ignore @@ dfg#add_vertex 3 NP (nt_ty_used_once 1 NP) false;
+          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 4 NP) false;
+          ignore @@ dfg#add_vertex 4 NP (nt_ty_used_once 3 NP) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -283,12 +283,12 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
-          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) false;
-          ignore @@ dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
-          ignore @@ dfg#add_vertex 3 NP (NTTypings.singleton (1, NP)) false;
-          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) true;
-          ignore @@ dfg#add_vertex 4 NP (NTTypings.singleton (3, NP)) false;
+          ignore @@ dfg#add_vertex 0 NP (nt_ty_used_once 1 NP) false;
+          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 2 PR) false;
+          ignore @@ dfg#add_vertex 2 PR (nt_ty_used_once 3 NP) false;
+          ignore @@ dfg#add_vertex 3 NP (nt_ty_used_once 1 NP) false;
+          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 4 NP) true;
+          ignore @@ dfg#add_vertex 4 NP (nt_ty_used_once 3 NP) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -298,12 +298,12 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP (NTTypings.singleton (1, NP)) false;
-          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (2, PR)) true;
-          ignore @@ dfg#add_vertex 2 PR (NTTypings.singleton (3, NP)) false;
-          ignore @@ dfg#add_vertex 1 NP (NTTypings.singleton (4, NP)) false;
-          ignore @@ dfg#add_vertex 4 NP (NTTypings.singleton (5, NP)) false;
-          ignore @@ dfg#add_vertex 5 NP (NTTypings.singleton (1, NP)) false;
+          ignore @@ dfg#add_vertex 0 NP (nt_ty_used_once 1 NP) false;
+          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 2 PR) true;
+          ignore @@ dfg#add_vertex 2 PR (nt_ty_used_once 3 NP) false;
+          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 4 NP) false;
+          ignore @@ dfg#add_vertex 4 NP (nt_ty_used_once 5 NP) false;
+          ignore @@ dfg#add_vertex 5 NP (nt_ty_used_once 1 NP) false;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -313,8 +313,8 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
-          ignore @@ dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) false;
+          ignore @@ dfg#add_vertex 0 PR (nt_ty_used_once 0 PR) true;
+          ignore @@ dfg#add_vertex 0 PR (nt_ty_used_once 0 PR) false;
           dfg
         )#has_positive_cycle 0 PR
       );
@@ -324,7 +324,7 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 PR (NTTypings.singleton (0, PR)) true;
+          ignore @@ dfg#add_vertex 0 PR (nt_ty_used_once 0 PR) true;
           dfg
         )#has_positive_cycle 0 NP
       );
@@ -511,21 +511,21 @@ let typing_e_test () =
     (* check if e : np type checks *)
     "type_check-1" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.singleton NP @@ empty_env @@ hg#nt_arity 0)
+          (TargetEnvms.singleton NP @@ empty_env @@ hg#nt_arity 0)
           (type_check_nt_wo_env typing hg 0 NP false false)
       );
 
     (* checking basic functionality of forcing pr vars *)
     "type_check-2" >:: (fun _ ->
         assert_equal_tels
-          TargetEnvl.empty
+          TargetEnvms.empty
           (type_check_nt_wo_env typing hg 0 NP false true)
       );
 
     (* checking that forcing no pr vars does not break anything when there are only terminals *)
     "type_check-3" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.singleton NP @@ empty_env @@ hg#nt_arity 0)
+          (TargetEnvms.singleton NP @@ empty_env @@ hg#nt_arity 0)
           (type_check_nt_wo_env typing hg 0 NP true false)
       );
   ]
@@ -543,11 +543,11 @@ let typing_ax_test () =
     (* check that a x : pr accepts both productivities of x *)
     "type_check-4" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list
+          (TargetEnvms.of_list
            [
              (PR, [
-                 mk_envm NTTypings.empty true @@ senv hg 1 0 "pr";
-                 mk_envm NTTypings.empty true @@ senv hg 1 0 "np"
+                 mk_envm empty_used_nts true @@ senv hg 1 0 "pr";
+                 mk_envm empty_used_nts true @@ senv hg 1 0 "np"
               ])
            ])
           (type_check_nt_wo_env typing hg 1 PR false false)
@@ -556,7 +556,7 @@ let typing_ax_test () =
     (* check that a x : np does not type check *)
     "type_check-5" >:: (fun _ ->
         assert_equal_tels
-          TargetEnvl.empty
+          TargetEnvms.empty
           (type_check_nt_wo_env typing hg 1 NP false false)
       );
   ]
@@ -603,10 +603,10 @@ let typing_xyyz_test () =
     (* check that intersection of common types from different arguments works *)
     "type_check-6" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.singleton_of_envm PR @@
-           mk_envm (NTTypings.of_list [
-               (2, ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr");
-               (3, ty_of_string "(np -> np) -> np -> np")
+          (TargetEnvms.singleton_of_envm PR @@
+           mk_envm (NTTyMap.of_seq @@ List.to_seq [
+               ((2, ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr"), false);
+               ((3, ty_of_string "(np -> np) -> np -> np"), false)
              ]) false @@
            new env [|
              ity_of_string "pr -> pr";
@@ -619,10 +619,10 @@ let typing_xyyz_test () =
     (* check that branching works *)
     "type_check-7" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list [
+          (TargetEnvms.of_list [
               (PR, [
-                 mk_envm NTTypings.empty true @@ senv hg 4 0 "pr";
-                 mk_envm NTTypings.empty true @@ senv hg 4 0 "np"
+                 mk_envm empty_used_nts true @@ senv hg 4 0 "pr";
+                 mk_envm empty_used_nts true @@ senv hg 4 0 "np"
                ])
             ]) @@
         type_check_nt_wo_env typing hg 4 PR false false
@@ -631,19 +631,19 @@ let typing_xyyz_test () =
     (* check that branching works *)
     "type_check-8" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list [
+          (TargetEnvms.of_list [
               (NP, [
-                 mk_envm NTTypings.empty false @@ senv hg 4 0 "pr";
-                 mk_envm NTTypings.empty false @@ senv hg 4 0 "np"
+                 mk_envm empty_used_nts false @@ senv hg 4 0 "pr";
+                 mk_envm empty_used_nts false @@ senv hg 4 0 "np"
                ])
             ]) @@
         type_check_nt_wo_env typing hg 4 NP false false
       );
 
     (* Basic creation of bindings without a product *)
-    "binding2envl-1" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-1" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "pr -> pr";
                 ity_of_string "pr -> pr";
@@ -655,34 +655,34 @@ let typing_xyyz_test () =
                 ity_of_string "np -> pr"
               |]
             ]) @@
-        typing#binding2envl 3 None None [(0, 0, id0_0)]
+        typing#binding2envms 3 None None [(0, 0, id0_0)]
       );
 
     (* Basic creation of bindings with mask without all but first variables, without product *)
-    "binding2envl-2" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-2" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "pr -> pr";
                 ity_of_string "T";
                 ity_of_string "T"
               |]
             ]) @@
-        typing#binding2envl 3 (Some (SortedVars.of_list [(0, 0)])) None
+        typing#binding2envms 3 (Some (SortedVars.of_list [(0, 0)])) None
           [(0, 0, id0_0)]
       );
 
     (* Creation of bindings with mask and fixed hty of hterms. *)
-    "binding2envl-3" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-3" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "np -> pr";
                 ity_of_string "T";
                 ity_of_string "T"
               |]
             ]) @@
-        typing#binding2envl 3 (Some (SortedVars.of_list [(0, 0)]))
+        typing#binding2envms 3 (Some (SortedVars.of_list [(0, 0)]))
           (Some (id0_0, [ity_of_string "np -> pr"; ity_of_string "pr"; ity_of_string "np"]))
           [(0, 0, id0_0)]
       );
@@ -724,15 +724,13 @@ let typing_dup_test () =
        a e being productive. *)
     "type_check-9" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list [
+          (TargetEnvms.of_list [
               (PR, [
-                  mk_envm (NTTypings.singleton
-                             (1, ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
-                          ) true @@
+                  mk_envm (nt_ty_used_once 1 @@
+                           ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np") true @@
                   senv hg 2 0 "pr -> pr";
-                  mk_envm (NTTypings.singleton
-                             (1, ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np")
-                          ) true @@
+                  mk_envm (nt_ty_used_once 1 @@
+                           ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np") true @@
                   senv hg 2 0 "pr -> np"
                 ])
             ])
@@ -743,7 +741,7 @@ let typing_dup_test () =
        argument productive. *)
     "type_check-10" >:: (fun _ ->
         assert_equal_tels
-          TargetEnvl.empty
+          TargetEnvms.empty
           (type_check_nt_wo_env typing hg 2 NP false false)
       );
 
@@ -754,10 +752,9 @@ let typing_dup_test () =
        known typing of the head with unproductive last argument. *)
     "type_check-11" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.singleton_of_envm PR @@
-           mk_envm (NTTypings.singleton
-                      (1, ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
-                   ) true @@
+          (TargetEnvms.singleton_of_envm PR @@
+           mk_envm (nt_ty_used_once 1 @@
+                    ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np") true @@
            new env [|
              ity_of_string "pr -> pr";
              ity_of_string "pr"
@@ -769,10 +766,9 @@ let typing_dup_test () =
        above with x : pr -> np passing and x : pr -> pr failing and y : pr being forced. *)
     "type_check-12" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.singleton_of_envm NP @@
-           mk_envm (NTTypings.singleton
-                      (1, ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np")
-                   ) false @@
+          (TargetEnvms.singleton_of_envm NP @@
+           mk_envm (nt_ty_used_once 1 @@
+                    ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np") false @@
            new env [|
              ity_of_string "pr -> np";
              ity_of_string "pr"
@@ -785,7 +781,7 @@ let typing_dup_test () =
        way to achieve productivity. *)
     "type_check-13" >:: (fun _ ->
         assert_equal_tels
-          TargetEnvl.empty
+          TargetEnvms.empty
           (type_check_nt_wo_env typing hg 4 PR false false)
       );
 
@@ -793,19 +789,17 @@ let typing_dup_test () =
     (* Similar to test 12, but this time the duplication cannot happen. *)
     "type_check-14" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list @@ [
+          (TargetEnvms.of_list @@ [
               (NP, [
-                  mk_envm (NTTypings.singleton
-                             (1, ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
-                          ) false @@
+                  mk_envm (nt_ty_used_once 1 @@
+                           ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np") false @@
                   new env [|
                     ity_of_string "pr -> pr";
                     ity_of_string "pr -> pr";
                     ity_of_string "pr"
                   |];
-                  mk_envm (NTTypings.singleton
-                             (1, ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np")
-                          ) false @@
+                  mk_envm (nt_ty_used_once 1 @@
+                           ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np") false @@
                   new env [|
                     ity_of_string "pr -> np";
                     ity_of_string "pr -> np";
@@ -820,20 +814,18 @@ let typing_dup_test () =
     (* Typing without target *)
     "type_check-15" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list @@ [
+          (TargetEnvms.of_list @@ [
               (PR, [
-                  mk_envm (NTTypings.singleton
-                             (1, ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
-                          ) true @@
+                  mk_envm (nt_ty_used_once 1 @@
+                           ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np") true @@
                   new env [|
                     ity_of_string "pr -> pr";
                     ity_of_string "pr"
                   |]
                 ]);
               (NP, [
-                  mk_envm (NTTypings.singleton
-                             (1, ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np")
-                          ) false @@
+                  mk_envm (nt_ty_used_once 1 @@
+                           ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np") false @@
                   new env [|
                     ity_of_string "pr -> np";
                     ity_of_string "pr"
@@ -874,9 +866,9 @@ let typing_double_test () =
   [
     (* Creation of bindings with fixed hty of hterms when there are two copies of
        fixed hterms in a binding and without mask. *)
-    "binding2envl-4" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-4" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "pr";
                 ity_of_string "np"
@@ -890,16 +882,16 @@ let typing_double_test () =
                 ity_of_string "pr"
               |]
             ]) @@
-        typing#binding2envl 2 None
+        typing#binding2envms 2 None
           (Some (id1_y, [ity_of_string "pr"]))
           [(0, 0, id1_y); (1, 1, id1_y)]
       );
 
     (* Creation of bindings with mask and with fixed hty of hterms when there are
        two copies of fixed hterms in a binding. *)
-    "binding2envl-5" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-5" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "pr";
                 ity_of_string "T"
@@ -909,61 +901,61 @@ let typing_double_test () =
                 ity_of_string "T"
               |]
             ]) @@
-        typing#binding2envl 2 (Some (SortedVars.singleton (2, 0)))
+        typing#binding2envms 2 (Some (SortedVars.singleton (2, 0)))
           (Some (id1_y, [ity_of_string "pr"]))
           [(0, 0, id1_y); (1, 1, id1_y)]
       );
     
     (* Creation of bindings without mask or forced hty when there are two copies of same
        hterms in a binding. *)
-    "binding2envl-6" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-6" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "np";
                 ity_of_string "np"
               |]
             ]) @@
-        typing#binding2envl 2 None None [(0, 0, id1_y); (1, 1, id1_y)]
+        typing#binding2envms 2 None None [(0, 0, id1_y); (1, 1, id1_y)]
       );
 
     (* Creation of bindings without mask and without fixed hty of hterms. *)
-    "binding2envl-7" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-7" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "np -> pr /\\ pr -> pr";
                 ity_of_string "np"
               |]
             ]) @@
-        typing#binding2envl 2 None None [(0, 0, id0_ae)]
+        typing#binding2envms 2 None None [(0, 0, id0_ae)]
       );
 
     (* Creation of bindings with mask and fixed hty of hterms. *)
-    "binding2envl-8" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-8" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "np -> pr";
                 ity_of_string "T"
               |]
             ]) @@
-        typing#binding2envl 2
+        typing#binding2envms 2
           (Some (SortedVars.singleton (1, 0)))
           (Some (id0_ae, [ity_of_string "np -> pr"; ity_of_string "np"]))
           [(0, 0, id0_ae)]
       );
 
     (* Creation of bindings with mask and fixed hty of hterms. *)
-    "binding2envl-9" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-9" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "T";
                 ity_of_string "np"
               |]
             ]) @@
-        typing#binding2envl 2
+        typing#binding2envms 2
           (Some (SortedVars.singleton (1, 1)))
           (Some (id0_ae, [ity_of_string "np -> pr"; ity_of_string "np"]))
           [(0, 0, id0_ae)]
@@ -971,9 +963,9 @@ let typing_double_test () =
 
     (* Creation of bindings with fixed hty of hterms when there are two copies of
        fixed hterms in a binding and without mask. *)
-    "binding2envl-10" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-10" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               new env @@ [|
                 ity_of_string "pr";
                 ity_of_string "np";
@@ -999,30 +991,30 @@ let typing_double_test () =
                 ity_of_string "np"
               |]
             ]) @@
-        typing#binding2envl 6 None
+        typing#binding2envms 6 None
           (Some (id1_y, [ity_of_string "pr"]))
           [(0, 0, id1_y); (1, 1, id1_y); (2, 3, id0_ae); (4, 5, id0_ae)]
       );
 
     (* Creation of bindings fixed hty of hterms, but no variables. *)
-    "binding2envl-11" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-11" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               empty_env 0
             ]) @@
-        typing#binding2envl 0
+        typing#binding2envms 0
           None
           (Some (id0_ae, [ity_of_string "np -> pr"; ity_of_string "np"]))
           []
       );
 
     (* Creation of bindings with no variables. *)
-    "binding2envl-12" >:: (fun _ ->
-        assert_equal_envls
-          (EnvList.of_list_empty_flags [
+    "binding2envms-12" >:: (fun _ ->
+        assert_equal_envms
+          (Envms.of_list_empty_flags [
               empty_env 0
             ]) @@
-        typing#binding2envl 0 None None []
+        typing#binding2envms 0 None None []
       );
   ]
 
@@ -1043,9 +1035,9 @@ let typing_misc_test () =
     (* Typing a x without target should not yield np target. *)
     "type_check-16" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list @@ [
+          (TargetEnvms.of_list @@ [
               (PR, [
-                  mk_envm NTTypings.empty true @@
+                  mk_envm empty_used_nts true @@
                   new env [|
                     ity_of_string "pr"
                   |]
@@ -1058,9 +1050,9 @@ let typing_misc_test () =
     (* Typing a x without target should not yield np target. *)
     "type_check-17" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list @@ [
+          (TargetEnvms.of_list @@ [
               (PR, [
-                  mk_envm NTTypings.empty true @@
+                  mk_envm empty_used_nts true @@
                   new env [|
                     ity_of_string "np"
                   |]
@@ -1073,15 +1065,15 @@ let typing_misc_test () =
     (* Typing a x without target should not yield np target. *)
     "type_check-18" >:: (fun _ ->
         assert_equal_tels
-          (TargetEnvl.of_list @@ [
+          (TargetEnvms.of_list @@ [
               (PR, [
-                  mk_envm NTTypings.empty true @@
+                  mk_envm empty_used_nts true @@
                   new env [|
                     ity_of_string "pr"
                   |]
                 ]);
               (PR, [
-                  mk_envm NTTypings.empty true @@
+                  mk_envm empty_used_nts true @@
                   new env [|
                     ity_of_string "np"
                   |]

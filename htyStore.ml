@@ -20,6 +20,8 @@ class hty_store (hgrammar : hgrammar) = object(self)
 
   (* --- modification --- *)
 
+  (* TODO this should be array hterms_id -> set of hty, also ty funs should change to arg list -> res *)
+
   (** Idempodently adds mapping from id to hty to the storage. Returns whether it was new (did not
       already exist). *)
   method add_hty (id : hterms_id) (hty : hty) : bool =

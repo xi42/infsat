@@ -1,16 +1,13 @@
 open GrammarCommon
-open TargetEnvListMap
+open TargetEnvms
 open Type
 open Utilities
 
-type dfg_vertex = nt_id * ty
+type dfg_vertex = nt_ty
 
-let dfg_vertex_eq (nt1, ty1) (nt2, ty2) = nt1 = nt2 && eq_ty ty1 ty2
-
-module DFGVertexHash = Hashtbl.Make(struct
-    type t = dfg_vertex
-    let hash (nt, ty) = Hashtbl.hash (nt, id_of_ty ty)
-    let equal = dfg_vertex_eq
+module NTTySet = Set.Make (struct
+    type t = nt_ty
+    let compare = nt_ty_compare
   end)
 
 (** Duplication Factor graph with typings of nonterminals (nt : ty) in vertices and edges to
@@ -19,60 +16,61 @@ module DFGVertexHash = Hashtbl.Make(struct
     productive variable) or used a proof of typing of another nonterminal that was productive. *)
 class dfg = object(self)
   (** List of out-neighbours of each vertex. *)
-  val graph : (bool DFGVertexHash.t) DFGVertexHash.t = DFGVertexHash.create 8192
+  val mutable graph : (bool NTTyMap.t) NTTyMap.t = NTTyMap.empty
 
   (** List of in-neighbours of each vertex with label whether the edge is positive. *)
-  val rev_graph : (bool DFGVertexHash.t) DFGVertexHash.t = DFGVertexHash.create 8192
+  val mutable rev_graph : (bool NTTyMap.t) NTTyMap.t = NTTyMap.empty
 
   method private get_or_create_edges (vertex : nt_id * ty) =
-    try
-      (DFGVertexHash.find graph vertex, DFGVertexHash.find rev_graph vertex)
-    with
-    | Not_found ->
-      let out_edges = DFGVertexHash.create 8192 in
-      DFGVertexHash.add graph vertex out_edges;
-      let in_edges = DFGVertexHash.create 8192 in
-      DFGVertexHash.add rev_graph vertex in_edges;
+    match NTTyMap.find_opt vertex graph, NTTyMap.find_opt vertex rev_graph with
+    | Some edges1, Some edges2 -> (edges1, edges2)
+    | _, _ ->
+      let out_edges = NTTyMap.empty in
+      graph <- NTTyMap.add vertex out_edges graph;
+      let in_edges = NTTyMap.empty in
+      rev_graph <- NTTyMap.add vertex in_edges rev_graph;
       (out_edges, in_edges)
+
+  method replace_edge (vertex_from : dfg_vertex) (vertex_to : dfg_vertex) (edge : bool) : unit =
+    let out_edges, _ = self#get_or_create_edges vertex_from in
+    graph <- NTTyMap.add vertex_from (NTTyMap.add vertex_to edge out_edges) graph;
+    let _, in_edges = self#get_or_create_edges vertex_to in
+    rev_graph <- NTTyMap.add vertex_to (NTTyMap.add vertex_from edge in_edges) rev_graph
 
   (** Adds edges from nt : ty to typings of used nonterminals and adds missing vertices. Returns
       whether an edge was added or updated. *)
-  method add_vertex (nt : nt_id) (ty : ty) (used_nts : nt_tys) (positive : bool) : bool =
+  method add_vertex (nt : nt_id) (ty : ty) (used_nts : used_nts) (positive : bool) : bool =
     let vertex = (nt, ty) in
     (* computing minimum of 2 and number of productive used nonterminals *)
-    let pr_nts = NTTypings.fold_left_short_circuit 0 used_nts 2 (fun acc vertex' ->
-        acc + int_of_bool (is_productive @@ snd vertex')
-      ) in
+    let pr_nts_count = NTTyMap.fold (fun vertex' multi acc ->
+        (* when a productive nonterminal is used multiple times, it is counted as two *)
+        acc + (1 + int_of_bool multi) * int_of_bool (is_productive @@ snd vertex')
+      ) used_nts 0
+    in
     (* updating out edges of current vertex *)
     let out_edges, _ = self#get_or_create_edges vertex in
-    used_nts |> NTTypings.exists (fun vertex' ->
-        try
+    used_nts |> NTTyMap.exists (fun vertex' _ ->
+        match NTTyMap.find_opt vertex' out_edges with
+        | Some false ->
           (* updating the edge and reverse edge if the edge already exists *)
-          if not @@ DFGVertexHash.find out_edges vertex' then
+          let edge =
+            positive || pr_nts_count > 1 ||
+            pr_nts_count = 1 && not @@ is_productive @@ snd vertex'
+          in
+          if edge then
             begin
-              let edge =
-                positive || pr_nts > 1 || pr_nts = 1 && not @@ is_productive @@ snd vertex'
-              in
-              if edge then
-                begin
-                  DFGVertexHash.replace out_edges vertex' edge;
-                  (* should exist *)
-                  DFGVertexHash.replace (DFGVertexHash.find rev_graph vertex') vertex edge;
-                  true
-                end
-              else
-                false
+              self#replace_edge vertex vertex' edge;
+              true
             end
           else
             false
-        with
-        | Not_found ->
+        | Some true -> false
+        | None ->
           let edge =
-            positive || pr_nts > 1 || pr_nts = 1 && not @@ is_productive @@ snd vertex'
+            positive || pr_nts_count > 1 ||
+            pr_nts_count = 1 && not @@ is_productive @@ snd vertex'
           in
-          DFGVertexHash.replace out_edges vertex' edge;
-          let _, in_edges = self#get_or_create_edges vertex' in
-          DFGVertexHash.add in_edges vertex edge;
+          self#replace_edge vertex vertex' edge;
           true
       )
 
@@ -84,14 +82,14 @@ class dfg = object(self)
        vertices reachable from the start vertex. *)
     let start_vertex = (start_nt, start_ty) in
     let order : dfg_vertex list ref = ref [] in
-    let visited : unit DFGVertexHash.t = DFGVertexHash.create 8192 in
+    let visited : NTTySet.t ref = ref NTTySet.empty in
     let rec visit (vertex : nt_id * ty) : unit =
-      if not @@ DFGVertexHash.mem visited vertex then
+      if not @@ NTTySet.mem vertex !visited then
         begin
-          DFGVertexHash.add visited vertex ();
+          visited := NTTySet.add vertex !visited;
           (* should exist *)
-          let out_edges = DFGVertexHash.find graph vertex in
-          out_edges |> DFGVertexHash.iter (fun vertex' _ ->
+          let out_edges = NTTyMap.find vertex graph in
+          out_edges |> NTTyMap.iter (fun vertex' _ ->
               visit vertex'
             );
           order := vertex :: !order
@@ -101,15 +99,15 @@ class dfg = object(self)
       visit start_vertex;
       (* Computing strongly connected components by reverse traversing of the graph, but only
          through the vertices that were visited (i.e., reachable from start). *)
-      let scc_root : dfg_vertex DFGVertexHash.t = DFGVertexHash.create 8192 in
+      let scc_root : dfg_vertex NTTyMap.t ref = ref NTTyMap.empty in
       let rec assign (vertex : dfg_vertex) (root : dfg_vertex) : unit =
-        if not @@ DFGVertexHash.mem scc_root vertex then
+        if not @@ NTTyMap.mem vertex !scc_root then
           begin
-            DFGVertexHash.add scc_root vertex root;
+            scc_root := NTTyMap.add vertex root !scc_root;
             (* should exist *)
-            let in_edges = DFGVertexHash.find rev_graph vertex in
-            in_edges |> DFGVertexHash.iter (fun vertex' _ ->
-                if DFGVertexHash.mem visited vertex' then
+            let in_edges = NTTyMap.find vertex rev_graph in
+            in_edges |> NTTyMap.iter (fun vertex' _ ->
+                if NTTySet.mem vertex' !visited then
                   assign vertex' root
               )
           end
@@ -120,11 +118,11 @@ class dfg = object(self)
       (* Computing the result by checking if any positive edge connects vertices from the same
          strongly connected component, i.e., is a part of a cycle. Note that it also works for
          self-loops. *)
-      DFGVertexHash.fold (fun vertex root acc ->
-          acc || DFGVertexHash.fold (fun vertex' edge acc ->
-              acc || edge && dfg_vertex_eq root (DFGVertexHash.find scc_root vertex')
-            ) (DFGVertexHash.find graph vertex) false
-        ) scc_root false
+      NTTyMap.fold (fun vertex root acc ->
+          acc || NTTyMap.fold (fun vertex' edge acc ->
+              acc || edge && nt_ty_compare root (NTTyMap.find vertex' !scc_root) = 0
+            ) (NTTyMap.find vertex graph) false
+        ) !scc_root false
     with
     | Not_found ->
       (* when start vertex is not in the graph *)
@@ -132,9 +130,9 @@ class dfg = object(self)
 
   (** The graph in printable form. *)
   method to_string (string_of_nt : nt_id -> string) : string =
-    DFGVertexHash.fold (fun (nt, ty) out_edges acc ->
+    NTTyMap.fold (fun (nt, ty) out_edges acc ->
         let edges_str =
-          String.concat "; " @@ DFGVertexHash.fold (fun (nt', ty') edge acc ->
+          String.concat "; " @@ NTTyMap.fold (fun (nt', ty') edge acc ->
               (string_of_nt nt' ^ " : " ^ string_of_ty ty' ^ " (" ^
                string_of_int (int_of_bool edge) ^ ")") :: acc
             ) out_edges []

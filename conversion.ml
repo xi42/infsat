@@ -153,7 +153,7 @@ let elim_fun_from_midrules fun_counter (rules : midrules) : midrules =
   in
   List.rev_append rules' newrules
 
-module SS = Set.Make(String)
+module SS = Set.Make (String)
 
 let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
   let rec b_tree_aux from_arg to_arg =

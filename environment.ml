@@ -39,6 +39,11 @@ class env (var_itys : ity array) = object(self)
     in
     compare_aux 0
 
+  method hash : int =
+    Array.fold_left (fun acc xxxxx ->
+        acc
+      ) 0 var_itys
+
   method has_pr_vars : bool =
     Array.exists (fun ity -> TyList.exists is_productive ity) var_itys
 
@@ -73,6 +78,12 @@ class env (var_itys : ity array) = object(self)
       List.mapi (fun i ity -> string_of_int i ^ " : " ^ string_of_ity ity) @@
       Array.to_list var_itys
 end
+
+let env_eq (env1 : env) (env2 : env) =
+  env1#compare env2 = 0
+
+let env_hash (env : env) : int =
+  env#hash
 
 let empty_env (var_count : int) : env =
   new env @@ Array.make var_count TyList.empty

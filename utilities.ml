@@ -178,6 +178,12 @@ let string_of_list (p : 'a -> string) (l : 'a list) : string =
        ) (p x) l') ^
     "]"
 
+let concat_map (sep : string) (f : 'a -> string) (s : 'a list) : string =
+  String.concat sep @@ List.map f s
+
+let concat_map_seq (sep : string) (f : 'a -> string) (s : 'a Seq.t) : string =
+  String.concat sep @@ List.of_seq @@ Seq.map f s
+
 (* --- parsing --- *)
 
 (** Removes a single parenthesis from the beginning and end of the string if present on both
@@ -249,6 +255,8 @@ let int_of_bool : bool -> int = function
   | false -> 0
 
 let id (x : 'a) : 'a = x
+
+exception Short_circuit
 
 let debug s =
   if

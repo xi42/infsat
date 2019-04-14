@@ -8,7 +8,7 @@ module type SL = sig
   val to_list : t -> elt list
   val to_ilist : t -> (int * elt) list
   val init : (int -> elt) -> int -> t
-    
+  
   val mem : elt -> t -> bool
   val hd : t -> elt
   val hd_option : t -> elt option
@@ -40,6 +40,7 @@ module type SL = sig
   val compare : t -> t -> int
   val equal_custom : (elt -> elt -> int) -> t -> t -> bool
   val equal : t -> t -> bool
+  val hash : (elt -> int) -> t -> int
 
   val to_string : (elt -> string) -> t -> string
 end
@@ -232,6 +233,11 @@ struct
   let equal_custom compare_elt l1 l2 = compare_custom compare_elt l1 l2 = 0
 
   let equal = equal_custom Ord.compare
+
+  let hash h l =
+    fold_left (fun acc x ->
+        acc lxor (acc lsl 1) lxor h x
+      ) 0 l
 
   (* pretty printing *)
 
