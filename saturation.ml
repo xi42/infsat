@@ -310,7 +310,14 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   (** Performs saturation and returns whether the language is finite. *)
   method saturate : bool =
     while self#process_queues && result = None do
-      iteration <- iteration + 1
+      if not !Flags.debugging then
+        print @@ "Iteration " ^ string_of_int iteration ^ ".\n";
+      iteration <- iteration + 1;
+      match result, !Flags.maxiters with
+      | None, Some maxiters ->
+        if iteration >= maxiters then
+          result <- Some true (* TODO do this more sanely *)
+      | _, _ -> ()
     done;
     match result with
     | Some r ->
@@ -321,9 +328,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         print_string @@ "\nComputed result after " ^ string_of_int iteration ^ " iterations.\n";
       if not !Flags.quiet then
         if r then
-          (* should not happen with the current implementation *)
-          print_string @@ "The input HORS contains only paths with uniformly bounded number " ^
-                          "of counted terminals.\n"
+          print_string @@ "Could not determine the result in " ^ string_of_int iteration ^
+                          " iterations.\n"
         else
           print_string "The input HORS contains paths with arbitrarily many counted terminals.\n";
       r

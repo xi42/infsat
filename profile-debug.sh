@@ -4,7 +4,7 @@ SOURCES="flags.ml timing.ml utilities.ml sortedList.ml setQueue.ml twoLayerQueue
 
 make infsat-prof-debug
 
-./infsat-prof-debug
+./infsat-prof-debug "$@"
 
 cp ocamlprof.dump ocamlprof.bak
 

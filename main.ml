@@ -15,6 +15,9 @@ let rec read_options index =
   | "-n" -> (Flags.normalize := true;
              Flags.normalization_depth := int_of_string (Sys.argv.(index + 1));
              read_options (index + 2))
+  | "-maxiters" ->
+    Flags.maxiters := Some (int_of_string @@ Sys.argv.(index + 1));
+    read_options (index + 2)
   (*
   | "-noce" -> (Flags.ce := false; read_options (index+1))
   | "-subt" -> (Flags.subty := true; read_options (index+1))

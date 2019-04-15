@@ -14,7 +14,7 @@ infSatLexer.ml: infSatLexer.mll
 	ocamllex infSatLexer.mll
 
 infsat: $(SOURCE) main_wrapper.ml
-	# consider -unsafe
+# consider -unsafe
 	ocamlopt -inline 999 -o infsat $^
 
 infsat-g: $(SOURCE) main_wrapper.ml

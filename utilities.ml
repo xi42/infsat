@@ -43,6 +43,10 @@ let string_of_bool = function
   | true -> "true"
   | false -> "false"
 
+let print (str : string) : unit =
+  print_string str;
+  flush stdout
+
 (* --- tuples --- *)
 
 (** Lexicographical comparison of a pair with custom comparison of elements. *)
