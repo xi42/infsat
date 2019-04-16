@@ -103,7 +103,7 @@ class grammar nonterminals var_names rules = object(self)
   method grammar_info : string =
     self#to_string ^
     "\nThe number of rewrite rules: " ^ string_of_int self#nt_count ^ "\n" ^
-    "The size of recursion scheme: " ^ string_of_int self#size ^ "\n"
+    "The size of recursion scheme: " ^ string_of_int self#size
 
   initializer
     if snd nonterminals.(self#start_nt) <> O then

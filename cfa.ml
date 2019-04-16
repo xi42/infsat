@@ -114,19 +114,17 @@ class cfa (hg : hgrammar) = object(self)
   
   (* --- printing --- *)
 
-  method print_binding (binding : hterms_id binding) =
-    print_string @@ String.concat ", " @@ List.map (fun (i, j, id) ->
+  method string_of_binding (binding : hterms_id binding) : string=
+    String.concat ", " @@ List.map (fun (i, j, id) ->
         string_of_int i ^ "-" ^ string_of_int j ^ " <- " ^ string_of_int id
-      ) binding;
-    print_string "\n"
+      ) binding
 
-  method print_binding_array =
-    print_string @@ "bindings (nt --> one binding per line, comma-sep same-nt parts)\n" ^
-                    "===============================================================\n\n";
-    for nt = 0 to Array.length nt_bindings - 1 do (* TODO iter *)
-      print_string @@ hg#nt_name nt ^ ":\n";
-      List.iter self#print_binding (nt_bindings).(nt)
-    done
+  method string_of_binding_array : string =
+    "bindings (nt -> bindings, one per line, comma-sep same-nt parts):\n" ^
+    String.concat "\n\n" @@ array_listmap nt_bindings (fun nt binding ->
+        hg#nt_name nt ^ ":\n" ^
+        String.concat "\n" @@ List.map self#string_of_binding (nt_bindings).(nt)
+      )
     
   (* --- TODO split into categories --- *)
 
@@ -173,8 +171,10 @@ class cfa (hg : hgrammar) = object(self)
     else
       (term :: terms, true)
 
+  (*
   method print_hterm hterm =
     hg#print_hterm hterm
+*)
 
   method enqueue_hterm hterm =
     hterm_queue <- hterm :: hterm_queue
@@ -295,12 +295,11 @@ class cfa (hg : hgrammar) = object(self)
   method expand : unit =
     match self#dequeue_hterm with
     | None ->
-      if !Flags.debugging then
-        begin
-          self#print_binding_array;
-          print_string @@ "\nSize of abstract control flow graph: " ^
-                          string_of_int (HTermSet.cardinal visited_nodes) ^ "\n"
-        end
+      print_verbose !Flags.verbose_preprocessing @@ lazy (
+        self#string_of_binding_array ^ "\n" ^
+        "Size of abstract control flow graph: " ^
+        string_of_int (HTermSet.cardinal visited_nodes) ^ "\n"
+      )
     | Some hterm ->
       self#process_hterm hterm;
       self#expand
@@ -369,15 +368,16 @@ class cfa (hg : hgrammar) = object(self)
     print_string "\n"
   *)
 
-  method print_hterms_bindings =
-    print_string "dependency info. (id --> [(i,j,id1);...])\n";
-    for id=0 to Array.length hterms_bindings - 1 do
-      if hterms_are_arg.(id) then
-        begin
-          print_int id; print_string ":\n";
-          List.iter self#print_binding hterms_bindings.(id)
-        end
-    done
+  method string_of_hterms_bindings : string =
+    "Dependency info (hterms_id -> [(from,to,hterms_id); ...]):\n" ^
+    String.concat "\n" @@ List.filter (fun s -> s <> "") @@
+    array_listmap hterms_bindings (fun id binding ->
+        if hterms_are_arg.(id) then
+          string_of_int id ^ ":\n" ^
+          concat_map "\n" self#string_of_binding hterms_bindings.(id)
+        else
+          ""
+      )
 
   (*
   (** Splits a list of vars to ones less or equal to j and larger than j. *)
@@ -522,14 +522,13 @@ class cfa (hg : hgrammar) = object(self)
          else *)
       SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1) nts1
     done;
-    if !Flags.debugging then
-      begin
-        self#print_hterms_bindings;
-        (* TODO print_nt_containing_nt ? *)
-        (*
-        self#print_dep_nt_nt_lin
-        *)
-      end
+    print_verbose !Flags.verbose_preprocessing @@ lazy (
+      self#string_of_hterms_bindings ^ "\n"
+      (* TODO print_nt_containing_nt ? *)
+      (*
+      self#print_dep_nt_nt_lin
+      *)
+    )
 
   initializer
     for i = 0 to hg#nt_count - 1 do

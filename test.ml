@@ -16,8 +16,8 @@ open Utilities
 (* --- helper functions --- *)
 
 let init_flags () =
-  Flags.debugging := true;
-  Flags.verbose := !Flags.debugging
+  Flags.verbose_all := true;
+  Flags.propagate_flags ()
 
 let assert_equal_envms envms1 envms2 =
   assert_equal ~printer:Envms.to_string ~cmp:Envms.equal
@@ -230,7 +230,7 @@ let dfg_test () : test =
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_np empty_used_nts false;
           dfg
-        )#has_positive_cycle 0 ty_np
+        )#find_positive_cycle 0 ty_np
       );
 
     (* unreachable loop *)
@@ -241,7 +241,7 @@ let dfg_test () : test =
           ignore @@ dfg#add_vertex 0 ty_np empty_used_nts false;
           ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
-        )#has_positive_cycle 0 ty_np
+        )#find_positive_cycle 0 ty_np
       );
 
     (* positive loop at start *)
@@ -251,7 +251,7 @@ let dfg_test () : test =
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
-        )#has_positive_cycle 0 ty_pr
+        )#find_positive_cycle 0 ty_pr
       );
 
     (* non-positive loop at start *)
@@ -261,7 +261,7 @@ let dfg_test () : test =
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 0 ty_np) false;
           dfg
-        )#has_positive_cycle 0 ty_np
+        )#find_positive_cycle 0 ty_np
       );
 
     (* non-positive and positive interconnected loops *)
@@ -276,7 +276,7 @@ let dfg_test () : test =
           ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 4 ty_np) false;
           ignore @@ dfg#add_vertex 4 ty_np (nt_ty_used_once 3 ty_np) false;
           dfg
-        )#has_positive_cycle 0 ty_np
+        )#find_positive_cycle 0 ty_np
       );
 
     (* non-positive and positive interconnected loops - another order *)
@@ -291,7 +291,7 @@ let dfg_test () : test =
           ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 4 ty_np) true;
           ignore @@ dfg#add_vertex 4 ty_np (nt_ty_used_once 3 ty_np) false;
           dfg
-        )#has_positive_cycle 0 ty_np
+        )#find_positive_cycle 0 ty_np
       );
 
     (* non-positive loop and positive path *)
@@ -306,7 +306,7 @@ let dfg_test () : test =
           ignore @@ dfg#add_vertex 4 ty_np (nt_ty_used_once 5 ty_np) false;
           ignore @@ dfg#add_vertex 5 ty_np (nt_ty_used_once 1 ty_np) false;
           dfg
-        )#has_positive_cycle 0 ty_np
+        )#find_positive_cycle 0 ty_np
       );
 
     (* registering twice the same vertex *)
@@ -317,7 +317,7 @@ let dfg_test () : test =
           ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) false;
           dfg
-        )#has_positive_cycle 0 ty_pr
+        )#find_positive_cycle 0 ty_pr
       );
 
     (* checking for not registered vertex *)
@@ -327,7 +327,7 @@ let dfg_test () : test =
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
-        )#has_positive_cycle 0 ty_np
+        )#find_positive_cycle 0 ty_np
       );
   ]
 
@@ -377,7 +377,7 @@ let conversion_test () : test =
        ]))
   ] in
   let gram = Conversion.prerules2gram (test_prerules, preserved_preterminals) in
-  if !Flags.debugging then
+  if !Flags.verbose_preprocessing then
     print_string @@ "Conversion test grammar:\n" ^ gram#grammar_info ^ "\n";
   "conversion" >::: [
     (* Terminals

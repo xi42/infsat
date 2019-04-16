@@ -264,31 +264,6 @@ let sort_and_delete_duplicates c =
   let c' = List.sort Pervasives.compare c in
   delete_consecutive_duplicates Pervasives.compare c'
 
-let rec is_sorted cmp l =
-  match l with
-  | [] -> true
-  | [x] -> true
-  | x :: (y :: l as yl) ->
-    cmp x y < 0 && is_sorted cmp yl
-
-(* --- ? --- *)
-
-let int_of_bool : bool -> int = function
-  | true -> 1
-  | false -> 0
-
-let id (x : 'a) : 'a = x
-
-exception Short_circuit
-
-let debug s =
-  if
-    !debugging
-  then
-    (print_string s; flush stdout)
-  else 
-    ()
-
 let list_max c l =
   let rec f c l max =
     match l with
@@ -300,3 +275,48 @@ let list_max c l =
         f c l' max
   in
   f c (List.tl l) (List.hd l)
+
+let rec is_sorted cmp l =
+  match l with
+  | [] -> true
+  | [x] -> true
+  | x :: (y :: l as yl) ->
+    cmp x y < 0 && is_sorted cmp yl
+
+let array_listmap (a : 'a array) (f : int -> 'a -> 'b) : 'b list =
+  let rec array_listmap_aux i acc =
+    if i = 0 then
+      acc
+    else
+      array_listmap_aux (i - 1) @@ f (i - 1) a.(i - 1) :: acc
+  in
+  array_listmap_aux (Array.length a) []
+
+(* --- printing --- *)
+
+(** Global, but only for the purpose of debugging *)
+let indentation = ref 0
+
+let indent (delta : int) : unit =
+  indentation := !indentation + 2 * delta
+
+let indentation_str () =
+  String.make !indentation ' '
+
+let print_verbose (flag : bool) (str : string Lazy.t) : unit =
+  if flag then
+    begin
+      print_string @@
+      indentation_str () ^
+      Str.global_replace (Str.regexp "\n") ("\n" ^ indentation_str ()) @@
+      Lazy.force str;
+      flush stdout
+    end
+
+(* --- other --- *)
+
+let int_of_bool : bool -> int = function
+  | true -> 1
+  | false -> 0
+
+let id (x : 'a) : 'a = x

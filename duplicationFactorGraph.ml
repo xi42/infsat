@@ -76,7 +76,7 @@ class dfg = object(self)
 
   (** DFS with checking for existence of positive edge in a cycle reachable from
       (start_nt, start_ty). Linear time, based on Kosaraju's algorithm. *)
-  method has_positive_cycle (start_nt : nt_id) (start_ty : ty) : bool =
+  method find_positive_cycle (start_nt : nt_id) (start_ty : ty) : bool =
     (* Computing the order of reverse traversal of the graph, but not starting from each vertex like
        in Kosaraju's algorithm, but only form (start_nt, start_ty), since we're only interested in
        vertices reachable from the start vertex. *)

@@ -1,9 +1,24 @@
-let debugging : bool ref = ref false (* TODO this should be for stuff not needed for users *)
-let verbose : bool ref = ref false (* TODO this should be fore stuff intended for users, change to verbosity level *)
-let normalize : bool ref = ref false
-let normalization_depth : int ref = ref 1
+let verbose_all : bool ref = ref false
+let verbose_preprocessing : bool ref = ref false
+let verbose_proofs : bool ref = ref false
+let verbose_typing : bool ref = ref false
+let verbose_queues : bool ref = ref false
+let verbose_profiling : bool ref = ref false
+let normalize = ref false
+let normalization_depth = ref 1
 let quiet : bool ref = ref false
-let maxiters : int option ref = ref None
+let maxiters : int ref = ref (-1)
+
+let propagate_flags () : unit =
+  if !verbose_all then
+    begin
+      verbose_preprocessing := true;
+      verbose_proofs := true;
+      verbose_typing := true;
+      verbose_queues := true;
+      verbose_profiling := true
+    end
+
 (*
 let emptiness_check = ref true 
 let certificate = ref false

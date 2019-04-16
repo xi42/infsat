@@ -5,7 +5,7 @@ let add_timing name time =
 
 let time (name : string) (f : unit -> 'a) : 'a =
   let start_t = Sys.time() in
-  if !Flags.debugging then
+  if !Flags.verbose_profiling then
     begin
       print_string ("\n--------======== "^name^" ========--------\n\n");
       flush stdout
@@ -17,7 +17,7 @@ let time (name : string) (f : unit -> 'a) : 'a =
 
 let report_timings start_t end_t =
   print_string ("Elapsed Time: "^(string_of_float (end_t -. start_t))^"s\n");
-  if !Flags.debugging then
+  if !Flags.verbose_profiling then
     begin
       List.iter (fun (name, time) ->
           print_string ("  "^name^": "^(string_of_float time)^"s\n")

@@ -59,70 +59,69 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
 
   (* --- printing --- *)
 
-  method print_queues =
-    print_string @@ "prop_hterms_hty_queue: " ^
-                    TwoLayerQueue.string_of_queue string_of_hty prop_hterms_hty_queue
-                    ^ "\n" ^
-                    (* "prop_nt_ty_queue: " ^ BatchQueue.print_queue string_of_ty ^ "\n" ^ *)
-                    "prop_nt_queue: " ^ SetQueue.string_of_queue prop_nt_queue ^ "\n" ^
-                    "nt_binding_queue: " ^
-                    TwoLayerQueue.string_of_queue (string_of_binding string_of_int)
-                      nt_binding_queue ^
-                    "\n" ^
-                    "nt_queue: " ^ SetQueue.string_of_queue nt_queue ^ "\n" ^
-                    "hterms_queue: " ^ SetQueue.string_of_queue hterms_queue ^ "\n"
+  method string_of_queues =
+    "prop_hterms_hty_queue: " ^
+    TwoLayerQueue.string_of_queue string_of_hty prop_hterms_hty_queue
+    ^ "\n" ^
+    (* "prop_nt_ty_queue: " ^ BatchQueue.print_queue string_of_ty ^ "\n" ^ *)
+    "prop_nt_queue: " ^ SetQueue.string_of_queue prop_nt_queue ^ "\n" ^
+    "nt_binding_queue: " ^
+    TwoLayerQueue.string_of_queue (string_of_binding string_of_int)
+      nt_binding_queue ^
+    "\n" ^
+    "nt_queue: " ^ SetQueue.string_of_queue nt_queue ^ "\n" ^
+    "hterms_queue: " ^ SetQueue.string_of_queue hterms_queue
 
-  method print_status =
-    print_string @@ "\n================ ITERATION " ^ string_of_int iteration ^
-                    " ================\n";
-    typing#print_nt_ity;
-    print_string "\n";
-    typing#print_hterms_hty cfa#hterms_are_arg;
-    self#print_queues;
-    print_string @@ "\nDuplication Factor Graph:\n" ^ dfg#to_string hg#nt_name ^ "\n"
+  method status : string =
+    "\n================ ITERATION " ^ string_of_int iteration ^
+    " ================\n" ^
+    typing#string_of_nt_ity ^ "\n\n" ^
+    typing#string_of_hterms_hty cfa#hterms_are_arg ^ "\n\n" ^
+    self#string_of_queues ^ "\n\n" ^
+    "Duplication Factor Graph:\n" ^ dfg#to_string hg#nt_name ^ "\n"
 
   (* --- processing results of typing --- *)
 
   method register_nt_ty (nt : nt_id) (ty : ty) (used_nts : used_nts) (positive : bool) =
     if typing#add_nt_ty nt ty then
       begin
-        if !Flags.verbose then
-          begin
-            let positive_info =
-              if positive then
-                " with positive duplication factor"
-              else
-                " without positive duplication factor"
-            in
-            let used_nts_info =
-              if NTTyMap.is_empty used_nts then
-                " and no used nonterminals"
-              else
-                " and the following used nonterminal typings: " ^
-                (NTTyMap.to_seq used_nts |> concat_map_seq ", " (fun ((nt', ty'), multi) ->
-                     let multi_info =
-                       if multi then
-                         " (multiple)"
-                       else
-                         ""
-                     in
-                     hg#nt_name nt' ^ " : " ^ string_of_ty ty' ^ multi_info
-                   ))
-            in
-            print_string @@ "Registering new typing of nonterminal " ^ string_of_int nt ^ ": " ^
-                            hg#nt_name nt ^ " : " ^ string_of_ty ty ^ positive_info ^
-                            used_nts_info ^ ".\n";
-          end;
+        print_verbose !Flags.verbose_typing @@ lazy (
+          let positive_info =
+            if positive then
+              " with positive duplication factor"
+            else
+              " without positive duplication factor"
+          in
+          let used_nts_info =
+            if NTTyMap.is_empty used_nts then
+              " and no used nonterminals"
+            else
+              " and the following used nonterminal typings: " ^
+              (NTTyMap.to_seq used_nts |> concat_map_seq ", " (fun ((nt', ty'), multi) ->
+                   let multi_info =
+                     if multi then
+                       " (multiple)"
+                     else
+                       ""
+                   in
+                   hg#nt_name nt' ^ " : " ^ string_of_ty ty' ^ multi_info
+                 ))
+          in
+          "Registering new typing of nonterminal " ^ string_of_int nt ^ ": " ^
+          hg#nt_name nt ^ " : " ^ string_of_ty ty ^ positive_info ^
+          used_nts_info ^ ".\n";
+        );
         SetQueue.enqueue prop_nt_queue nt
       end;
     (* Adding the new typing to the graph and checking for positive cycle. This should
        be performed even if the typing is not new, since set of used nonterminals may be new. *)
     if dfg#add_vertex nt ty used_nts positive then
       begin
-        if !Flags.debugging then
-          print_string @@ "The duplication factor graph was updated by adding or modifying " ^
-                          "an edge.\n";
-        if dfg#has_positive_cycle hg#start_nt ty_pr then
+        print_verbose !Flags.verbose_typing @@ lazy (
+          "The duplication factor graph was updated by adding or modifying " ^
+          "an edge.\n"
+        );
+        if dfg#find_positive_cycle hg#start_nt ty_pr then
           result <- Some false
       end
 
@@ -130,10 +129,11 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     (* TODO subtyping and overwriting logic *)
     if typing#add_hterms_hty id hty then
       begin
-        if !Flags.verbose then
-          print_string @@ "Registering new typing of hterms " ^ string_of_int id ^ ": " ^
-                          hg#string_of_hterms id ^ " : " ^
-                          string_of_hty hty ^ "\n";
+        print_verbose !Flags.verbose_typing @@ lazy (
+          "Registering new typing of hterms " ^ string_of_int id ^ ": " ^
+          hg#string_of_hterms id ^ " : " ^
+          string_of_hty hty ^ "\n"
+        );
         TwoLayerQueue.enqueue prop_hterms_hty_queue id hty
       end
 
@@ -141,17 +141,18 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
 
   method infer_nt_ity (nt : nt_id) (fixed_hterms_hty : (hterms_id * hty) option)
       (binding : hterms_id binding) =
-    if !Flags.debugging then
-      begin
-        print_string @@ "* Inferring type of nonterminal " ^ string_of_int nt ^ " under binding " ^
-                        string_of_binding string_of_int binding ^ " and ";
+    print_verbose !Flags.verbose_queues @@ lazy (
+      let typings_info =
         match fixed_hterms_hty with
         | Some (id, hty) ->
-          print_string @@ "fixed typing of hterms " ^ string_of_int id ^ " to " ^
-                          string_of_hty hty ^ ".\n"
+          "fixed typing of hterms " ^ string_of_int id ^ " to " ^
+          string_of_hty hty
         | None ->
-          print_string "no fixed typings.\n"
-      end;
+          "no fixed typings"
+      in
+      "* Inferring type of nonterminal " ^ string_of_int nt ^ " under binding " ^
+      string_of_binding string_of_int binding ^ " and " ^ typings_info ^ ".\n"
+    );
     let body = hg#nt_body nt in
     let var_count = hg#nt_arity nt in
     let envms = typing#binding2envms var_count None fixed_hterms_hty binding in
@@ -165,17 +166,18 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   (** Infers type of given hterm under given bindings. If the type is new, it is registered. *)
   method infer_hterms_hty (id : hterms_id) (fixed_hterms_hty : (hterms_id * hty) option)
       (binding : hterms_id binding) =
-    if !Flags.debugging then
-      begin
-        print_string @@ "* Inferring type of hterms " ^ string_of_int id ^ " under binding " ^
-                        string_of_binding string_of_int binding ^ " and ";
+    print_verbose !Flags.verbose_queues @@ lazy (
+      let typing_info =
         match fixed_hterms_hty with
         | Some (id, hty) ->
-          print_string @@ "fixed typing of hterms " ^ string_of_int id ^ " to " ^
-                          string_of_hty hty ^ ".\n"
+          "fixed typing of hterms " ^ string_of_int id ^ " to " ^
+          string_of_hty hty
         | None ->
-          print_string "no fixed typings.\n"
-      end;
+          "no fixed typings"
+      in
+      "* Inferring type of hterms " ^ string_of_int id ^ " under binding " ^
+      string_of_binding string_of_int binding ^ " and " ^ typing_info ^ ".\n"
+    );
     let mask = hg#id2vars id in
     let var_count = match hg#id2nt id with
       | Some nt -> hg#nt_arity nt
@@ -198,9 +200,10 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   method process_prop_hterms_hty_queue : bool =
     try
       let id, hty = TwoLayerQueue.dequeue prop_hterms_hty_queue in
-      if !Flags.debugging then
-        print_string @@ "prop_nt_queue: Propagating new types of hterms " ^
-                        string_of_int id ^ " : " ^ string_of_hty hty ^ ".\n";
+      print_verbose !Flags.verbose_queues @@ lazy (
+        "prop_nt_queue: Propagating new types of hterms " ^
+        string_of_int id ^ " : " ^ string_of_hty hty ^ ".\n"
+      );
       (* This step is required, because new typing of hterms might be enough to type other hterms,
          but not enough to type a whole nonterminal if it needs typings of more hterms. And these
          newly typed hterms may be enough to type some nonterminal, while it would be impossible
@@ -230,9 +233,10 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   method process_prop_nt_queue : bool =
     try
       let nt = SetQueue.dequeue prop_nt_queue in
-      if !Flags.debugging then
-        print_string @@ "prop_nt_queue: Propagating all types of nonterminal " ^
-                        string_of_int nt ^ ".\n";
+      print_verbose !Flags.verbose_queues @@ lazy (
+        "prop_nt_queue: Propagating all types of nonterminal " ^
+        string_of_int nt ^ ".\n"
+      );
       (* This step is required, because when a new type is computed for a nonterminal, type of
          application of this nonterminal to other terms may yield new possible typings and
          effectively give new type for the terms it is contained in. *)
@@ -254,9 +258,10 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   method process_nt_binding_queue : bool =
     try
       let nt, binding = TwoLayerQueue.dequeue nt_binding_queue in
-      if !Flags.debugging then
-        print_string @@ "nt_binding_queue: Typing nonterminal " ^ string_of_int nt ^
-                        " with binding " ^ string_of_binding string_of_int binding ^ ".\n";
+      print_verbose !Flags.verbose_queues @@ lazy (
+        "nt_binding_queue: Typing nonterminal " ^ string_of_int nt ^
+        " with binding " ^ string_of_binding string_of_int binding ^ ".\n"
+      );
       self#infer_nt_ity nt None binding;
       true
     with
@@ -269,9 +274,10 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       let nt = SetQueue.dequeue nt_queue in
       (* TODO version for no environment ones *)
       let bindings = cfa#lookup_nt_bindings nt in
-      if !Flags.debugging then
-        print_string @@ "nt_queue: Enqueuing all " ^ string_of_int (List.length bindings) ^
-                        " bindings of nonterminal " ^ string_of_int nt ^ ".\n";
+      print_verbose !Flags.verbose_queues @@ lazy (
+        "nt_queue: Enqueuing all " ^ string_of_int (List.length bindings) ^
+        " bindings of nonterminal " ^ string_of_int nt ^ ".\n"
+      );
       List.iter (fun binding ->
           TwoLayerQueue.enqueue nt_binding_queue nt binding
         ) bindings;
@@ -284,9 +290,10 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     try
       let id = SetQueue.dequeue hterms_queue in
       let bindings = cfa#get_hterms_bindings id in
-      if !Flags.debugging then
-        print_string @@ "hterms_queue: Typing hterms " ^ string_of_int id ^ " with " ^
-                        string_of_int (List.length bindings) ^ " bindings.\n";
+      print_verbose !Flags.verbose_queues @@ lazy (
+        "hterms_queue: Typing hterms " ^ string_of_int id ^ " with " ^
+        string_of_int (List.length bindings) ^ " bindings.\n";
+      );
       bindings |> List.iter @@ self#infer_hterms_hty id None;
       true
     with
@@ -297,8 +304,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   (** Performs a single iteration of the main loop. Processes a single task from one of the queues.
       Returns whether at least one of the queues was not empty. *)
   method process_queues : bool =
-    if !Flags.debugging then
-      self#print_status;
+    print_verbose !Flags.verbose_queues @@ lazy self#status;
     self#process_prop_hterms_hty_queue ||
     self#process_prop_nt_ty_queue ||
     self#process_prop_nt_queue ||
@@ -308,39 +314,32 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   
   (** Performs saturation and returns whether the language is finite. *)
   method saturate : bool =
-    while self#process_queues && result = None do
-      if not !Flags.debugging then
-        print @@ "Iteration " ^ string_of_int iteration ^ ".\n";
-      iteration <- iteration + 1;
-      match result, !Flags.maxiters with
-      | None, Some maxiters ->
-        if iteration >= maxiters then
-          result <- Some true (* TODO do this more sanely *)
-      | _, _ -> ()
+    while self#process_queues && result = None &&
+          (!Flags.maxiters < 0 || iteration < !Flags.maxiters) do
+      iteration <- iteration + 1
     done;
     match result with
     | Some r ->
-      if !Flags.verbose then
-        print_string @@ "\nDuplication Factor Graph:\n" ^
-                        dfg#to_string hg#nt_name ^ "\n";
-      if !Flags.verbose then
-        print_string @@ "\nComputed result after " ^ string_of_int iteration ^ " iterations.\n";
-      if not !Flags.quiet then
-        if r then
-          print_string @@ "Could not determine the result in " ^ string_of_int iteration ^
-                          " iterations.\n"
-        else
-          print_string "The input HORS contains paths with arbitrarily many counted terminals.\n";
+      print_verbose (not !Flags.quiet) @@ lazy (
+        let res_str =
+          if r then
+            "Could not determine the result in " ^ string_of_int iteration ^ " iterations."
+          else
+            "The input HORS contains paths with arbitrarily many counted terminals.";
+        in
+        "Duplication Factor Graph:\n" ^
+        dfg#to_string hg#nt_name ^ "\n" ^
+        "Computed result after " ^ string_of_int iteration ^ " iterations.\n" ^
+        res_str ^ "\n"
+      );
       r
     | None ->
-      if !Flags.verbose && not !Flags.debugging then
-        print_string @@ "\nDuplication Factor Graph:\n" ^
-                        dfg#to_string hg#nt_name ^ "\n";
-      if !Flags.verbose then
-        print_string @@ "\nComputed result after " ^ string_of_int iteration ^ " iterations.\n";
-      if not !Flags.quiet then
-          print_string @@ "The input HORS contains only paths with uniformly bounded number " ^
-                          "of counted terminals.\n";
+      print_verbose (not !Flags.quiet) @@ lazy (
+        "Duplication Factor Graph:\n" ^ dfg#to_string hg#nt_name ^ "\n" ^
+        "Computed result after " ^ string_of_int iteration ^ " iterations.\n" ^
+        "The input HORS contains only paths with uniformly bounded number " ^
+        "of counted terminals.\n";
+      );
       result <- Some true;
       true
 

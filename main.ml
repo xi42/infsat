@@ -7,45 +7,20 @@ let report_usage () =
                   " -d\n" ^
                   "  debug mode\n"
 
-let rec read_options index =
-  match Sys.argv.(index) with
-  | "-q" -> (Flags.quiet := true; read_options (index + 1))
-  | "-d" -> (Flags.debugging := true; read_options (index + 1))
-  | "-v" -> (Flags.verbose := true; read_options (index + 1))
-  | "-n" -> (Flags.normalize := true;
-             Flags.normalization_depth := int_of_string (Sys.argv.(index + 1));
-             read_options (index + 2))
-  | "-maxiters" ->
-    Flags.maxiters := Some (int_of_string @@ Sys.argv.(index + 1));
-    read_options (index + 2)
-  (*
-  | "-noce" -> (Flags.ce := false; read_options (index+1))
-  | "-subt" -> (Flags.subty := true; read_options (index+1))
-  | "-o" -> (Flags.outputfile := Sys.argv.(index+1); read_options (index+2))
-  | "-r" -> (Flags.redstep := int_of_string(Sys.argv.(index+1));
-             Flags.flow := false;
-             read_options(index+2))
-  | "-lazy" -> (Flags.eager := false;
-			      read_options(index+1))
-  | "-merge" -> (Flags.merge_vte := true;
-			      read_options(index+1))
-  | "-nn" -> (Flags.normalize := false;
-			      read_options(index+1))
-  | "-tyterm2" -> (Flags.ty_of_term := true;read_options(index+1))
-  | "-c" -> (Flags.compute_alltypes := true;read_options (index+1))
-  | "-noinc" -> (Flags.incremental := false;read_options (index+1))
-  | "-nooverwrite" -> (Flags.overwrite := false;read_options (index+1))
-  | "-subty" -> (Flags.subtype_hash := true;read_options (index+1))
-  | "-nosubty" -> (Flags.nosubtype := true;read_options (index+1))
-  | "-ne" -> (Flags.emptiness_check := false; read_options (index+1))
-  | "-bdd" -> (Flags.bdd_mode := 1; read_options (index+1))
-  | "-bdd2" -> (Flags.bdd_mode := 2; read_options (index+1))
-  | "-prof" -> (Flags.profile := true; read_options (index+1))
-  | "-flowcts" -> (Flags.add_flow_cts := true; read_options (index+1))
-  | "-notenv" -> (Flags.report_type_env := false; read_options (index+1))
-  | "-cert" -> (Flags.certificate := true; read_options (index+1))
-  *)
-  | _ -> index
+let program_info = "InfSat 0.1: Saturation-based finiteness checker for higher-order " ^
+                   "recursion schemes"
+
+let options = [
+  ("-q", Arg.Set Flags.quiet, "Enables quiet mode");
+  ("-v", Arg.Set Flags.verbose_all, "Enables full verbosity");
+  ("-vc", Arg.Set Flags.verbose_preprocessing, "Enables verbose parsing and preprocessing");
+  ("-vp", Arg.Set Flags.verbose_proofs, "Enables verbose proofs");
+  ("-vt", Arg.Set Flags.verbose_typing, "Enables verbose typing results");
+  ("-vq", Arg.Set Flags.verbose_queues, "Enables verbose saturation tasks");
+  ("-vo", Arg.Set Flags.verbose_profiling, "Enables verbose profiling");
+  ("-maxiters", Arg.Set_int Flags.maxiters, "Maximum number of saturation iterations before " ^
+                                        "giving up");
+]
 
 (** Parses a file to HORS prerules and automata definition. *)
 let parse_file filename =
@@ -128,30 +103,25 @@ let parse_and_report_finiteness (filename : string option) : bool =
       | InfSatLexer.LexError s -> failwith @@ "Lexer error: "^s
     )
   in
-  if !Flags.debugging then
-    print_string @@ "Input:\n\n" ^ string_of_input input;
+  print_verbose !Flags.verbose_preprocessing @@ lazy (
+    "Input:\n\n" ^ string_of_input input
+  );
   report_finiteness input
   
 let main () : unit =
-  print_string @@ "InfSat2 0.1: Saturation-based finiteness checker for higher-order " ^
-                  "recursion schemes\n";
-  flush stdout;
-  let filename = 
-    try
-      Some (Sys.argv.(read_options 1))
-    with
-    | Invalid_argument _ -> None
-    | _ -> 
-      print_string "Invalid options.\n\n";
-      report_usage ();
-      exit (-1)
-  in
-  let start_t = Sys.time () in
-  let res = parse_and_report_finiteness filename in
-  let end_t = Sys.time () in
-  report_timings start_t end_t;
-  (* return value indicates finiteness only when return flag is on *)
-  if res || not !Flags.quiet then
-    exit 0
-  else
-    exit 1
+  program_info |> Arg.parse options (fun filenames ->
+      Flags.propagate_flags ();
+      let filename = match filenames with
+        | "" -> None
+        | f -> Some f
+      in
+      let start_t = Sys.time () in
+      let res = parse_and_report_finiteness filename in
+      let end_t = Sys.time () in
+      report_timings start_t end_t;
+      (* return value indicates finiteness only when return flag is on *)
+      if res || not !Flags.quiet then
+        exit 0
+      else
+        exit 1
+    )

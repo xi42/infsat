@@ -17,11 +17,6 @@ class typing (hg : hgrammar) = object(self)
       corresponding terms in the list of terms identified by id. *)
   val hty_store : hty_store = new hty_store hg
 
-  (* --- printing --- *)
-  
-  (** Used only for debug printing. *)
-  val mutable indent = 0
-
   (* --- getting registered typings --- *)
 
   method nt_ty_exists (nt : nt_id) (ty : ty) : bool =
@@ -291,23 +286,19 @@ class typing (hg : hgrammar) = object(self)
   method type_check (hterm : hterm) (target : ty option) (env_data : (env, int) either)
       (no_pr_vars : bool) (force_pr_var : bool) : te =
     assert (not (no_pr_vars && force_pr_var));
-    if !Flags.debugging then
-      begin
-        let vars_info = match no_pr_vars, force_pr_var with
-          | true, false -> " (no pr vars)"
-          | false, true -> " (force pr var)"
-          | _ -> ""
-        in
-        print_string @@ String.make indent ' ' ^ "Inferring environment for " ^
-                        hg#string_of_hterm hterm;
-        begin
-          match target with
-          | Some target ->
-            print_string @@ " : " ^ string_of_ty target;
-          | None -> ()
-        end;
-        print_string @@ vars_info ^ "\n"
-      end;
+    print_verbose !Flags.verbose_proofs @@ lazy (
+      let vars_info = match no_pr_vars, force_pr_var with
+        | true, false -> " (no pr vars)"
+        | false, true -> " (force pr var)"
+        | _ -> ""
+      in
+      let target_info =
+        match target with
+        | Some target -> " : " ^ string_of_ty target;
+        | None -> ""
+      in
+      "Inferring environment for " ^ hg#string_of_hterm hterm ^ target_info ^ vars_info ^ "\n"
+    );
     let var_count = match env_data with
       | Left env -> env#var_count
       | Right var_count -> var_count
@@ -381,15 +372,16 @@ class typing (hg : hgrammar) = object(self)
         self#type_check_app h args target env_data no_pr_vars force_pr_var
     in
     assert (target = None || TargetEnvms.targets_count res <= 1);
-    if !Flags.debugging then
-      begin
-        print_string @@ String.make indent ' ' ^ hg#string_of_hterm hterm;
+    print_verbose !Flags.verbose_proofs @@ lazy (
+      let check_info =
         if TargetEnvms.is_empty res then
-          print_string " does not type check\n"
+          " does not type check"
         else
-          print_string @@ " type checks with the following targets and environments: " ^
-                          TargetEnvms.to_string res ^ "\n"
-      end;
+          " type checks with the following targets and environments: " ^
+          TargetEnvms.to_string res
+      in
+      hg#string_of_hterm hterm ^ check_info ^ "\n"
+    );
     res
 
   method type_check_app (h : head) (args : hterm list) (target : ty option)
@@ -409,13 +401,13 @@ class typing (hg : hgrammar) = object(self)
     let h_data = target |> option_map all_h_data
                   (self#filter_compatible_heads all_h_data h_arity)
     in
-    if !Flags.debugging then
-      print_string @@ String.make indent ' ' ^ "head_ity " ^
-                      string_of_ity (TyList.of_list (List.map fst all_h_data)) ^ "\n" ^
-                      String.make indent ' ' ^ "compatible head_ity " ^
-                      string_of_ity (TyList.of_list (List.map fst h_data)) ^
-                      "\n";
-    (* TODO optimizations:
+    print_verbose !Flags.verbose_proofs @@ lazy (
+      "head_ity: " ^
+      string_of_ity (TyList.of_list (List.map fst all_h_data)) ^ "\n" ^
+      "compatible head_ity: " ^
+      string_of_ity (TyList.of_list (List.map fst h_data)) ^ "\n"
+    );
+      (* TODO optimizations:
        * caching argument index * argument required productivity -> envms
        * computing terms without variables first and short circuit after for all terms
        * computing terms with non-duplicating variables last with short-circuiting when
@@ -453,18 +445,20 @@ class typing (hg : hgrammar) = object(self)
              )
          in
          let start_te = TargetEnvms.union pr_start_te np_start_te in
-         if !Flags.debugging then
-           begin
-             print_string @@ String.make indent ' ' ^ "* Type checking ";
-             print_string @@ String.concat " -> " @@ List.map (fun (arg_term, arg_ity) ->
-                 "(" ^ hg#string_of_hterm arg_term ^ " : " ^ string_of_ity arg_ity ^ ")"
-               ) args;
+         print_verbose !Flags.verbose_proofs @@ lazy (
+           let head_info =
              if head_pr then
-               print_string " -> ... -> pr\n"
+               " -> ... -> pr\n"
              else
-               print_string " -> ... -> np\n";
-             indent <- indent + 2
-           end;
+               " -> ... -> np\n";
+           in
+           "* Type checking " ^
+           String.concat " -> " (args |> List.map (fun (arg_term, arg_ity) ->
+               "(" ^ hg#string_of_hterm arg_term ^ " : " ^ string_of_ity arg_ity ^ ")"
+             )) ^
+           head_info
+         );
+         indent (+1);
          (* The target is args = (arg_i: arg_ity_i)_i and the codomain is head_pr.
             Iterate over arguments while intersecting variable environments with short-circuit.
             Note that below productive argument describes productivity of the argument term, not
@@ -488,13 +482,12 @@ class typing (hg : hgrammar) = object(self)
                    was used (for (3)). *)
                 TyList.fold_left_short_circuit te arg_ity TargetEnvms.empty
                   (fun te arg_ty ->
-                     if !Flags.debugging then
-                       begin
-                         print_string @@ String.make indent ' ' ^ "* Typing argument " ^
-                                         hg#string_of_hterm arg_term ^ " : " ^
-                                         string_of_ity arg_ity ^ "\n";
-                         indent <- indent + 2
-                       end;
+                     print_verbose !Flags.verbose_proofs @@ lazy (
+                       "* Typing argument " ^
+                       hg#string_of_hterm arg_term ^ " : " ^
+                       string_of_ity arg_ity ^ "\n"
+                     );
+                     indent (+1);
                      (* te are possible variable environments constructed so far from previous
                         arguments, only for the current target.
                         When target argument is productive, the actual argument can be either
@@ -561,48 +554,43 @@ class typing (hg : hgrammar) = object(self)
                          TargetEnvms.union pr_target_arg_te np_target_arg_te
                      in
                      let intersection = TargetEnvms.intersect te arg_te in
-                     if !Flags.debugging then
-                       begin
-                         indent <- indent - 2;
-                         print_string @@ String.make indent ' ' ^
-                                         "  retargeted envs for the argument: " ^
-                                         TargetEnvms.to_string arg_te ^ "\n" ^
-                                         String.make indent ' ' ^
-                                         "  intersected with envs: " ^
-                                         TargetEnvms.to_string te ^ "\n" ^
-                                         String.make indent ' ' ^
-                                         "  env count for the argument: " ^
-                                         string_of_int (TargetEnvms.size arg_te) ^ "\n" ^
-                                         String.make indent ' ' ^
-                                         "  env count after intersection: " ^
-                                         string_of_int (TargetEnvms.size intersection) ^ "\n"
-                       end;
+                     print_verbose !Flags.verbose_proofs @@ lazy (
+                       "retargeted envs for the argument: " ^
+                       TargetEnvms.to_string arg_te ^ "\n" ^
+                       "intersected with envs: " ^
+                       TargetEnvms.to_string te ^ "\n" ^
+                       "env count for the argument: " ^
+                       string_of_int (TargetEnvms.size arg_te) ^ "\n" ^
+                       "env count after intersection: " ^
+                       string_of_int (TargetEnvms.size intersection) ^ "\n"
+                     );
                      (* Productive target might require duplication in (3), but this can only
                         be checked at the end. (or TODO optimization in argument order).
                         Nonproductive target requires no duplication. *)
                      let res = TargetEnvms.filter_no_dup_for_np_targets intersection in
-                     if !Flags.debugging then
-                       print_string @@ String.make indent ' ' ^
-                                       "  env count after no duplication filtering: " ^
-                                       string_of_int (TargetEnvms.size res) ^ "\n";
+                     print_verbose !Flags.verbose_proofs @@ lazy (
+                       "env count after no duplication filtering: " ^
+                       string_of_int (TargetEnvms.size res) ^ "\n"
+                     );
+                     indent (-1);
                      res
                   )
              )
          in
-         if !Flags.debugging then
-           print_string @@ String.make indent ' ' ^
-                           "* Intersected envs before duplication filtering:\n" ^
-                           String.make (indent + 2) ' ' ^ TargetEnvms.to_string te ^ "\n";
+         print_verbose !Flags.verbose_proofs @@ lazy (
+           "* Intersected envs before duplication filtering:\n" ^
+           "  " ^ TargetEnvms.to_string te ^ "\n"
+         );
          let te =
            if not head_pr then
              begin
                (* a duplication or productive actual argument is required when head is not
                   productive and target is productive *)
                let te = TargetEnvms.filter_dup_or_pr_arg_for_pr_targets te in
-               if !Flags.debugging then
-                 print_string @@ String.make indent ' ' ^
-                                 "* env count after duplication or pr arg filtering: " ^
-                                 string_of_int (TargetEnvms.size te) ^ "\n";
+               print_verbose !Flags.verbose_proofs @@ lazy (
+                 "* env count after duplication or pr arg filtering: " ^
+                 string_of_int (TargetEnvms.size te) ^ "\n";
+               );
                te
              end
            else
@@ -610,16 +598,15 @@ class typing (hg : hgrammar) = object(self)
          in
          if force_pr_var then
            let te = TargetEnvms.filter_pr_vars te in
-           if !Flags.debugging then
-             begin
-               print_string @@ String.make indent ' ' ^ "* env count after pr var filtering: " ^
-                               string_of_int (TargetEnvms.size te) ^ "\n";
-               indent <- indent - 2
-             end;
+           print_verbose !Flags.verbose_proofs @@ lazy (
+             "* env count after pr var filtering: " ^
+             string_of_int (TargetEnvms.size te) ^ "\n"
+           );
+           indent (-1);
            te
          else
            begin
-             indent <- indent - 2;
+             indent (-1);
              te
            end
        )
@@ -627,27 +614,23 @@ class typing (hg : hgrammar) = object(self)
 
   (* --- printing --- *)
 
-  method print_nt_ity =
-    print_string @@ "Types of nt:\n" ^
-                    "============\n";
-    for nt = 0 to hg#nt_count - 1 do
-      print_string @@ hg#nt_name nt ^ ": " ^ string_of_ity nt_ity.(nt) ^ "\n"
-    done
+  method string_of_nt_ity : string =
+    "Types of nonterminals:\n" ^
+    String.concat "\n" @@ (range 0 hg#nt_count |> List.map (fun nt ->
+        hg#nt_name nt ^ ": " ^ string_of_ity nt_ity.(nt)
+      ))
 
-  method print_hterms_hty (should_be_printed : hterms_id -> bool) =
-    print_string @@ "Types of hterms:\n" ^
-                    "================\n";
-    for id = 0 to hg#hterms_count - 1 do
-      if should_be_printed id then
-        begin
-          print_string @@ string_of_int id ^ ":\n";
-          let htys = hty_store#get_htys id in
-          List.iter (fun hty ->
-              print_string @@ string_of_list string_of_ity hty ^ "\n"
-            ) htys;
-          print_string "\n"
-        end
-    done
+  method string_of_hterms_hty (should_be_printed : hterms_id -> bool) : string =
+    "Types of hterms:\n" ^
+    String.concat "\n" @@ List.filter (fun s -> s <> "")
+      (range 0 hg#hterms_count |> List.map (fun id ->
+           if should_be_printed id then
+             let htys = hty_store#get_htys id in
+             string_of_int id ^ ":\n" ^
+             concat_map "\n" (string_of_list string_of_ity) htys
+           else
+             ""
+         ))
 
   (* --- debugging --- *)
 

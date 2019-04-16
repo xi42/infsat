@@ -314,8 +314,7 @@ let prerules2gram
       (nt_kinds, rules)
   in
   let g = new Grammar.grammar nt' vinfo rules' in
-  (* saving grammar in a global variable *)
-  if !Flags.debugging then
-    print_string @@ "Grammar after conversion from prerules:\n" ^
-                    g#grammar_info;
+  print_verbose !Flags.verbose_preprocessing @@ lazy (
+    "Grammar after conversion from prerules:\n" ^ g#grammar_info ^ "\n"
+  );
   g

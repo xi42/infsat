@@ -128,16 +128,11 @@ let rec string_of_sty (sty : st) : string =
     in
     left ^ " -> " ^ string_of_sty sty2
 
-let print_sortbinding (nt, sty) =
-  print_string @@ " " ^ nt ^ " : " ^ string_of_sty sty ^ "\n"
-
-let print_nste gram nste =
-  print_string @@ "Sorts of nonterminals:\n" ^
-                  "======================\n";
-  for i = 0 to (Array.length nste - 1) do
-    print_sortbinding (gram#name_of_nt i, nste.(i))
-  done;
-  print_string "\n"
+let string_of_nste gram nste : string =
+  "Sorts of nonterminals:\n" ^
+  String.concat "\n" @@ array_listmap nste (fun i sty ->
+      "  " ^ gram#name_of_nt i ^ " : " ^ string_of_sty sty
+    )
 
 let lookup_stype_nt f nste = nste.(f)
 let lookup_stype_var v vste = vste.(snd v)
@@ -199,9 +194,9 @@ let order_of_nste nste =
   let x = list_max (fun (nt1, ord1) (nt2, ord2) -> compare ord1 ord2) ordmap in
   x
 
-let print_order gram nt ord =
-  print_string @@ "Order of recursion scheme: " ^ string_of_int ord ^ "\n";
-  print_string @@ "Non-terminal of highest order: " ^ gram#name_of_nt nt ^ "\n"
+let string_of_order gram nt ord : string =
+  "Order of recursion scheme: " ^ string_of_int ord ^ "\n" ^
+  "Non-terminal of highest order: " ^ gram#name_of_nt nt
 
 let rec mk_vste i vste arity sty =
   if i < arity then
@@ -232,8 +227,9 @@ let eta_expand (gram : grammar) =
   for i = 0 to num_of_nts - 1 do
     nste.(i) <- new_tvar ()
   done;
-  if !Flags.debugging then
-    print_nste gram nste;
+  print_verbose !Flags.verbose_preprocessing @@ lazy (
+    string_of_nste gram nste ^ "\n"
+  );
   (* creating equations for unification *)
   let c = tcheck_rules gram#rules nste in
   (* computing sorts by unification *)
@@ -253,8 +249,10 @@ let eta_expand (gram : grammar) =
   let f, ord = order_of_nste nste in
   (* eta-expanding bodies of non-terminals so that their bodies are of sort O *)
   update_arity_of_nt gram nste;
-  if !Flags.debugging then
-    begin
-      print_nste gram nste;
-      print_order gram f ord
-    end
+  print_verbose !Flags.verbose_preprocessing @@ lazy (
+    string_of_nste gram nste
+  );
+  print_verbose !Flags.verbose_preprocessing @@ lazy (
+    string_of_nste gram nste ^ "\n" ^
+    string_of_order gram f ord ^ "\n"
+  )

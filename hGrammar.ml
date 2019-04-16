@@ -1,5 +1,6 @@
 open Grammar
 open GrammarCommon
+open Utilities
 
 (** Identifier of a sequence of hterms (terms in head form) that is an argument to some head term.
     Terms under one hterms_id are defined in one nonterminal or do not contain a variable. *)
@@ -246,19 +247,20 @@ class hgrammar (grammar : grammar) = object(self)
 
   method string_of_hterms (id : hterms_id) : string =
     Utilities.string_of_list self#string_of_hterm @@ self#id2hterms id
-
-  method print_hterm (hterm : hterm) =
-    print_string (self#string_of_hterm hterm)
   
-  method print_hterms =
-    print_string "hterms_id --> terms\n\n";
-    for id = 0 to next_hterms_id - 1 do
-      let terms = self#id2terms id in
-      if terms <> [] then
-        print_string @@ string_of_int id ^ ": " ^
-                        String.concat ", " (List.map grammar#string_of_term terms) ^ "\n"
-    done
-
+  method to_string : string =
+    "hterms_id -> terms:\n" ^
+    String.concat "\n" @@ List.filter (fun x -> x <> "") @@
+    (range 0 next_hterms_id |> List.map (fun id ->
+         let terms = self#id2terms id in
+         if terms <> [] then
+           string_of_int id ^ ": " ^
+           String.concat ", " (List.map grammar#string_of_term terms)
+         else
+           ""
+       )
+    )
+     
   (* --- debugging --- *)
 
   (** Locates hterms_id with given path in given hterm. Path consists of integers that mean
@@ -284,9 +286,7 @@ class hgrammar (grammar : grammar) = object(self)
       let hterm = self#convert_term body in
       nt_bodies.(nt) <- hterm (* nt_bodies now contains (arity, (H, [ID])), where H is a var/nonterminal/terminal and ID points in hterms_data at list of terms normalized to (H, [ID]) or (H, []) if there are no args *)
     done;
-    if !Flags.debugging then
-      begin
-        self#print_hterms;
-        print_string "\n"
-      end
+    print_verbose !Flags.verbose_preprocessing @@ lazy (
+      self#to_string ^ "\n"
+    )
 end
