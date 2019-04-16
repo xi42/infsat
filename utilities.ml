@@ -169,6 +169,25 @@ let replace_nth (l : 'a list) (i : int) (r : 'a) : 'a list =
   in
   replace_nth_aux l i []
 
+(** Returns list without first nth elements. 0-indexed. *)
+let rec from_nth (l : 'a list) (nth : int) =
+  if nth = 0 then
+    l
+  else
+    from_nth (List.tl l) (nth - 1)
+
+let split_list (l : 'a list) (prefix_size : int) : 'a list * 'a list =
+  let rec split_list_aux rprefix postfix n =
+    if n = 0 then
+      (List.rev rprefix, postfix)
+    else
+      match postfix with
+      | [] -> failwith "List too short in split_list"
+      | x :: postfix' ->
+        split_list_aux (x :: rprefix) postfix' (n - 1)
+  in
+  split_list_aux [] l prefix_size
+
 (** Change list to string as it would be represented in OCaml using custom function to change each
     element to string. *)
 let string_of_list (p : 'a -> string) (l : 'a list) : string =

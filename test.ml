@@ -1,3 +1,4 @@
+
 open Binding
 open DuplicationFactorGraph
 open Environment
@@ -22,9 +23,9 @@ let assert_equal_envms envms1 envms2 =
   assert_equal ~printer:Envms.to_string ~cmp:Envms.equal
     (Envms.with_empty_temp_flags envms1) (Envms.with_empty_temp_flags envms2)
 
-let assert_equal_tels tel1 tel2 =
+let assert_equal_tes te1 te2 =
   assert_equal ~printer:TargetEnvms.to_string ~cmp:TargetEnvms.equal
-    (TargetEnvms.with_empty_temp_flags tel1) (TargetEnvms.with_empty_temp_flags tel2)
+    (TargetEnvms.with_empty_temp_flags te1) (TargetEnvms.with_empty_temp_flags te2)
 
 let mk_grammar rules =
   let nonterminals = Array.mapi (fun i _ -> ("N" ^ string_of_int i, O)) rules in
@@ -227,9 +228,9 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP empty_used_nts false;
+          ignore @@ dfg#add_vertex 0 ty_np empty_used_nts false;
           dfg
-        )#has_positive_cycle 0 NP
+        )#has_positive_cycle 0 ty_np
       );
 
     (* unreachable loop *)
@@ -237,10 +238,10 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP empty_used_nts false;
-          ignore @@ dfg#add_vertex 0 PR (nt_ty_used_once 0 PR) true;
+          ignore @@ dfg#add_vertex 0 ty_np empty_used_nts false;
+          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
-        )#has_positive_cycle 0 NP
+        )#has_positive_cycle 0 ty_np
       );
 
     (* positive loop at start *)
@@ -248,9 +249,9 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 PR (nt_ty_used_once 0 PR) true;
+          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
-        )#has_positive_cycle 0 PR
+        )#has_positive_cycle 0 ty_pr
       );
 
     (* non-positive loop at start *)
@@ -258,9 +259,9 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP (nt_ty_used_once 0 NP) false;
+          ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 0 ty_np) false;
           dfg
-        )#has_positive_cycle 0 NP
+        )#has_positive_cycle 0 ty_np
       );
 
     (* non-positive and positive interconnected loops *)
@@ -268,14 +269,14 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP (nt_ty_used_once 1 NP) false;
-          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 2 PR) true;
-          ignore @@ dfg#add_vertex 2 PR (nt_ty_used_once 3 NP) false;
-          ignore @@ dfg#add_vertex 3 NP (nt_ty_used_once 1 NP) false;
-          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 4 NP) false;
-          ignore @@ dfg#add_vertex 4 NP (nt_ty_used_once 3 NP) false;
+          ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 1 ty_np) false;
+          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 2 ty_pr) true;
+          ignore @@ dfg#add_vertex 2 ty_pr (nt_ty_used_once 3 ty_np) false;
+          ignore @@ dfg#add_vertex 3 ty_np (nt_ty_used_once 1 ty_np) false;
+          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 4 ty_np) false;
+          ignore @@ dfg#add_vertex 4 ty_np (nt_ty_used_once 3 ty_np) false;
           dfg
-        )#has_positive_cycle 0 NP
+        )#has_positive_cycle 0 ty_np
       );
 
     (* non-positive and positive interconnected loops - another order *)
@@ -283,14 +284,14 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP (nt_ty_used_once 1 NP) false;
-          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 2 PR) false;
-          ignore @@ dfg#add_vertex 2 PR (nt_ty_used_once 3 NP) false;
-          ignore @@ dfg#add_vertex 3 NP (nt_ty_used_once 1 NP) false;
-          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 4 NP) true;
-          ignore @@ dfg#add_vertex 4 NP (nt_ty_used_once 3 NP) false;
+          ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 1 ty_np) false;
+          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 2 ty_pr) false;
+          ignore @@ dfg#add_vertex 2 ty_pr (nt_ty_used_once 3 ty_np) false;
+          ignore @@ dfg#add_vertex 3 ty_np (nt_ty_used_once 1 ty_np) false;
+          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 4 ty_np) true;
+          ignore @@ dfg#add_vertex 4 ty_np (nt_ty_used_once 3 ty_np) false;
           dfg
-        )#has_positive_cycle 0 NP
+        )#has_positive_cycle 0 ty_np
       );
 
     (* non-positive loop and positive path *)
@@ -298,14 +299,14 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 NP (nt_ty_used_once 1 NP) false;
-          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 2 PR) true;
-          ignore @@ dfg#add_vertex 2 PR (nt_ty_used_once 3 NP) false;
-          ignore @@ dfg#add_vertex 1 NP (nt_ty_used_once 4 NP) false;
-          ignore @@ dfg#add_vertex 4 NP (nt_ty_used_once 5 NP) false;
-          ignore @@ dfg#add_vertex 5 NP (nt_ty_used_once 1 NP) false;
+          ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 1 ty_np) false;
+          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 2 ty_pr) true;
+          ignore @@ dfg#add_vertex 2 ty_pr (nt_ty_used_once 3 ty_np) false;
+          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 4 ty_np) false;
+          ignore @@ dfg#add_vertex 4 ty_np (nt_ty_used_once 5 ty_np) false;
+          ignore @@ dfg#add_vertex 5 ty_np (nt_ty_used_once 1 ty_np) false;
           dfg
-        )#has_positive_cycle 0 NP
+        )#has_positive_cycle 0 ty_np
       );
 
     (* registering twice the same vertex *)
@@ -313,10 +314,10 @@ let dfg_test () : test =
         assert_equal true @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 PR (nt_ty_used_once 0 PR) true;
-          ignore @@ dfg#add_vertex 0 PR (nt_ty_used_once 0 PR) false;
+          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
+          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) false;
           dfg
-        )#has_positive_cycle 0 PR
+        )#has_positive_cycle 0 ty_pr
       );
 
     (* checking for not registered vertex *)
@@ -324,9 +325,9 @@ let dfg_test () : test =
         assert_equal false @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 PR (nt_ty_used_once 0 PR) true;
+          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
-        )#has_positive_cycle 0 NP
+        )#has_positive_cycle 0 ty_np
       );
   ]
 
@@ -402,80 +403,196 @@ let conversion_test () : test =
 let type_test () : test =
   "type" >::: [
     "string_of_ty-1" >:: (fun _ ->
-        assert_equal "pr" @@ string_of_ty PR
+        assert_equal ~printer:id "pr" @@ string_of_ty ty_pr
       );
 
     "string_of_ty-2" >:: (fun _ ->
-        assert_equal "np -> pr" @@
-        string_of_ty (mk_fun (sty NP) PR)
+        assert_equal ~printer:id "np -> pr" @@
+        string_of_ty @@ mk_fun [ity_np] true
       );
 
     "string_of_ty-3" >:: (fun _ ->
-        assert_equal "(np -> pr) -> np" @@
-        string_of_ty (mk_fun (sty (mk_fun (sty NP) PR)) NP)
+        assert_equal ~printer:id "(np -> pr) -> np" @@
+        string_of_ty @@ mk_fun [sty (mk_fun [ity_np] true)] false
       );
 
     "string_of_ty-4" >:: (fun _ ->
-        assert_equal "pr /\\ np -> pr" @@
-        string_of_ty (mk_fun (TyList.of_list [PR; NP]) PR)
+        assert_equal ~printer:id "np /\\ pr -> pr" @@
+        string_of_ty @@ mk_fun [TyList.of_list [ty_pr; ty_np]] true
       );
 
     "string_of_ty-5" >:: (fun _ ->
-        assert_equal "T -> pr" @@ string_of_ty (mk_fun (TyList.empty) PR)
+        assert_equal ~printer:id "T -> pr" @@
+        string_of_ty @@ mk_fun [ity_top] true
       );
 
     "string_of_ty-6" >:: (fun _ ->
-        assert_equal "(pr -> pr) -> (np -> pr) -> np -> pr" @@
-        string_of_ty
-          (mk_fun
-             (sty (mk_fun (sty PR) PR))
-             (mk_fun
-                (sty (mk_fun (sty NP) PR))
-                (mk_fun (sty NP) PR)))
+        assert_equal ~printer:id "(pr -> pr) -> (np -> pr) -> np -> pr" @@
+        string_of_ty @@
+        mk_fun [sty @@ mk_fun [ity_pr] true; sty @@ mk_fun [ity_np] true; ity_np] true
       );
 
     "string_of_ity-1" >:: (fun _ ->
-        assert_equal "(pr -> pr) /\\ (np -> np)" @@
-        string_of_ity (TyList.of_list [mk_fun (sty PR) PR; mk_fun (sty NP) NP])
+        assert_equal ~printer:id "(pr -> pr) /\\ (np -> np)" @@
+        string_of_ity (TyList.of_list [mk_fun [ity_pr] true; mk_fun [ity_np] false])
       );
     
     "ty_of_string-1" >:: (fun _ ->
-        assert_equal ~cmp:Ty.equal PR @@ ty_of_string "pr"
+        assert_equal ~cmp:Ty.equal ty_pr @@ ty_of_string "pr"
       );
 
     "ty_of_string-2" >:: (fun _ ->
-        assert_equal ~cmp:Ty.equal (mk_fun (sty NP) PR) @@ ty_of_string "np -> pr"
+        assert_equal ~cmp:Ty.equal (mk_fun [ity_np] true) @@ ty_of_string "np -> pr"
       );
 
     "ty_of_string-3" >:: (fun _ ->
-        assert_equal ~cmp:Ty.equal (mk_fun (sty (mk_fun (sty NP) PR)) NP) @@
+        assert_equal ~cmp:Ty.equal (mk_fun [sty @@ mk_fun [ity_np] true] false) @@
         ty_of_string "(np -> pr) -> np"
       );
 
     "ty_of_string-4" >:: (fun _ ->
-        assert_equal ~cmp:Ty.equal (mk_fun (TyList.of_list [PR; NP]) PR) @@
+        assert_equal ~cmp:Ty.equal (mk_fun [TyList.of_list [ty_np; ty_pr]] true) @@
         ty_of_string "pr /\\ np -> pr"
       );
 
     "ty_of_string-5" >:: (fun _ ->
-        assert_equal ~cmp:Ty.equal (mk_fun (TyList.empty) PR) @@
+        assert_equal ~cmp:Ty.equal (mk_fun [ity_top] true) @@
         ty_of_string "T -> pr"
       );
 
     "ty_of_string-6" >:: (fun _ ->
         assert_equal ~cmp:Ty.equal
-          (mk_fun
-             (sty (mk_fun (sty PR) PR))
-             (mk_fun
-                (sty (mk_fun (sty NP) PR))
-                (mk_fun (sty NP) PR))) @@
+          (mk_fun [sty @@ mk_fun [ity_pr] true; sty @@ mk_fun [ity_np] true; ity_np] true) @@
         ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr"
       );
 
     "ity_of_string-1" >:: (fun _ ->
         assert_equal ~cmp:TyList.equal
-          (TyList.of_list [mk_fun (sty PR) PR; mk_fun (sty NP) NP]) @@
+          (TyList.of_list [mk_fun [ity_pr] true; mk_fun [ity_np] false]) @@
         ity_of_string "(pr -> pr) /\\ (np -> np)"
+      );
+  ]
+
+let te_test () : test =
+  "targetEnvms" >::: [
+    "intersect-1" >:: (fun _ ->
+        assert_equal_tes
+          (TargetEnvms.singleton ty_np @@ empty_env 0) @@
+        TargetEnvms.intersect
+          (TargetEnvms.singleton ty_np @@ empty_env 0)
+          (TargetEnvms.singleton ty_np @@ empty_env 0)
+      );
+
+    "intersect-2" >:: (fun _ ->
+        assert_equal_tes
+          (TargetEnvms.of_list [
+              (ty_np, [with_positive true @@ with_dup true @@
+                    mk_envm_empty_flags @@ singleton_env 1 (0, 0) @@ sty ty_pr])
+            ]) @@
+        TargetEnvms.intersect
+          (TargetEnvms.of_list_empty_flags [
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_pr])
+            ])
+          (TargetEnvms.of_list_empty_flags [
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_pr])
+            ])
+      );
+
+    "intersect-3" >:: (fun _ ->
+        assert_equal_tes
+          (TargetEnvms.of_list_empty_flags [
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np])
+            ]) @@
+        TargetEnvms.intersect
+          (TargetEnvms.of_list_empty_flags [
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np])
+            ])
+          (TargetEnvms.of_list_empty_flags [
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np])
+            ])
+      );
+
+    "intersect-4" >:: (fun _ ->
+        assert_equal_tes
+          (TargetEnvms.of_list [
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm
+                      (NTTyMap.of_list [((0, ty_pr), false); ((0, ty_np), false)]) true])
+            ]) @@
+        TargetEnvms.intersect
+          (TargetEnvms.of_list [
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm (nt_ty_used_once 0 ty_pr) true])
+            ])
+          (TargetEnvms.of_list [
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm (nt_ty_used_once 0 ty_np) true;
+                    singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm (nt_ty_used_once 0 ty_np) false]);
+              (ty_pr, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm empty_used_nts false])
+            ])
+      );
+
+    "intersect-5" >:: (fun _ ->
+        assert_equal_tes
+          (TargetEnvms.of_list [
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm
+                      (NTTyMap.of_list [((0, ty_np), true)]) false;
+                    singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm
+                      (NTTyMap.of_list [((0, ty_np), true)]) true]);
+            ]) @@
+        TargetEnvms.intersect
+          (TargetEnvms.of_list [
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm (nt_ty_used_once 0 ty_np) false])
+            ])
+          (TargetEnvms.of_list [
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm (nt_ty_used_once 0 ty_np) true]);
+              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm (nt_ty_used_once 0 ty_np) false]);
+              (ty_pr, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm empty_used_nts false])
+            ])
+      );
+
+    "intersect-6" >:: (fun _ ->
+        assert_equal_tes
+          (TargetEnvms.of_list_empty_flags [
+              (ty_np, [singleton_env 2 (0, 0) @@ ity_of_string "pr /\\ np";
+                    singleton_env 2 (0, 1) @@ ity_of_string "pr /\\ np";
+                    new env [|sty ty_np; sty ty_pr|];
+                    new env [|sty ty_pr; sty ty_np|]
+                   ]);
+            ]) @@
+        TargetEnvms.intersect
+          (TargetEnvms.of_list_empty_flags [
+              (ty_np, [singleton_env 2 (0, 0) @@ sty ty_np]);
+              (ty_np, [singleton_env 2 (0, 1) @@ sty ty_np])
+            ])
+          (TargetEnvms.of_list_empty_flags [
+              (ty_np, [singleton_env 2 (0, 0) @@ sty ty_pr]);
+              (ty_np, [singleton_env 2 (0, 1) @@ sty ty_pr])
+            ])
+      );
+
+    (*
+    "intersect-7" >:: (fun _ ->
+        assert_equal_tes
+          (TargetEnvms.of_list_empty_flags [
+              (ty_np, [singleton_env 2 (0, 0) @@ ity_of_string "pr /\\ np";
+                    singleton_env 2 (0, 1) @@ ity_of_string "pr /\\ np";
+                    new env [|sty ty_np; sty ty_pr|];
+                    new env [|sty ty_pr; sty ty_np|]
+                   ]);
+            ]) @@
+        TargetEnvms.intersect
+          (TargetEnvms.of_list_empty_flags [
+              (ty_np, [singleton_env 2 (0, 0) @@ sty ty_np]);
+              (ty_np, [singleton_env 2 (0, 1) @@ sty ty_np])
+            ])
+          (TargetEnvms.of_list_empty_flags [
+              (ty_np, [singleton_env 2 (0, 2) @@ sty ty_np])
+            ])
+      );
+*)
+    "size-1" >:: (fun _ ->
+        assert_equal ~printer:string_of_int 1 @@
+        TargetEnvms.size @@
+        TargetEnvms.singleton ty_np @@
+        singleton_env 3 (0, 2) @@ sty ty_np
       );
   ]
 
@@ -488,45 +605,25 @@ let grammar_e () = mk_grammar
 let typing_e_test () =
   let hg, typing = mk_typing @@ grammar_e () in
   [
-    (* checking if matching arguments to their types works *)
-    "annotate_args-0" >:: (fun _ ->
-        assert_equal
-          [
-            ([(1, TyList.singleton NP); (2, TyList.singleton PR)], Fun (4, TyList.empty, PR),
-             42, true)
-          ] @@
-        typing#annotate_args
-          [1; 2]
-          [
-            (Fun (2, TyList.singleton NP,
-                  Fun (3, TyList.singleton PR,
-                       Fun (4, TyList.empty, PR)
-                      )
-                 ),
-             42
-            )
-          ]
-      );
-    
     (* check if e : np type checks *)
     "type_check-1" >:: (fun _ ->
-        assert_equal_tels
-          (TargetEnvms.singleton NP @@ empty_env @@ hg#nt_arity 0)
-          (type_check_nt_wo_env typing hg 0 NP false false)
+        assert_equal_tes
+          (TargetEnvms.singleton ty_np @@ empty_env @@ hg#nt_arity 0)
+          (type_check_nt_wo_env typing hg 0 ty_np false false)
       );
 
     (* checking basic functionality of forcing pr vars *)
     "type_check-2" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           TargetEnvms.empty
-          (type_check_nt_wo_env typing hg 0 NP false true)
+          (type_check_nt_wo_env typing hg 0 ty_np false true)
       );
 
     (* checking that forcing no pr vars does not break anything when there are only terminals *)
     "type_check-3" >:: (fun _ ->
-        assert_equal_tels
-          (TargetEnvms.singleton NP @@ empty_env @@ hg#nt_arity 0)
-          (type_check_nt_wo_env typing hg 0 NP true false)
+        assert_equal_tes
+          (TargetEnvms.singleton ty_np @@ empty_env @@ hg#nt_arity 0)
+          (type_check_nt_wo_env typing hg 0 ty_np true false)
       );
   ]
 
@@ -542,22 +639,22 @@ let typing_ax_test () =
   [
     (* check that a x : pr accepts both productivities of x *)
     "type_check-4" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           (TargetEnvms.of_list
            [
-             (PR, [
+             (ty_pr, [
                  mk_envm empty_used_nts true @@ senv hg 1 0 "pr";
                  mk_envm empty_used_nts true @@ senv hg 1 0 "np"
               ])
            ])
-          (type_check_nt_wo_env typing hg 1 PR false false)
+          (type_check_nt_wo_env typing hg 1 ty_pr false false)
       );
 
     (* check that a x : np does not type check *)
     "type_check-5" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           TargetEnvms.empty
-          (type_check_nt_wo_env typing hg 1 NP false false)
+          (type_check_nt_wo_env typing hg 1 ty_np false false)
       );
   ]
   
@@ -602,8 +699,8 @@ let typing_xyyz_test () =
   [
     (* check that intersection of common types from different arguments works *)
     "type_check-6" >:: (fun _ ->
-        assert_equal_tels
-          (TargetEnvms.singleton_of_envm PR @@
+        assert_equal_tes
+          (TargetEnvms.singleton_of_envm ty_pr @@
            mk_envm (NTTyMap.of_seq @@ List.to_seq [
                ((2, ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr"), false);
                ((3, ty_of_string "(np -> np) -> np -> np"), false)
@@ -613,31 +710,31 @@ let typing_xyyz_test () =
              ity_of_string "(np -> pr) /\\ (np -> np)";
              ity_of_string "np"
            |]) @@
-        type_check_nt_wo_env typing hg 1 PR false false
+        type_check_nt_wo_env typing hg 1 ty_pr false false
       );
 
     (* check that branching works *)
     "type_check-7" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           (TargetEnvms.of_list [
-              (PR, [
+              (ty_pr, [
                  mk_envm empty_used_nts true @@ senv hg 4 0 "pr";
                  mk_envm empty_used_nts true @@ senv hg 4 0 "np"
                ])
             ]) @@
-        type_check_nt_wo_env typing hg 4 PR false false
+        type_check_nt_wo_env typing hg 4 ty_pr false false
       );
 
     (* check that branching works *)
     "type_check-8" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           (TargetEnvms.of_list [
-              (NP, [
+              (ty_np, [
                  mk_envm empty_used_nts false @@ senv hg 4 0 "pr";
                  mk_envm empty_used_nts false @@ senv hg 4 0 "np"
                ])
             ]) @@
-        type_check_nt_wo_env typing hg 4 NP false false
+        type_check_nt_wo_env typing hg 4 ty_np false false
       );
 
     (* Basic creation of bindings without a product *)
@@ -723,9 +820,9 @@ let typing_dup_test () =
     (* All valid typings of x type check, because the application is already productive due to
        a e being productive. *)
     "type_check-9" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           (TargetEnvms.of_list [
-              (PR, [
+              (ty_pr, [
                   mk_envm (nt_ty_used_once 1 @@
                            ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np") true @@
                   senv hg 2 0 "pr -> pr";
@@ -734,15 +831,15 @@ let typing_dup_test () =
                   senv hg 2 0 "pr -> np"
                 ])
             ])
-          (type_check_nt_wo_env typing hg 2 PR false false)
+          (type_check_nt_wo_env typing hg 2 ty_pr false false)
       );
 
     (* No valid environment, because a e is productive and makes the application with it as
        argument productive. *)
     "type_check-10" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           TargetEnvms.empty
-          (type_check_nt_wo_env typing hg 2 NP false false)
+          (type_check_nt_wo_env typing hg 2 ty_np false false)
       );
 
     (* Only one valid env when there is a duplication. Since everything in N1 is a variable,
@@ -751,46 +848,46 @@ let typing_dup_test () =
        it is not productive, so it is not a duplication. y : pr is forced by there being no
        known typing of the head with unproductive last argument. *)
     "type_check-11" >:: (fun _ ->
-        assert_equal_tels
-          (TargetEnvms.singleton_of_envm PR @@
+        assert_equal_tes
+          (TargetEnvms.singleton_of_envm ty_pr @@
            mk_envm (nt_ty_used_once 1 @@
                     ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np") true @@
            new env [|
              ity_of_string "pr -> pr";
              ity_of_string "pr"
            |])
-          (type_check_nt_wo_env typing hg 3 PR false false)
+          (type_check_nt_wo_env typing hg 3 ty_pr false false)
       );
 
     (* Only one valid env when there is no duplication. This is exactly the opposite of the test
        above with x : pr -> np passing and x : pr -> pr failing and y : pr being forced. *)
     "type_check-12" >:: (fun _ ->
-        assert_equal_tels
-          (TargetEnvms.singleton_of_envm NP @@
+        assert_equal_tes
+          (TargetEnvms.singleton_of_envm ty_np @@
            mk_envm (nt_ty_used_once 1 @@
                     ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np") false @@
            new env [|
              ity_of_string "pr -> np";
              ity_of_string "pr"
            |])
-          (type_check_nt_wo_env typing hg 3 NP false false)
+          (type_check_nt_wo_env typing hg 3 ty_np false false)
       );
 
     (* Similar to test 11, but this time there are separate variables used for first
        and second argument, so there is no place for duplication. This means that there is no
        way to achieve productivity. *)
     "type_check-13" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           TargetEnvms.empty
-          (type_check_nt_wo_env typing hg 4 PR false false)
+          (type_check_nt_wo_env typing hg 4 ty_pr false false)
       );
 
     (* TODO update tests from here *)
     (* Similar to test 12, but this time the duplication cannot happen. *)
     "type_check-14" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           (TargetEnvms.of_list @@ [
-              (NP, [
+              (ty_np, [
                   mk_envm (nt_ty_used_once 1 @@
                            ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np") false @@
                   new env [|
@@ -808,14 +905,14 @@ let typing_dup_test () =
                 ])
             ]
           )
-          (type_check_nt_wo_env typing hg 4 NP false false)
+          (type_check_nt_wo_env typing hg 4 ty_np false false)
       );
 
     (* Typing without target *)
     "type_check-15" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           (TargetEnvms.of_list @@ [
-              (PR, [
+              (ty_pr, [
                   mk_envm (nt_ty_used_once 1 @@
                            ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np") true @@
                   new env [|
@@ -823,7 +920,7 @@ let typing_dup_test () =
                     ity_of_string "pr"
                   |]
                 ]);
-              (NP, [
+              (ty_np, [
                   mk_envm (nt_ty_used_once 1 @@
                            ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np") false @@
                   new env [|
@@ -1034,9 +1131,9 @@ let typing_misc_test () =
   [
     (* Typing a x without target should not yield np target. *)
     "type_check-16" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           (TargetEnvms.of_list @@ [
-              (PR, [
+              (ty_pr, [
                   mk_envm empty_used_nts true @@
                   new env [|
                     ity_of_string "pr"
@@ -1049,9 +1146,9 @@ let typing_misc_test () =
 
     (* Typing a x without target should not yield np target. *)
     "type_check-17" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           (TargetEnvms.of_list @@ [
-              (PR, [
+              (ty_pr, [
                   mk_envm empty_used_nts true @@
                   new env [|
                     ity_of_string "np"
@@ -1064,15 +1161,15 @@ let typing_misc_test () =
 
     (* Typing a x without target should not yield np target. *)
     "type_check-18" >:: (fun _ ->
-        assert_equal_tels
+        assert_equal_tes
           (TargetEnvms.of_list @@ [
-              (PR, [
+              (ty_pr, [
                   mk_envm empty_used_nts true @@
                   new env [|
                     ity_of_string "pr"
                   |]
                 ]);
-              (PR, [
+              (ty_pr, [
                   mk_envm empty_used_nts true @@
                   new env [|
                     ity_of_string "np"
@@ -1222,6 +1319,7 @@ let tests () = [
   dfg_test ();
   conversion_test ();
   cfa_test ();
+  te_test ();
   type_test ();
   typing_test ();
   examples_test ()

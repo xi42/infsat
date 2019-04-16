@@ -71,16 +71,15 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
                     "\n" ^
                     "nt_queue: " ^ SetQueue.string_of_queue nt_queue ^ "\n" ^
                     "hterms_queue: " ^ SetQueue.string_of_queue hterms_queue ^ "\n"
-  
+
   method print_status =
     print_string @@ "\n================ ITERATION " ^ string_of_int iteration ^
-                    " ================ \n";
+                    " ================\n";
     typing#print_nt_ity;
     print_string "\n";
     typing#print_hterms_hty cfa#hterms_are_arg;
     self#print_queues;
-    print_string @@ "\nDuplication Factor Graph:\n" ^
-                    dfg#to_string hg#nt_name ^ "\n"
+    print_string @@ "\nDuplication Factor Graph:\n" ^ dfg#to_string hg#nt_name ^ "\n"
 
   (* --- processing results of typing --- *)
 
@@ -123,7 +122,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         if !Flags.debugging then
           print_string @@ "The duplication factor graph was updated by adding or modifying " ^
                           "an edge.\n";
-        if dfg#has_positive_cycle hg#start_nt PR then
+        if dfg#has_positive_cycle hg#start_nt ty_pr then
           result <- Some false
       end
 

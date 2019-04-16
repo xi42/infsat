@@ -8,10 +8,14 @@ type nt_ty = nt_id * ty
 let nt_ty_compare = Utilities.compare_pair Pervasives.compare Ty.compare
 
 (** Map from used nonterminal typings to whether they were used twice or more. *)
-module NTTyMap = Map.Make (struct
-    type t = nt_id * ty
-    let compare = nt_ty_compare
-  end)
+module NTTyMap = struct
+  include Map.Make (struct
+      type t = nt_id * ty
+      let compare = nt_ty_compare
+    end)
+
+  let of_list (l : (key * 'a) list) : 'a t = of_seq @@ List.to_seq l
+end
 
 type used_nts = bool NTTyMap.t
 
@@ -30,7 +34,13 @@ let mk_envm_empty_flags (env : env) : envm =
 let mk_envm (used_nts : used_nts) (positive : bool) (env : env) : envm =
   { env = env; dup = false; pr_arg = false; used_nts = used_nts; positive = positive }
 
-let with_used_nts (envm : envm) (used_nts : used_nts) : envm =
+let with_dup (dup : bool) (envm : envm) : envm =
+  { envm with dup = dup }
+
+let with_positive (positive : bool) (envm : envm) : envm =
+  { envm with positive = positive }
+
+let with_used_nts (used_nts : used_nts) (envm : envm) : envm =
   { envm with used_nts = used_nts }
 
 let string_of_envm (envm : envm) : string =
@@ -94,14 +104,14 @@ module TargetEnvms = struct
 
   type t = envms M.t
 
-  (** Empty TEL. *)
+  (** Empty TE. *)
   let empty : t = M.empty
 
-  (** Singleton TEL with mapping from target to envm *)
+  (** Singleton TE with mapping from target to envm *)
   let singleton_of_envm (target : ty) (envm : envm) =
     M.singleton target @@ Envms.singleton envm
 
-  (** Singleton TEL with mapping from target to env with no duplication *)
+  (** Singleton TE with mapping from target to env with no duplication *)
   let singleton (target : ty) (env : env) =
     singleton_of_envm target @@ mk_envm_empty_flags env
 
@@ -122,21 +132,21 @@ module TargetEnvms = struct
         (target, Envms.of_list envms)) @@
     List.to_seq l
 
-  (** Conversion of list of pairs target-envms to respective tel assuming default flags. *)
+  (** Conversion of list of pairs target-envms to respective TE assuming default flags. *)
   let of_list_empty_flags (l : (ty * env list) list) : t =
     of_list @@ (l |> List.map (fun (target, envms) ->
         (target, List.map mk_envm_empty_flags envms)))
 
-  let to_list (tel : t) : (ty * envm list) list =
-    List.map (fun (target, envms) -> (target, Envms.elements envms)) @@ M.bindings tel
+  let to_list (te : t) : (ty * envm list) list =
+    List.map (fun (target, envms) -> (target, Envms.elements envms)) @@ M.bindings te
 
-  let mem (tel : t) (target : ty) : bool =
-    M.mem target tel
+  let mem (te : t) (target : ty) : bool =
+    M.mem target te
 
   let is_empty : t -> bool = M.is_empty
 
-  let size (tel : t) : int =
-    M.fold (fun _ envms acc -> acc + Envms.cardinal envms) tel 0
+  let size (te : t) : int =
+    M.fold (fun _ envms acc -> acc + Envms.cardinal envms) te 0
 
   let for_all (f : ty -> envm -> bool) : t -> bool =
     M.for_all (fun target envms ->
@@ -147,15 +157,15 @@ module TargetEnvms = struct
   let remove_empty_targets : t -> t =
     M.filter (fun target envms -> not @@ Envms.is_empty envms)
 
-  (** Returns TEL with flags of environments set to default values and removes duplicates. *)
+  (** Returns TE with flags of environments set to default values and removes duplicates. *)
   let with_empty_temp_flags : t -> t =
     M.map Envms.with_empty_temp_flags
 
-  (** Changes target of the sole element of TEL. Requires TEL to have exactly one target.
+  (** Changes target of the sole element of TE. Requires TE to have exactly one target.
       Also removes duplication flag and sets productive actual argument flag to whether previous
       target was productive. *)
-  let retarget (target : ty) (tel : t) : t =
-    assert (M.cardinal tel <= 1);
+  let retarget (target : ty) (te : t) : t =
+    assert (M.cardinal te <= 1);
     M.of_seq @@
     Seq.map (fun (target', envms') ->
         let envms =
@@ -167,33 +177,33 @@ module TargetEnvms = struct
         in
         (target, envms)
       ) @@
-    M.to_seq tel
+    M.to_seq te
 
-  (** Returns filtered TEL with only the environments that have no duplication for nonproductive
+  (** Returns filtered TE with only the environments that have no duplication for nonproductive
       targets. *)
-  let filter_no_dup_for_np_targets (tel : t) : t =
+  let filter_no_dup_for_np_targets (te : t) : t =
     remove_empty_targets @@ M.mapi (fun target envms ->
         if is_productive target then
           envms
         else
           Envms.filter (fun envm -> not envm.dup) envms
-      ) tel
+      ) te
 
-  (** Returns filtered TEL with only the environments that have a duplication for productive
+  (** Returns filtered TE with only the environments that have a duplication for productive
       targets. *)
-  let filter_dup_or_pr_arg_for_pr_targets (tel : t) : t =
+  let filter_dup_or_pr_arg_for_pr_targets (te : t) : t =
     remove_empty_targets @@ M.mapi (fun target envms ->
         if is_productive target then
           Envms.filter (fun envm -> envm.dup || envm.pr_arg) envms
         else
           envms
-      ) tel
+      ) te
 
-  (** Returns filtered TEL with only the environments that contain productive_vars. *)
-  let filter_pr_vars (tel : t) : t =
+  (** Returns filtered TE with only the environments that contain productive_vars. *)
+  let filter_pr_vars (te : t) : t =
     remove_empty_targets @@ M.mapi (fun target envms ->
         Envms.filter (fun envm -> envm.env#has_pr_vars) envms
-      ) tel
+      ) te
 
   (** Flatten an intersection of variable environments, intersected separately for each target.
       Environments are essentially OR-separated sets of AND-separated sets of typings of
@@ -204,12 +214,12 @@ module TargetEnvms = struct
         match envms1, envms2 with
         | Some envms1, Some envms2 ->
           Some (
-            (* for each envm in envms in tel1 *)
+            (* for each envm in envms in te1 *)
             Envms.fold (fun envm1 acc ->
-                (* for each envm in envms in tel2 *)
+                (* for each envm in envms in te2 *)
                 Envms.fold (fun envm2 acc ->
                     (* Merge them together, compute duplication, and reshape the list result into
-                       a TEL. This is the only place where duplication flag is set. If there was a
+                       a TE. This is the only place where duplication flag is set. If there was a
                        duplication, positive flag is updated to true too. *)
                     let env, merged_dup = envm1.env#merge envm2.env in
                     let merged_envm = {
@@ -227,14 +237,10 @@ module TargetEnvms = struct
           )
         | _, _ -> None
       )
-(*
-  let map (f : ty -> envms -> 'a) (tel : t) : 'a list =
-    TargetEnvmsListBase.map (fun (target, envms) -> f target envms) tel
-*)
 
   (** Returns the types of arguments to which terms typed as targets can be applied in
       variable environments of the target. *)
-  let targets_as_args (tel : t) : ity =
+  let targets_as_args (te : t) : ity =
     TyList.remove_duplicates @@ TyList.of_list @@
     M.fold (fun target envms acc ->
         if is_productive target then
@@ -244,14 +250,14 @@ module TargetEnvms = struct
           let some_envm = Envms.choose envms in
           if some_envm.env#has_pr_vars then
             if Envms.for_all (fun envm -> envm.env#has_pr_vars) envms then
-              with_productivity PR target :: acc
+              with_productivity true target :: acc
             else
-              with_productivity PR target :: target :: acc
+              with_productivity true target :: target :: acc
           else if Envms.exists (fun envm -> envm.env#has_pr_vars) envms then
-            with_productivity PR target :: target :: acc
+            with_productivity true target :: target :: acc
           else
             target :: acc
-      ) tel []
+      ) te []
 
   let targets_count : t -> int = M.cardinal
 
@@ -268,15 +274,15 @@ module TargetEnvms = struct
 
   let compare : t -> t -> int = M.compare Envms.compare
 
-  let equal (tel1 : t) (tel2 : t) : bool = compare tel1 tel2 = 0
+  let equal (te1 : t) (te2 : t) : bool = compare te1 te2 = 0
 
-  let to_string (tel : t) =
+  let to_string (te : t) =
     Utilities.string_of_list Utilities.id @@
     List.map (fun (target, envms) ->
         string_of_ty target ^ " => " ^ Envms.to_string envms
       ) @@
-    M.bindings tel
+    M.bindings te
 end
 
 (** target -> environments *)
-type tel = TargetEnvms.t
+type te = TargetEnvms.t
