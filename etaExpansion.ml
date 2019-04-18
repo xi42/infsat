@@ -230,6 +230,7 @@ let eta_expand (gram : grammar) =
   print_verbose !Flags.verbose_preprocessing @@ lazy (
     string_of_nste gram nste ^ "\n"
   );
+  print_string "\n";
   (* creating equations for unification *)
   let c = tcheck_rules gram#rules nste in
   (* computing sorts by unification *)
@@ -250,9 +251,6 @@ let eta_expand (gram : grammar) =
   (* eta-expanding bodies of non-terminals so that their bodies are of sort O *)
   update_arity_of_nt gram nste;
   print_verbose !Flags.verbose_preprocessing @@ lazy (
-    string_of_nste gram nste
-  );
-  print_verbose !Flags.verbose_preprocessing @@ lazy (
-    string_of_nste gram nste ^ "\n" ^
+    string_of_nste gram nste ^ "\n\n" ^
     string_of_order gram f ord ^ "\n"
   )

@@ -115,7 +115,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
                    hg#nt_name nt' ^ " : " ^ string_of_ty ty' ^ multi_info
                  ))
           in
-          "Registering new typing of nonterminal " ^ string_of_int nt ^ ": " ^
+          "Registering new typing of nonterminal " ^ hg#nt_name nt ^ ": " ^
           hg#nt_name nt ^ " : " ^ string_of_ty ty ^ positive_info ^
           used_nts_info ^ ".\n";
         );
@@ -159,18 +159,20 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         | None ->
           "no fixed typings"
       in
-      "* Inferring type of nonterminal " ^ string_of_int nt ^ " under binding " ^
+      "* Inferring type of nonterminal " ^ hg#nt_name nt ^ " under binding " ^
       string_of_binding string_of_int binding ^ " and " ^ typings_info ^ ".\n"
     );
+    indent (+1);
     let body = hg#nt_body nt in
     let var_count = hg#nt_arity nt in
     let envms = typing#binding2envms var_count None fixed_hterms_hty binding in
-    Envms.iter (fun envm ->
+    envms |> Envms.iter (fun envm ->
         let tel = typing#type_check body None (Left envm.env) false false in
         tel |> TargetEnvms.iter_fun_ty (fun ty used_nts positive ->
             self#register_nt_ty nt ty used_nts positive
           )
-      ) envms
+      );
+    indent (-1)
   
   (** Infers type of given hterm under given bindings. If the type is new, it is registered. *)
   method infer_hterms_hty (id : hterms_id) (fixed_hterms_hty : (hterms_id * hty) option)
@@ -187,6 +189,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       "* Inferring type of hterms " ^ string_of_int id ^ " under binding " ^
       string_of_binding string_of_int binding ^ " and " ^ typing_info ^ ".\n"
     );
+    indent (+1);
     let mask = hg#id2vars id in
     let var_count = match hg#id2nt id with
       | Some nt -> hg#nt_arity nt
@@ -201,7 +204,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         in
         let hty = tels |> List.map TargetEnvms.targets_as_args in
         self#register_hterms_hty id hty
-      )
+      );
+    indent (-1)
 
   (* --- processing queues --- *)
 
@@ -244,7 +248,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       let nt = SetQueue.dequeue prop_nt_queue in
       print_verbose !Flags.verbose_queues @@ lazy (
         "prop_nt_queue: Propagating all types of nonterminal " ^
-        string_of_int nt ^ ".\n"
+        hg#nt_name nt ^ ".\n"
       );
       (* This step is required, because when a new type is computed for a nonterminal, type of
          application of this nonterminal to other terms may yield new possible typings and
@@ -268,7 +272,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     try
       let nt, binding = TwoLayerQueue.dequeue nt_binding_queue in
       print_verbose !Flags.verbose_queues @@ lazy (
-        "nt_binding_queue: Typing nonterminal " ^ string_of_int nt ^
+        "nt_binding_queue: Typing nonterminal " ^ hg#nt_name nt ^
         " with binding " ^ string_of_binding string_of_int binding ^ ".\n"
       );
       self#infer_nt_ity nt None binding;
@@ -285,7 +289,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       let bindings = cfa#lookup_nt_bindings nt in
       print_verbose !Flags.verbose_queues @@ lazy (
         "nt_queue: Enqueuing all " ^ string_of_int (List.length bindings) ^
-        " bindings of nonterminal " ^ string_of_int nt ^ ".\n"
+        " bindings of nonterminal " ^ hg#nt_name nt ^ ".\n"
       );
       List.iter (fun binding ->
           TwoLayerQueue.enqueue nt_binding_queue nt binding
@@ -338,13 +342,14 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       Finite
     with
     | Positive_cycle_found cycle_path ->
+      reset_indentation ();
       print_verbose (not !Flags.quiet) @@ lazy (
         "Duplication Factor Graph:\n" ^
         dfg#to_string hg#nt_name ^ "\n" ^
         "Computed result after " ^ string_of_int iteration ^ " iterations.\n" ^
         "The input HORS contains paths with arbitrarily many counted terminals.\n" ^
         "A path in the Duplication Factor Graph proving infiniteness:\n" ^
-        DuplicationFactorGraph.string_of_path hg#nt_name cycle_path
+        DuplicationFactorGraph.string_of_path hg#nt_name cycle_path ^ "\n"
       );
       Infinite
     | Max_iterations_reached ->

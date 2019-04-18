@@ -300,6 +300,9 @@ let indentation = ref 0
 let indent (delta : int) : unit =
   indentation := !indentation + 2 * delta
 
+let reset_indentation () : unit =
+  indentation := 0
+
 let indentation_str () =
   String.make !indentation ' '
 

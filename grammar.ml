@@ -102,7 +102,7 @@ class grammar nonterminals var_names rules = object(self)
 
   method grammar_info : string =
     self#to_string ^
-    "\nThe number of rewrite rules: " ^ string_of_int self#nt_count ^ "\n" ^
+    "\n\nThe number of rewrite rules: " ^ string_of_int self#nt_count ^ "\n" ^
     "The size of recursion scheme: " ^ string_of_int self#size
 
   initializer
@@ -175,17 +175,6 @@ let rec nt_in_term (term : term) : SortedNTs.t =
   | NT x -> SortedNTs.singleton x
   | App (t1, t2) ->
     SortedNTs.merge (nt_in_term t1)  (nt_in_term t2) 
-
-(* TODO Unused *)
-let nt_in_rule (_, (_, term)) =
-  nt_in_term term
-
-(* TODO Unused *)
-let rec nt_in_rules rules : SortedNTs.t =
-  match rules with
-  | [] -> SortedNTs.empty
-  | r :: rules' ->
-    SortedNTs.merge (nt_in_rule r) (nt_in_rules rules')
       
 let rec arity_of_sort = function
   | O -> 0
