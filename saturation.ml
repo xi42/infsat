@@ -9,16 +9,24 @@ open TargetEnvms
 open Type
 open Utilities
 
+type infsat_result = Infinite | Finite | Unknown
+
+let string_of_infsat_result = function
+  | Infinite -> "infinite"
+  | Finite -> "finite"
+  | Unknown -> "unknown"
+
+exception Max_iterations_reached
+
+exception Positive_cycle_found of (bool * nt_ty) list
+
 class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   (* Design note: typing with specific environments occurs in Typing, but this module is used to
      prepare precise specification of these environments based on 0CFA output, Typing does not
      use 0CFA depdendency information. *)
-  
-  (** Place to store result if it was computed before fixpoint. *)
-  val mutable result : bool option = None
 
   (** Current iteration number kept for debugging purposes only. *)
-  val mutable iteration : int = 0
+  val mutable iteration : int = 1
 
   (** Part that stores types and types specific terms and nonterminals. *)
   val typing = new Typing.typing hg
@@ -121,8 +129,9 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
           "The duplication factor graph was updated by adding or modifying " ^
           "an edge.\n"
         );
-        if dfg#find_positive_cycle hg#start_nt ty_pr then
-          result <- Some false
+        match dfg#find_positive_cycle hg#start_nt ty_pr with
+        | Some path -> raise_notrace @@ Positive_cycle_found path
+        | None -> ()
       end
 
   method register_hterms_hty (id : hterms_id) (hty : hty) =
@@ -313,35 +322,37 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     self#process_hterms_queue
   
   (** Performs saturation and returns whether the language is finite. *)
-  method saturate : bool =
-    while self#process_queues && result = None &&
-          (!Flags.maxiters < 0 || iteration < !Flags.maxiters) do
-      iteration <- iteration + 1
-    done;
-    match result with
-    | Some r ->
-      print_verbose (not !Flags.quiet) @@ lazy (
-        let res_str =
-          if r then
-            "Could not determine the result in " ^ string_of_int iteration ^ " iterations."
-          else
-            "The input HORS contains paths with arbitrarily many counted terminals.";
-        in
-        "Duplication Factor Graph:\n" ^
-        dfg#to_string hg#nt_name ^ "\n" ^
-        "Computed result after " ^ string_of_int iteration ^ " iterations.\n" ^
-        res_str ^ "\n"
-      );
-      r
-    | None ->
+  method saturate : infsat_result =
+    try
+      while self#process_queues do
+        if iteration = !Flags.maxiters then
+          raise_notrace Max_iterations_reached;
+        iteration <- iteration + 1
+      done;
       print_verbose (not !Flags.quiet) @@ lazy (
         "Duplication Factor Graph:\n" ^ dfg#to_string hg#nt_name ^ "\n" ^
         "Computed result after " ^ string_of_int iteration ^ " iterations.\n" ^
         "The input HORS contains only paths with uniformly bounded number " ^
         "of counted terminals.\n";
       );
-      result <- Some true;
-      true
+      Finite
+    with
+    | Positive_cycle_found cycle_path ->
+      print_verbose (not !Flags.quiet) @@ lazy (
+        "Duplication Factor Graph:\n" ^
+        dfg#to_string hg#nt_name ^ "\n" ^
+        "Computed result after " ^ string_of_int iteration ^ " iterations.\n" ^
+        "The input HORS contains paths with arbitrarily many counted terminals.\n" ^
+        "A path in the Duplication Factor Graph proving infiniteness:\n" ^
+        DuplicationFactorGraph.string_of_path hg#nt_name cycle_path
+      );
+      Infinite
+    | Max_iterations_reached ->
+      print_verbose (not !Flags.quiet) @@ lazy (
+        "Could not determine the result in " ^ string_of_int iteration ^ " iterations.\n"
+      );
+      Unknown
+
 
   initializer
     (* initializing queues *)

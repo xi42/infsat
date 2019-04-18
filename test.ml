@@ -19,6 +19,17 @@ let init_flags () =
   Flags.verbose_all := true;
   Flags.propagate_flags ()
 
+let rec paths_equal path1 path2 =
+  match path1, path2 with
+  | (true, nt_ty1) :: path1', (true, nt_ty2) :: path2'
+  | (false, nt_ty1) :: path1', (false, nt_ty2) :: path2' ->
+    nt_ty_eq nt_ty1 nt_ty2 && paths_equal path1' path2'
+  | [], [] -> true
+  | _, _ -> false
+
+let assert_equal_paths =
+  assert_equal ~printer:(string_of_path string_of_int) ~cmp:paths_equal
+
 let assert_equal_envms envms1 envms2 =
   assert_equal ~printer:Envms.to_string ~cmp:Envms.equal
     (Envms.with_empty_temp_flags envms1) (Envms.with_empty_temp_flags envms2)
@@ -225,7 +236,7 @@ let dfg_test () : test =
   "dfg" >::: [
     (* one node, no edges *)
     "dfg-0" >:: (fun _ ->
-        assert_equal false @@
+        assert_equal None @@
         (
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_np empty_used_nts false;
@@ -235,7 +246,7 @@ let dfg_test () : test =
 
     (* unreachable loop *)
     "dfg-1" >:: (fun _ ->
-        assert_equal false @@
+        assert_equal None @@
         (
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_np empty_used_nts false;
@@ -246,8 +257,9 @@ let dfg_test () : test =
 
     (* positive loop at start *)
     "dfg-2" >:: (fun _ ->
-        assert_equal true @@
-        (
+        assert_equal_paths
+          [(false, (0, ty_pr)); (true, (0, ty_pr))] @@
+        option_get @@ (
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
@@ -256,7 +268,7 @@ let dfg_test () : test =
 
     (* non-positive loop at start *)
     "dfg-3" >:: (fun _ ->
-        assert_equal false @@
+        assert_equal None @@
         (
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 0 ty_np) false;
@@ -266,8 +278,10 @@ let dfg_test () : test =
 
     (* non-positive and positive interconnected loops *)
     "dfg-4" >:: (fun _ ->
-        assert_equal true @@
-        (
+        assert_equal_paths
+          [(false, (0, ty_np)); (false, (1, ty_np)); (true, (2, ty_pr));
+           (false, (3, ty_np)); (false, (1, ty_np))] @@
+        option_get @@ (
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 1 ty_np) false;
           ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 2 ty_pr) true;
@@ -281,8 +295,10 @@ let dfg_test () : test =
 
     (* non-positive and positive interconnected loops - another order *)
     "dfg-5" >:: (fun _ ->
-        assert_equal true @@
-        (
+        assert_equal_paths
+          [(false, (0, ty_np)); (false, (1, ty_np)); (true, (4, ty_np));
+           (false, (3, ty_np)); (false, (1, ty_np))] @@
+        option_get @@ (
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 1 ty_np) false;
           ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 2 ty_pr) false;
@@ -296,7 +312,7 @@ let dfg_test () : test =
 
     (* non-positive loop and positive path *)
     "dfg-6" >:: (fun _ ->
-        assert_equal false @@
+        assert_equal None @@
         (
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 1 ty_np) false;
@@ -311,8 +327,9 @@ let dfg_test () : test =
 
     (* registering twice the same vertex *)
     "dfg-7" >:: (fun _ ->
-        assert_equal true @@
-        (
+        assert_equal_paths
+          [(false, (0, ty_pr)); (true, (0, ty_pr))] @@
+        option_get @@ (
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) false;
@@ -321,13 +338,57 @@ let dfg_test () : test =
       );
 
     (* checking for not registered vertex *)
-    "dfg-7" >:: (fun _ ->
-        assert_equal false @@
+    "dfg-8" >:: (fun _ ->
+        assert_equal None @@
         (
           let dfg = new dfg in
           ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
         )#find_positive_cycle 0 ty_np
+      );
+
+    (* cycle at start, but not on the same vertex *)
+    "dfg-9" >:: (fun _ ->
+        assert_equal_paths
+          [(false, (0, ty_pr)); (true, (1, ty_pr)); (true, (0, ty_pr))] @@
+        option_get @@ (
+          let dfg = new dfg in
+          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 1 ty_pr) true;
+          ignore @@ dfg#add_vertex 1 ty_pr (nt_ty_used_once 0 ty_pr) true;
+          dfg
+        )#find_positive_cycle 0 ty_pr
+      );
+
+    (* two cycles, one shorter *)
+    "dfg-10" >:: (fun _ ->
+        assert_equal_paths
+          [(false, (0, ty_pr)); (false, (4, ty_pr)); (false, (3, ty_pr)); (true, (0, ty_pr))] @@
+        option_get @@ (
+          let dfg = new dfg in
+          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 1 ty_pr) false;
+          ignore @@ dfg#add_vertex 1 ty_pr (nt_ty_used_once 2 ty_pr) false;
+          ignore @@ dfg#add_vertex 2 ty_pr (nt_ty_used_once 3 ty_pr) false;
+          ignore @@ dfg#add_vertex 3 ty_pr (nt_ty_used_once 0 ty_pr) true;
+          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 4 ty_pr) false;
+          ignore @@ dfg#add_vertex 4 ty_pr (nt_ty_used_once 3 ty_pr) false;
+          dfg
+        )#find_positive_cycle 0 ty_pr
+      );
+
+    (* two cycles, one shorter - another order *)
+    "dfg-11" >:: (fun _ ->
+        assert_equal_paths
+          [(false, (0, ty_pr)); (false, (1, ty_pr)); (false, (2, ty_pr)); (true, (0, ty_pr))] @@
+        option_get @@ (
+          let dfg = new dfg in
+          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 1 ty_pr) false;
+          ignore @@ dfg#add_vertex 1 ty_pr (nt_ty_used_once 2 ty_pr) false;
+          ignore @@ dfg#add_vertex 2 ty_pr (nt_ty_used_once 0 ty_pr) true;
+          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 3 ty_pr) false;
+          ignore @@ dfg#add_vertex 3 ty_pr (nt_ty_used_once 4 ty_pr) false;
+          ignore @@ dfg#add_vertex 4 ty_pr (nt_ty_used_once 2 ty_pr) false;
+          dfg
+        )#find_positive_cycle 0 ty_pr
       );
   ]
 
@@ -1305,12 +1366,12 @@ let examples_test () : test =
   "Examples" >::: [
     "Infinite examples" >::: List.map (fun filename ->
         filename >:: (fun _ ->
-            assert_equal ~printer:string_of_bool false
+            assert_equal ~printer:Saturation.string_of_infsat_result Infinite
               (Main.parse_and_report_finiteness (path filename))))
       inf_filenames;
     "Finite examples" >::: List.map (fun filename ->
         filename >:: (fun _ ->
-            assert_equal ~printer:string_of_bool true
+            assert_equal ~printer:Saturation.string_of_infsat_result Finite
               (Main.parse_and_report_finiteness (path filename))))
       fin_filenames]
 

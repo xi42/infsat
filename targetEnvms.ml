@@ -5,7 +5,10 @@ open Utilities
 
 type nt_ty = nt_id * ty
 
-let nt_ty_compare = Utilities.compare_pair Pervasives.compare Ty.compare
+let nt_ty_compare : nt_ty -> nt_ty -> int = Utilities.compare_pair Pervasives.compare Ty.compare
+
+let nt_ty_eq (nt1, ty1 : nt_ty) (nt2, ty2 : nt_ty) : bool =
+  nt1 = nt2 && Ty.equal ty1 ty2
 
 (** Map from used nonterminal typings to whether they were used twice or more. *)
 module NTTyMap = struct
