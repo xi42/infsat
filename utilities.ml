@@ -306,14 +306,15 @@ let reset_indentation () : unit =
 let indentation_str () =
   String.make !indentation ' '
 
+(** When flag is true, computes and prints lazy string str followed by a new line and flushes
+    stdout. *)
 let print_verbose (flag : bool) (str : string Lazy.t) : unit =
   if flag then
     begin
-      print_string @@
+      print_endline @@
       indentation_str () ^
       Str.global_replace (Str.regexp "\n") ("\n" ^ indentation_str ()) @@
-      Lazy.force str;
-      flush stdout
+      Lazy.force str
     end
 
 (* --- other --- *)

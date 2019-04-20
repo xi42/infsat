@@ -232,21 +232,29 @@ class hgrammar (grammar : grammar) = object(self)
     | HVar v -> grammar#name_of_var v
     | HT a -> string_of_terminal a
 
-  method string_of_hterm (h, ids : hterm) : string =
-    self#string_of_head h ^
-    String.concat " " (List.map (fun id ->
-        let hterms = self#id2hterms id in
-        " [" ^
-        String.concat " " (List.map (fun t ->
-            "(" ^
-            self#string_of_hterm t ^
-            ")"
-          ) hterms) ^
-        "]"
-      ) ids)
+  method string_of_hterm (sep_envs : bool) (hterm : hterm) : string =
+    let rec string_of_hterm_aux (is_arg : bool) (h, ids : hterm) : string =
+      let arg_strs = (ids |> List.map (fun id ->
+          let arg_str = self#id2hterms id |> concat_map " " (string_of_hterm_aux true) in
+          if sep_envs then
+            "[" ^ arg_str ^ "]"
+          else
+            arg_str
+        ))
+      in
+      let res = String.concat " " @@ self#string_of_head h :: arg_strs in
+      if is_arg && ids <> [] then
+        "(" ^ res ^ ")"
+      else
+        res
+    in
+    string_of_hterm_aux false hterm
 
   method string_of_hterms (id : hterms_id) : string =
-    Utilities.string_of_list self#string_of_hterm @@ self#id2hterms id
+    Utilities.string_of_list (self#string_of_hterm false) @@ self#id2hterms id
+
+  method var_name (v : var_id) : string =
+    grammar#name_of_var v
   
   method to_string : string =
     "hterms_id -> terms:\n" ^

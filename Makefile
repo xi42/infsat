@@ -1,4 +1,4 @@
-SOURCE_PRE = flags.ml timing.ml utilities.ml sortedList.ml setQueue.ml twoLayerQueue.ml batchQueue.ml syntax.ml
+SOURCE_PRE = flags.ml utilities.ml timing.ml sortedList.ml setQueue.ml twoLayerQueue.ml batchQueue.ml syntax.ml
 SOURCE_GEN = infSatParser.mli infSatParser.ml infSatLexer.ml
 SOURCE_POST = grammarCommon.ml grammar.ml conversion.ml etaExpansion.ml hGrammar.ml binding.ml cfa.ml type.ml htyStore.ml environment.ml targetEnvms.ml typing.ml duplicationFactorGraph.ml saturation.ml main.ml
 SOURCE = $(SOURCE_PRE) $(SOURCE_GEN) $(SOURCE_POST)
@@ -52,4 +52,4 @@ doc: $(SOURCE)
 	all install-dependencies run-test clean
 
 clean:
-	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof test oUnit-*
+	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof-debug test oUnit-*

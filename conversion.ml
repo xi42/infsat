@@ -315,6 +315,6 @@ let prerules2gram
   in
   let g = new Grammar.grammar nt' vinfo rules' in
   print_verbose !Flags.verbose_preprocessing @@ lazy (
-    "Grammar after conversion from prerules:\n" ^ g#grammar_info ^ "\n"
+    "Grammar after conversion from prerules:\n" ^ g#grammar_info
   );
   g

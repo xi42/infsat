@@ -12,14 +12,15 @@ let program_info = "InfSat 0.1: Saturation-based finiteness checker for higher-o
 
 let options = [
   ("-q", Arg.Set Flags.quiet, "Enables quiet mode");
-  ("-v", Arg.Set Flags.verbose_all, "Enables full verbosity");
-  ("-vc", Arg.Set Flags.verbose_preprocessing, "Enables verbose parsing and preprocessing");
-  ("-vp", Arg.Set Flags.verbose_proofs, "Enables verbose proofs");
-  ("-vt", Arg.Set Flags.verbose_typing, "Enables verbose typing results");
-  ("-vq", Arg.Set Flags.verbose_queues, "Enables verbose saturation tasks");
-  ("-vo", Arg.Set Flags.verbose_profiling, "Enables verbose profiling");
-  ("-maxiters", Arg.Set_int Flags.maxiters, "Maximum number of saturation iterations before " ^
-                                        "giving up");
+  ("-v", Arg.Set Flags.verbose_main, "Enables basic verbosity");
+  ("-vv", Arg.Set Flags.verbose_all, "Enables full verbosity");
+  ("-vprep", Arg.Set Flags.verbose_preprocessing, "Enables verbose parsing and preprocessing");
+  ("-vproof", Arg.Set Flags.verbose_proofs, "Enables verbose proofs");
+  ("-vtype", Arg.Set Flags.verbose_typing, "Enables verbose typing results");
+  ("-vsat", Arg.Set Flags.verbose_queues, "Enables verbose saturation tasks");
+  ("-vprof", Arg.Set Flags.verbose_profiling, "Enables verbose profiling");
+  ("-maxiters", Arg.Set_int Flags.maxiters,
+   "Maximum number of saturation iterations before giving up");
 ]
 
 (** Parses a file to HORS prerules and automata definition. *)
@@ -59,8 +60,8 @@ let parse_file filename =
     result
 
 (** Parses stdin to HORS prerules and automata transitions. *)
-let parse_stdin() =
-  let _ = print_string ("reading standard input ...\n") in
+let parse_stdin () =
+  print_string "reading standard input ...\n";
   let in_strm = stdin in
   let lexbuf = Lexing.from_channel in_strm in
   let result =

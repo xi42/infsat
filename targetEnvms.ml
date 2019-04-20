@@ -5,7 +5,8 @@ open Utilities
 
 type nt_ty = nt_id * ty
 
-let nt_ty_compare : nt_ty -> nt_ty -> int = Utilities.compare_pair Pervasives.compare Ty.compare
+let nt_ty_compare : nt_ty -> nt_ty -> int =
+  Utilities.compare_pair Pervasives.compare Ty.compare
 
 let nt_ty_eq (nt1, ty1 : nt_ty) (nt2, ty2 : nt_ty) : bool =
   nt1 = nt2 && Ty.equal ty1 ty2
@@ -265,13 +266,12 @@ module TargetEnvms = struct
   let targets_count : t -> int = M.cardinal
 
   (** Creates function types from targets and variables in their environments and iterates over
-      all resulting function types along with nonterminal typings used to create them and
-      boolean whether duplication factor increased while computing them. *)
-  let iter_fun_ty (f : ty -> used_nts -> bool -> unit) : t -> unit =
+      all resulting function types along with environment. *)
+  let iter_fun_ty (f : ty -> envm -> unit) : t -> unit =
     M.iter (fun target envms ->
         Envms.iter (fun envm ->
             let ty = envm.env#mk_fun target in
-            f ty envm.used_nts envm.positive
+            f ty envm
           ) envms
       )
 

@@ -298,7 +298,7 @@ class cfa (hg : hgrammar) = object(self)
       print_verbose !Flags.verbose_preprocessing @@ lazy (
         self#string_of_binding_array ^ "\n" ^
         "Size of abstract control flow graph: " ^
-        string_of_int (HTermSet.cardinal visited_nodes) ^ "\n"
+        string_of_int (HTermSet.cardinal visited_nodes)
       )
     | Some hterm ->
       self#process_hterm hterm;
@@ -523,7 +523,7 @@ class cfa (hg : hgrammar) = object(self)
       SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1) nts1
     done;
     print_verbose !Flags.verbose_preprocessing @@ lazy (
-      self#string_of_hterms_bindings ^ "\n"
+      self#string_of_hterms_bindings
       (* TODO print_nt_containing_nt ? *)
       (*
       self#print_dep_nt_nt_lin

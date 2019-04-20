@@ -297,7 +297,7 @@ class typing (hg : hgrammar) = object(self)
         | Some target -> " : " ^ string_of_ty target;
         | None -> ""
       in
-      "Inferring environment for " ^ hg#string_of_hterm hterm ^ target_info ^ vars_info ^ "\n"
+      "Inferring environment for " ^ hg#string_of_hterm true hterm ^ target_info ^ vars_info
     );
     let var_count = match env_data with
       | Left env -> env#var_count
@@ -380,7 +380,7 @@ class typing (hg : hgrammar) = object(self)
           " type checks with the following targets and environments: " ^
           TargetEnvms.to_string res
       in
-      hg#string_of_hterm hterm ^ check_info ^ "\n"
+      hg#string_of_hterm true hterm ^ check_info
     );
     res
 
@@ -405,7 +405,7 @@ class typing (hg : hgrammar) = object(self)
       "head_ity: " ^
       string_of_ity (TyList.of_list (List.map fst all_h_data)) ^ "\n" ^
       "compatible head_ity: " ^
-      string_of_ity (TyList.of_list (List.map fst h_data)) ^ "\n"
+      string_of_ity (TyList.of_list (List.map fst h_data))
     );
       (* TODO optimizations:
        * caching argument index * argument required productivity -> envms
@@ -448,13 +448,13 @@ class typing (hg : hgrammar) = object(self)
          print_verbose !Flags.verbose_proofs @@ lazy (
            let head_info =
              if head_pr then
-               " -> ... -> pr\n"
+               " -> ... -> pr"
              else
-               " -> ... -> np\n";
+               " -> ... -> np";
            in
            "* Type checking " ^
            String.concat " -> " (args |> List.map (fun (arg_term, arg_ity) ->
-               "(" ^ hg#string_of_hterm arg_term ^ " : " ^ string_of_ity arg_ity ^ ")"
+               "(" ^ hg#string_of_hterm true arg_term ^ " : " ^ string_of_ity arg_ity ^ ")"
              )) ^
            head_info
          );
@@ -484,8 +484,8 @@ class typing (hg : hgrammar) = object(self)
                   (fun te arg_ty ->
                      print_verbose !Flags.verbose_proofs @@ lazy (
                        "* Typing argument " ^
-                       hg#string_of_hterm arg_term ^ " : " ^
-                       string_of_ity arg_ity ^ "\n"
+                       hg#string_of_hterm true arg_term ^ " : " ^
+                       string_of_ity arg_ity
                      );
                      indent (+1);
                      (* te are possible variable environments constructed so far from previous
@@ -562,7 +562,7 @@ class typing (hg : hgrammar) = object(self)
                        "env count for the argument: " ^
                        string_of_int (TargetEnvms.size arg_te) ^ "\n" ^
                        "env count after intersection: " ^
-                       string_of_int (TargetEnvms.size intersection) ^ "\n"
+                       string_of_int (TargetEnvms.size intersection)
                      );
                      (* Productive target might require duplication in (3), but this can only
                         be checked at the end. (or TODO optimization in argument order).
@@ -570,7 +570,7 @@ class typing (hg : hgrammar) = object(self)
                      let res = TargetEnvms.filter_no_dup_for_np_targets intersection in
                      print_verbose !Flags.verbose_proofs @@ lazy (
                        "env count after no duplication filtering: " ^
-                       string_of_int (TargetEnvms.size res) ^ "\n"
+                       string_of_int (TargetEnvms.size res)
                      );
                      indent (-1);
                      res
@@ -579,7 +579,7 @@ class typing (hg : hgrammar) = object(self)
          in
          print_verbose !Flags.verbose_proofs @@ lazy (
            "* Intersected envs before duplication filtering:\n" ^
-           "  " ^ TargetEnvms.to_string te ^ "\n"
+           "  " ^ TargetEnvms.to_string te
          );
          let te =
            if not head_pr then
@@ -589,7 +589,7 @@ class typing (hg : hgrammar) = object(self)
                let te = TargetEnvms.filter_dup_or_pr_arg_for_pr_targets te in
                print_verbose !Flags.verbose_proofs @@ lazy (
                  "* env count after duplication or pr arg filtering: " ^
-                 string_of_int (TargetEnvms.size te) ^ "\n";
+                 string_of_int (TargetEnvms.size te)
                );
                te
              end
@@ -600,7 +600,7 @@ class typing (hg : hgrammar) = object(self)
            let te = TargetEnvms.filter_pr_vars te in
            print_verbose !Flags.verbose_proofs @@ lazy (
              "* env count after pr var filtering: " ^
-             string_of_int (TargetEnvms.size te) ^ "\n"
+             string_of_int (TargetEnvms.size te)
            );
            indent (-1);
            te
