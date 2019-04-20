@@ -37,8 +37,8 @@ module NTTySet = Set.Make (struct
     generated a new duplication factor (i.e., used typing of terminal a or had a duplication of a
     productive variable) or used a proof of typing of another nonterminal that was productive. *)
 class dfg = object(self)
-  (** List of out-neighbours of each vertex. *)
-  val mutable graph : (dfg_edge NTTyMap.t) NTTyMap.t = NTTyMap.empty
+  (** List of edges to out-neighbours and leaf proofs of each vertex. *)
+  val mutable graph : (dfg_edge NTTyMap.t * string option) NTTyMap.t = NTTyMap.empty
 
   (** List of in-neighbours of each vertex with label whether the edge is positive. *)
   val mutable rev_graph : NTTySet.t NTTyMap.t = NTTyMap.empty
@@ -47,7 +47,7 @@ class dfg = object(self)
     match NTTyMap.find_opt vertex graph, NTTyMap.find_opt vertex rev_graph with
     | Some edges1, Some edges2 -> (edges1, edges2)
     | _, _ ->
-      let out_edges = NTTyMap.empty in
+      let out_edges = (NTTyMap.empty, None) in
       graph <- NTTyMap.add vertex out_edges graph;
       let in_edges = NTTySet.empty in
       rev_graph <- NTTyMap.add vertex in_edges rev_graph;
@@ -55,10 +55,16 @@ class dfg = object(self)
 
   method private replace_edge (vertex_from : dfg_vertex) (vertex_to : dfg_vertex)
       (edge : dfg_edge) : unit =
-    let out_edges, _ = self#get_or_create_edges vertex_from in
-    graph <- NTTyMap.add vertex_from (NTTyMap.add vertex_to edge out_edges) graph;
+    let (out_edges, leaf_proof), _ = self#get_or_create_edges vertex_from in
+    graph <- NTTyMap.add vertex_from (NTTyMap.add vertex_to edge out_edges, leaf_proof) graph;
     let _, in_edges = self#get_or_create_edges vertex_to in
     rev_graph <- NTTyMap.add vertex_to (NTTySet.add vertex_from in_edges) rev_graph
+
+  method private replace_leaf_proof (vertex : dfg_vertex) (proof : string) : unit =
+    match self#get_or_create_edges vertex with
+    | (out_edges, None), _ ->
+      graph <- NTTyMap.add vertex (out_edges, Some proof) graph
+    | _ -> ()
 
   (** Adds edges from nt : ty to typings of used nonterminals and adds missing vertices. Returns
       whether an edge was added or updated. *)
@@ -73,7 +79,10 @@ class dfg = object(self)
     in
     (* updating out edges of current vertex *)
     let updated : bool ref = ref false in
-    let out_edges, _ = self#get_or_create_edges vertex in
+    let (out_edges, leaf_proof), _ = self#get_or_create_edges vertex in
+    if NTTyMap.is_empty used_nts then
+      self#replace_leaf_proof vertex proof
+    else
     used_nts |> NTTyMap.iter (fun vertex' _ ->
         match NTTyMap.find_opt vertex' out_edges with
         | Some (false, _, _) ->
@@ -119,7 +128,7 @@ class dfg = object(self)
     while not @@ NTTyMap.mem vertex1 !visited do
       (* this should not fail if vertex1 is reachable *)
       let vertex = Queue.pop queue in
-      NTTyMap.find vertex graph |> NTTyMap.iter (fun vertex' _ ->
+      (fst @@ NTTyMap.find vertex graph) |> NTTyMap.iter (fun vertex' _ ->
           if not @@ NTTyMap.mem vertex' !visited then
             begin
               visited := NTTyMap.add vertex' vertex !visited;
@@ -148,7 +157,7 @@ class dfg = object(self)
           while !result = None do
             (* this should not fail if there is a cycle containing vertex2 *)
             let vertex = Queue.pop queue in
-            NTTyMap.find vertex graph |> NTTyMap.iter (fun vertex' _ ->
+            (fst @@ NTTyMap.find vertex graph) |> NTTyMap.iter (fun vertex' _ ->
                 (* following only edges in the same SCC *)
                 if nt_ty_eq root @@ NTTyMap.find vertex' scc_roots then
                   if NTTyMap.mem vertex' !visited then
@@ -174,7 +183,7 @@ class dfg = object(self)
     let rec add_edges acc = function
       | vertex :: ((next_vertex :: _) as vertices) ->
         add_edges
-          ((vertex, NTTyMap.find vertex graph |> NTTyMap.find next_vertex) :: acc)
+          ((vertex, (fst @@ NTTyMap.find vertex graph) |> NTTyMap.find next_vertex) :: acc)
           vertices
       | [last_vertex] -> List.rev_append acc [(last_vertex, empty_dfg_edge)]
       | [] -> failwith "Unexpected empty path"
@@ -199,7 +208,7 @@ class dfg = object(self)
             begin
               visited := NTTySet.add vertex !visited;
               (* should exist *)
-              let out_edges = NTTyMap.find vertex graph in
+              let out_edges = fst @@ NTTyMap.find vertex graph in
               out_edges |> NTTyMap.iter (fun vertex' _ ->
                   visit vertex'
                 );
@@ -238,7 +247,7 @@ class dfg = object(self)
                     Some (root, vertex, vertex')
                   else
                     acc
-                ) (NTTyMap.find vertex graph) acc
+                ) (fst @@ NTTyMap.find vertex graph) acc
             ) !scc_roots None
         in
         match cycle_data with
@@ -285,9 +294,11 @@ class dfg = object(self)
       let vertex = Queue.pop queue in
       (* finding outgoing edges, i.e., sets of nonterminals used in proofs of nonterminal typing
          in the vertex *)
-      let edges = NTTyMap.find vertex graph in
-      match NTTyMap.bindings edges with
-      | (_, (_, some_used_nts, some_proof)) :: edges' ->
+      let edges, leaf_proof = NTTyMap.find vertex graph in
+      match leaf_proof, NTTyMap.bindings edges with
+      | Some proof, _ ->
+        res := proof :: !res
+      | None, (_, (_, some_used_nts, some_proof)) :: edges' ->
         (* Any of edges is sufficient to get a proof, so taking the one with least amount of
            unvisited vertices as a heuristic to get small amount of short proofs. *)
         let _, best_used_nts, best_proof =
@@ -309,13 +320,17 @@ class dfg = object(self)
                 Queue.push nt_ty queue
               end
           )
-      | [] -> ()
+      | None, [] -> failwith "Unexpected vertex with no leaf proof and no outgoing edges"
     done;
+    (* TODO for completeness non-cyclic proof of one of vertices on the cycle should be added.
+       However, this requires change to the construction of graph as edges containing different
+       sets of used nonterminals but not new unique edges are forgotten, and this includes
+       situations like dependency on A /\ B and then on B only being forgotten. *)
     !res
 
   (** The graph in printable form. *)
   method to_string (string_of_nt : nt_id -> string) : string =
-    NTTyMap.fold (fun (nt, ty) out_edges acc ->
+    NTTyMap.fold (fun (nt, ty) (out_edges, _) acc ->
         let edges_str =
           String.concat "; " @@ NTTyMap.fold (fun (nt', ty') (edge, _, _) acc ->
               (string_of_nt nt' ^ " : " ^ string_of_ty ty' ^ " (" ^

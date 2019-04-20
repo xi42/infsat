@@ -144,6 +144,12 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         | Some path -> raise_notrace @@ Positive_cycle_found path
         | None -> ()
       end
+    else
+      print_verbose !Flags.verbose_proofs @@ lazy (
+        "The duplicaton factor graph was not modified. Short discarded proof " ^
+        "(+ - positive duplication factor/multiple uses):\n" ^
+        short_proof
+      )
 
   method register_hterms_hty (id : hterms_id) (hty : hty) =
     (* TODO subtyping and overwriting logic *)
