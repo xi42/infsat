@@ -96,7 +96,7 @@ class typing (hg : hgrammar) = object(self)
                 (* Case without mask.
                    If there is a fixed_hty, it has to be filtered out. *)
                 let htys = if id = fixed_id then
-                    remove_first htys @@ hty_eq fixed_hty
+                    htys |> remove_first @@ hty_eq fixed_hty
                   else
                     htys
                 in
@@ -121,7 +121,7 @@ class typing (hg : hgrammar) = object(self)
                    because it will be present there in the product anyway and not removing it
                    would create duplicates. *)
                 let masked_htys = if id = fixed_id then
-                    remove_first masked_htys @@ hty_eq masked_fixed_hty
+                    masked_htys |> remove_first @@ hty_eq masked_fixed_hty
                   else
                     masked_htys
                 in

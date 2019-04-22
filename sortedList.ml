@@ -126,7 +126,7 @@ struct
   let uniq (L l) =
     let rec uniq_list l acc =
       match l with
-      | x :: ((y :: _) as l') ->
+      | x :: (y :: _ as l') ->
         if Ord.compare x y = 0 then
           uniq_list l' acc
         else

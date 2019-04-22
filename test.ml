@@ -43,7 +43,7 @@ let mk_grammar rules =
   let nonterminals = Array.mapi (fun i _ -> ("N" ^ string_of_int i, O)) rules in
   let g = new grammar nonterminals [||] rules in
   print_string @@ "Creating grammar:\n" ^
-                  g#grammar_info;
+                  g#grammar_info ^ "\n";
   EtaExpansion.eta_expand g;
   g
 

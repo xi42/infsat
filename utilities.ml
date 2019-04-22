@@ -43,9 +43,24 @@ let string_of_bool = function
   | true -> "true"
   | false -> "false"
 
-let print (str : string) : unit =
-  print_string str;
-  flush stdout
+let concat_map (sep : string) (f : 'a -> string) (s : 'a list) : string =
+  String.concat sep @@ List.map f s
+
+let concat_map_seq (sep : string) (f : 'a -> string) (s : 'a Seq.t) : string =
+  String.concat sep @@ List.of_seq @@ Seq.map f s
+
+(** Change list to string as it would be represented in OCaml using custom function to change each
+    element to string. *)
+let string_of_list (p : 'a -> string) (l : 'a list) : string =
+  match l with
+  | [] -> "[]"
+  | [x] -> "[" ^ p x ^ "]"
+  | x :: l' ->
+    "[" ^
+    (List.fold_left (fun acc x ->
+         acc ^ "; " ^ p x
+       ) (p x) l') ^
+    "]"
 
 (* --- tuples --- *)
 
@@ -147,7 +162,7 @@ let index_list (l : 'a list) : (int * 'a) list =
   List.combine indices l
 
 (** Removes the first element in list l that satisfies f. *)
-let remove_first (l : 'a list) (f : 'a -> bool) : 'a list =
+let remove_first (f : 'a -> bool) (l : 'a list) : 'a list =
   let rec remove_first_aux l acc =
     match l with
     | [] -> List.rev acc
@@ -158,6 +173,15 @@ let remove_first (l : 'a list) (f : 'a -> bool) : 'a list =
         remove_first_aux l' (x :: acc)
   in
   remove_first_aux l []
+
+(** Removes elements from the front of the list as long as they don't satisfy the condition f. *)
+let rec remove_until (f : 'a -> bool) : 'a list -> 'a list = function
+  | [] -> []
+  | (x :: l') as l ->
+    if f x then
+      l
+    else
+      remove_until f l'
 
 (** Replaces i-th element of list l with r. *)
 let replace_nth (l : 'a list) (i : int) (r : 'a) : 'a list =
@@ -170,13 +194,14 @@ let replace_nth (l : 'a list) (i : int) (r : 'a) : 'a list =
   replace_nth_aux l i []
 
 (** Returns list without first nth elements. 0-indexed. *)
-let rec from_nth (l : 'a list) (nth : int) =
+let rec from_nth (nth : int) (l : 'a list) =
   if nth = 0 then
     l
   else
-    from_nth (List.tl l) (nth - 1)
+    from_nth (nth - 1) (List.tl l)
 
-let split_list (l : 'a list) (prefix_size : int) : 'a list * 'a list =
+(* Splits the list into first prefix_size elements and the rest. *)
+let split_list (prefix_size : int) (l : 'a list) : 'a list * 'a list =
   let rec split_list_aux rprefix postfix n =
     if n = 0 then
       (List.rev rprefix, postfix)
@@ -188,24 +213,11 @@ let split_list (l : 'a list) (prefix_size : int) : 'a list * 'a list =
   in
   split_list_aux [] l prefix_size
 
-(** Change list to string as it would be represented in OCaml using custom function to change each
-    element to string. *)
-let string_of_list (p : 'a -> string) (l : 'a list) : string =
-  match l with
-  | [] -> "[]"
-  | [x] -> "[" ^ p x ^ "]"
-  | x :: l' ->
-    "[" ^
-    (List.fold_left (fun acc x ->
-         acc ^ "; " ^ p x
-       ) (p x) l') ^
-    "]"
-
-let concat_map (sep : string) (f : 'a -> string) (s : 'a list) : string =
-  String.concat sep @@ List.map f s
-
-let concat_map_seq (sep : string) (f : 'a -> string) (s : 'a Seq.t) : string =
-  String.concat sep @@ List.of_seq @@ Seq.map f s
+(** Returns last element of a list. *)
+let rec last : 'a list -> 'a = function
+  | [x] -> x
+  | _ :: (x :: _ as l) -> last l
+  | [] -> failwith "Unexpected empty list in last"
 
 (* --- parsing --- *)
 

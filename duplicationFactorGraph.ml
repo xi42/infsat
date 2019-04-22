@@ -221,7 +221,7 @@ class dfg = object(self)
     in
     (* adding inward edges on the path, except for the first (start) node *)
     let rec add_edges acc = function
-      | vertex :: ((next_vertex :: _) as vertices) ->
+      | vertex :: (next_vertex :: _ as vertices) ->
         add_edges
           ((vertex, (fst @@ NTTyMap.find vertex graph) |> NTTyMap.find next_vertex) :: acc)
           vertices
@@ -309,56 +309,71 @@ class dfg = object(self)
     let visited : NTTySet.t ref =
       ref @@ NTTySet.of_list @@ List.map fst path
     in
-    let count_unvisited_nts (used_nts : NTTySet.t) : int =
-      NTTySet.cardinal @@ NTTySet.diff used_nts !visited
+    (* LIFO is used instead of FIFO because it produces better readability with relevant
+       proofs next to each other, and there is only one solution when following first proofs
+       anyway *)
+    let queue : dfg_vertex Stack.t = Stack.create () in
+    let add_to_queue_if_not_visited vertex =
+      if not @@ NTTySet.mem vertex !visited then
+        begin
+          visited := NTTySet.add vertex !visited;
+          Stack.push vertex queue
+        end
     in
     (* adding to queue all required nonterminals *)
-    let queue : nt_ty Queue.t = Queue.create () in
     path |> List.iter (fun (_, (_, used_nts, _)) ->
-        used_nts |> NTTySet.iter (fun vertex ->
-            if not @@ NTTySet.mem vertex !visited then
-              begin
-                visited := NTTySet.add vertex !visited;
-                Queue.push vertex queue
-              end
-          )
+        used_nts |> NTTySet.iter add_to_queue_if_not_visited
       );
     (* gathering proofs for vertices not on the path *)
     let res : string list ref = ref [] in
-    while not @@ Queue.is_empty queue do
-      let vertex = Queue.pop queue in
+    (* adding first node of escape path *)
+    let cycle_border = fst @@ last path in
+    let cycle_vertices = List.tl @@ remove_until (nt_ty_eq cycle_border) @@ List.map fst path in
+    (* there must be at least one leaf proof or first proof that does not use vertices in
+       the cycle, otherwise first proofs would form a cycle - the one with least amount of
+       dependencies is used *)
+    let best_leaf : dfg_leaf option ref = ref None in
+    cycle_vertices |> List.iter (fun vertex ->
+        match !best_leaf, snd @@ NTTyMap.find vertex graph with
+        | Some (LeafProof _), _ -> ()
+        | Some (FirstProof _), (LeafProof _ as better_leaf) ->
+          best_leaf := Some better_leaf
+        | leaf, (FirstProof (used_nts, proof) as better_leaf) ->
+          if not @@ (
+              cycle_vertices |> List.exists (fun vertex -> NTTySet.mem vertex used_nts)
+            ) then
+            begin
+              match leaf with
+              | None -> best_leaf := Some better_leaf
+              | Some (FirstProof (used_nts', _)) ->
+                if NTTySet.cardinal used_nts < NTTySet.cardinal used_nts' then
+                  best_leaf := Some better_leaf
+              | Some (LeafProof _) -> failwith "Unexpected leaf proof"
+            end
+        | _, _ -> ()
+      );
+    begin
+      match !best_leaf with
+      | Some (LeafProof proof) ->
+        res := proof :: !res
+      | Some (FirstProof (used_nts, proof)) ->
+        res := proof :: !res;
+        used_nts |> NTTySet.iter add_to_queue_if_not_visited
+      | None -> failwith "Did not find an escape path";
+    end;
+    while not @@ Stack.is_empty queue do
+      let vertex = Stack.pop queue in
       (* finding outgoing edges, i.e., sets of nonterminals used in proofs of nonterminal typing
          in the vertex *)
-      let out_edges, leaf = NTTyMap.find vertex graph in
-      match leaf with
+      match snd @@ NTTyMap.find vertex graph with
       | LeafProof proof ->
         res := proof :: !res
-      | FirstProof (some_used_nts, some_proof) ->
-        (* Any of edges is sufficient to get a proof, so taking the one with least amount of
-           unvisited vertices as a heuristic to get small amount of short proofs. *)
-        let _, best_used_nts, best_proof =
-          Seq.fold_left (fun ((min_count, _, _) as acc) (_, (_, used_nts, proof)) ->
-              let c = count_unvisited_nts used_nts in
-              if c < min_count then
-                (c, used_nts, proof)
-              else
-                acc
-            ) (count_unvisited_nts some_used_nts, some_used_nts, some_proof) @@
-          NTTyMap.to_seq out_edges
-        in
-        (* Found a proof with least amount of unvisited vertices. Adding these vertices to the
-           queue and the proof to the result. *)
-        res := best_proof :: !res;
-        NTTySet.diff best_used_nts !visited |> NTTySet.iter (fun nt_ty ->
-            visited := NTTySet.add nt_ty !visited;
-            Queue.push nt_ty queue
-          )
+      | FirstProof (used_nts, proof) ->
+        res := proof :: !res;
+        NTTySet.diff used_nts !visited |> NTTySet.iter add_to_queue_if_not_visited
     done;
-    (* TODO for completeness non-cyclic proof of one of vertices on the cycle should be added.
-       However, this requires change to the construction of graph as edges containing different
-       sets of used nonterminals but not new unique edges are forgotten, and this includes
-       situations like dependency on A /\ B and then on B only being forgotten. *)
-    !res
+    (* it's more readable when following the order it was added in *)
+    List.rev !res
 
   (** The graph in printable form. *)
   method to_string (string_of_nt : nt_id -> string) : string =

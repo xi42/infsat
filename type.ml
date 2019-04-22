@@ -92,14 +92,14 @@ let split_ty (f : ty) (k : int) : ity list * ty =
   match k, f with
   | 0, _ -> ([], f)
   | _, Fun (_, args, productivity) ->
-    let args1, args2 = split_list args k in
+    let args1, args2 = split_list k args in
     (args1, mk_fun args2 productivity)
 
 (** Returns functional type ty with first count arguments removed *)
 let remove_args (ty : ty) (count : int) : ty =
   match count, ty with
   | 0, _ -> ty
-  | _, Fun (_, args, p) -> mk_fun (from_nth args count) p
+  | _, Fun (_, args, p) -> mk_fun (from_nth count args) p
 
 (** Alias for singleton intersection types. *)
 let sty : ty -> ity = TyList.singleton
