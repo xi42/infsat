@@ -3,13 +3,24 @@ open TargetEnvms
 open Type
 open Utilities
 
+module NTTySet = struct
+  include Set.Make (struct
+      type t = nt_ty
+      let compare = nt_ty_compare
+    end)
+
+  let set_of_map_keys (m : 'a NTTyMap.t) : t =
+    of_seq @@ Seq.map fst @@ NTTyMap.to_seq m
+end
+
 (** Nonterminal and its typing. *)
 type dfg_vertex = nt_ty
 (** Positiveness of the edge, list of typings used in the proof, and the proof itself. *)
-type dfg_edge = bool * used_nts * string
+type dfg_edge = bool * NTTySet.t * string
 type dfg_path = (dfg_vertex * dfg_edge) list
+type dfg_leaf = FirstProof of NTTySet.t * string | LeafProof of string
 
-let empty_dfg_edge : dfg_edge = (false, empty_used_nts, "")
+let empty_dfg_edge : dfg_edge = (false, NTTySet.empty, "")
 
 let rec string_of_path (nt_name : nt_id -> string) (path : dfg_path) : string =
   let string_of_nt_ty (nt, ty : nt_ty) =
@@ -27,44 +38,19 @@ let rec string_of_path (nt_name : nt_id -> string) (path : dfg_path) : string =
     string_of_nt_ty nt_ty ^ edge_str ^ string_of_path nt_name path'
   | [] -> failwith "Unexpected empty path"
 
-module NTTySet = Set.Make (struct
-    type t = nt_ty
-    let compare = nt_ty_compare
-  end)
-
 (** Duplication Factor graph with typings of nonterminals (nt : ty) in vertices and edges to
     nonterminal typings used in one of proofs of that typing with boolean label whether the proof
     generated a new duplication factor (i.e., used typing of terminal a or had a duplication of a
     productive variable) or used a proof of typing of another nonterminal that was productive. *)
 class dfg = object(self)
-  (** List of edges to out-neighbours and leaf proofs of each vertex. *)
-  val mutable graph : (dfg_edge NTTyMap.t * string option) NTTyMap.t = NTTyMap.empty
+  (** List of edges to out-neighbours and either leaf proof or first proof for each vertex.
+      Leaf proofs are proofs of nonterminal typings that do not use other nonterminals. First
+      proof is the first typing the vertex had and is guaranteed to have a non-cyclic proof due
+      to non-recursiveness of saturation iteration with respect to known nonterminal typings. *)
+  val mutable graph : (dfg_edge NTTyMap.t * dfg_leaf) NTTyMap.t = NTTyMap.empty
 
   (** List of in-neighbours of each vertex with label whether the edge is positive. *)
   val mutable rev_graph : NTTySet.t NTTyMap.t = NTTyMap.empty
-
-  method private get_or_create_edges (vertex : nt_id * ty) =
-    match NTTyMap.find_opt vertex graph, NTTyMap.find_opt vertex rev_graph with
-    | Some edges1, Some edges2 -> (edges1, edges2)
-    | _, _ ->
-      let out_edges = (NTTyMap.empty, None) in
-      graph <- NTTyMap.add vertex out_edges graph;
-      let in_edges = NTTySet.empty in
-      rev_graph <- NTTyMap.add vertex in_edges rev_graph;
-      (out_edges, in_edges)
-
-  method private replace_edge (vertex_from : dfg_vertex) (vertex_to : dfg_vertex)
-      (edge : dfg_edge) : unit =
-    let (out_edges, leaf_proof), _ = self#get_or_create_edges vertex_from in
-    graph <- NTTyMap.add vertex_from (NTTyMap.add vertex_to edge out_edges, leaf_proof) graph;
-    let _, in_edges = self#get_or_create_edges vertex_to in
-    rev_graph <- NTTyMap.add vertex_to (NTTySet.add vertex_from in_edges) rev_graph
-
-  method private replace_leaf_proof (vertex : dfg_vertex) (proof : string) : unit =
-    match self#get_or_create_edges vertex with
-    | (out_edges, None), _ ->
-      graph <- NTTyMap.add vertex (out_edges, Some proof) graph
-    | _ -> ()
 
   (** Adds edges from nt : ty to typings of used nonterminals and adds missing vertices. Returns
       whether an edge was added or updated. *)
@@ -77,35 +63,89 @@ class dfg = object(self)
         acc + (1 + int_of_bool multi) * int_of_bool (is_productive @@ snd vertex')
       ) used_nts 0
     in
+    (* function to compute edge positiveness for given vertex *)
+    let edge_pos_for_vertex (vertex' : dfg_vertex) : bool =
+      positive || pr_nts_count > 1 ||
+      pr_nts_count = 1 && not @@ is_productive @@ snd vertex'
+    in
+    let out_vertices = NTTySet.set_of_map_keys used_nts in
     (* updating out edges of current vertex *)
-    let updated : bool ref = ref false in
-    let (out_edges, leaf_proof), _ = self#get_or_create_edges vertex in
-    if NTTyMap.is_empty used_nts then
-      self#replace_leaf_proof vertex proof
-    else
-    used_nts |> NTTyMap.iter (fun vertex' _ ->
-        match NTTyMap.find_opt vertex' out_edges with
-        | Some (false, _, _) ->
-          (* updating the edge and reverse edge if the edge already exists *)
-          let edge =
-            positive || pr_nts_count > 1 ||
-            pr_nts_count = 1 && not @@ is_productive @@ snd vertex'
-          in
-          if edge then
-            begin
-              self#replace_edge vertex vertex' (edge, used_nts, proof);
-              updated := true
-            end
-        | Some (true, _, _) -> ()
-        | None ->
-          let edge =
-            positive || pr_nts_count > 1 ||
-            pr_nts_count = 1 && not @@ is_productive @@ snd vertex'
-          in
-          self#replace_edge vertex vertex' (edge, used_nts, proof);
-          updated := true
-      );
-    !updated
+    match NTTyMap.is_empty used_nts, NTTyMap.find_opt vertex graph with
+    (* There are nonterminal dependencies, so adding missing edges and adding the vertex
+       with first proof if it doesn't exist yet. *)
+    | false, Some (out_edges, leaf) ->
+      let updated : bool ref = ref false in
+      (* computing new out_edges for vertex and new rev_graph *)
+      let out_edges', rev_graph' =
+        NTTySet.fold (fun vertex' (out_edges, rev_graph) ->
+            match edge_pos_for_vertex vertex', NTTyMap.find_opt vertex' out_edges with
+            | true as edge_pos, Some (false, _, _) ->
+              (* updating the edge (but not reverse edge, since it already exists) if the edge
+                 already exists but is not positive *)
+              let edge = (edge_pos, out_vertices, proof) in
+              let out_edges = NTTyMap.add vertex' edge out_edges in
+              updated := true;
+              (out_edges, rev_graph)
+            | _, Some (true, _, _)
+            | false, Some (false, _, _) ->
+              (* doing nothing when edge already exists and has not lower positiveness *)
+              (out_edges, rev_graph)
+            | edge_pos, None ->
+              (* creating the edge and reverse edge if it does not exist *)
+              let edge = (edge_pos, out_vertices, proof) in
+              let out_edges = NTTyMap.add vertex' edge out_edges in
+              (* updating ingoing reverse edges from other vertices that should already
+                 exist, being dependencies *)
+              let in_edges = NTTyMap.find vertex' rev_graph in
+              let rev_graph = rev_graph |> NTTyMap.add vertex' @@ NTTySet.add vertex in_edges in
+              updated := true;
+              (out_edges, rev_graph)
+          ) out_vertices (out_edges, rev_graph)
+      in
+      if !updated then
+        begin
+          graph <- graph |> NTTyMap.add vertex (out_edges', leaf);
+          rev_graph <- rev_graph'
+        end;
+      !updated
+    | false, None ->
+      (* there is no vertex yet *)
+      let out_edges =
+        (NTTyMap.of_seq @@
+         Seq.map (fun vertex' ->
+             (vertex',
+              (edge_pos_for_vertex vertex',
+               out_vertices,
+               proof))
+           ) @@
+         NTTySet.to_seq out_vertices,
+         FirstProof (out_vertices, proof)
+        )
+      in
+      graph <- NTTyMap.add vertex out_edges graph;
+      (* updating ingoing reverse edges from other vertices that should already exist, being
+         dependencies *)
+      rev_graph <- NTTySet.fold (fun vertex' rev_graph ->
+          let in_edges = NTTyMap.find vertex' rev_graph in
+          NTTyMap.add vertex' (NTTySet.add vertex in_edges) rev_graph
+        ) out_vertices rev_graph;
+      (* adding new empty rev_graph vertex *)
+      rev_graph <- NTTyMap.add vertex NTTySet.empty rev_graph;
+      true
+    (* there are no nonterminal dependencies, so adding a leaf proof if it does not exist yet
+       or replacing the first proof with leaf proof *)
+    | true, Some (out_edges, LeafProof _) ->
+      (* there already exists a leaf proof *)
+      false
+    | true, Some (out_edges, FirstProof _) ->
+      (* there already exists a vertex, but not a leaf proof *)
+      graph <- NTTyMap.add vertex (out_edges, LeafProof proof) graph;
+      false
+    | true, None ->
+      (* there is no vertex yet *)
+      graph <- NTTyMap.add vertex (NTTyMap.empty, LeafProof proof) graph;
+      rev_graph <- NTTyMap.add vertex NTTySet.empty rev_graph;
+      false
 
   method private find_short_cycle_path (start_vertex : dfg_vertex)
       (scc_roots : dfg_vertex NTTyMap.t) (vertex1 : dfg_vertex)
@@ -269,22 +309,17 @@ class dfg = object(self)
     let visited : NTTySet.t ref =
       ref @@ NTTySet.of_list @@ List.map fst path
     in
-    let count_unvisited_nts (used_nts : used_nts) : int =
-      NTTyMap.fold (fun nt_ty _ acc ->
-          if NTTySet.mem nt_ty !visited then
-            acc
-          else
-            acc + 1
-        ) used_nts 0
+    let count_unvisited_nts (used_nts : NTTySet.t) : int =
+      NTTySet.cardinal @@ NTTySet.diff used_nts !visited
     in
     (* adding to queue all required nonterminals *)
     let queue : nt_ty Queue.t = Queue.create () in
     path |> List.iter (fun (_, (_, used_nts, _)) ->
-        used_nts |> NTTyMap.iter (fun nt_ty _ ->
-            if not @@ NTTySet.mem nt_ty !visited then
+        used_nts |> NTTySet.iter (fun vertex ->
+            if not @@ NTTySet.mem vertex !visited then
               begin
-                visited := NTTySet.add nt_ty !visited;
-                Queue.push nt_ty queue
+                visited := NTTySet.add vertex !visited;
+                Queue.push vertex queue
               end
           )
       );
@@ -294,33 +329,30 @@ class dfg = object(self)
       let vertex = Queue.pop queue in
       (* finding outgoing edges, i.e., sets of nonterminals used in proofs of nonterminal typing
          in the vertex *)
-      let edges, leaf_proof = NTTyMap.find vertex graph in
-      match leaf_proof, NTTyMap.bindings edges with
-      | Some proof, _ ->
+      let out_edges, leaf = NTTyMap.find vertex graph in
+      match leaf with
+      | LeafProof proof ->
         res := proof :: !res
-      | None, (_, (_, some_used_nts, some_proof)) :: edges' ->
+      | FirstProof (some_used_nts, some_proof) ->
         (* Any of edges is sufficient to get a proof, so taking the one with least amount of
            unvisited vertices as a heuristic to get small amount of short proofs. *)
         let _, best_used_nts, best_proof =
-          List.fold_left (fun ((min_count, _, _) as acc) (_, (_, used_nts, proof)) ->
+          Seq.fold_left (fun ((min_count, _, _) as acc) (_, (_, used_nts, proof)) ->
               let c = count_unvisited_nts used_nts in
               if c < min_count then
                 (c, used_nts, proof)
               else
                 acc
-            ) (count_unvisited_nts some_used_nts, some_used_nts, some_proof) edges'
+            ) (count_unvisited_nts some_used_nts, some_used_nts, some_proof) @@
+          NTTyMap.to_seq out_edges
         in
         (* Found a proof with least amount of unvisited vertices. Adding these vertices to the
            queue and the proof to the result. *)
         res := best_proof :: !res;
-        NTTyMap.to_seq best_used_nts |> Seq.iter (fun (nt_ty, _) ->
-            if not @@ NTTySet.mem nt_ty !visited then
-              begin
-                visited := NTTySet.add nt_ty !visited;
-                Queue.push nt_ty queue
-              end
+        NTTySet.diff best_used_nts !visited |> NTTySet.iter (fun nt_ty ->
+            visited := NTTySet.add nt_ty !visited;
+            Queue.push nt_ty queue
           )
-      | None, [] -> failwith "Unexpected vertex with no leaf proof and no outgoing edges"
     done;
     (* TODO for completeness non-cyclic proof of one of vertices on the cycle should be added.
        However, this requires change to the construction of graph as edges containing different
@@ -337,6 +369,6 @@ class dfg = object(self)
                string_of_int (int_of_bool edge) ^ ")") :: acc
             ) out_edges []
         in
-        acc ^ string_of_nt nt ^ " : " ^ string_of_ty ty ^ " -> " ^ edges_str ^ "\n"
+        acc ^ string_of_nt nt ^ " : " ^ string_of_ty ty ^ " => " ^ edges_str ^ "\n"
       ) graph ""
 end
