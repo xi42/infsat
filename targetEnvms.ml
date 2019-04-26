@@ -1,26 +1,10 @@
 open GrammarCommon
 open Environment
 open Type
+open TypingCommon
 open Utilities
 
-type nt_ty = nt_id * ty
-
-let nt_ty_compare : nt_ty -> nt_ty -> int =
-  Utilities.compare_pair Pervasives.compare Ty.compare
-
-let nt_ty_eq (nt1, ty1 : nt_ty) (nt2, ty2 : nt_ty) : bool =
-  nt1 = nt2 && Ty.equal ty1 ty2
-
 (** Map from used nonterminal typings to whether they were used twice or more. *)
-module NTTyMap = struct
-  include Map.Make (struct
-      type t = nt_id * ty
-      let compare = nt_ty_compare
-    end)
-
-  let of_list (l : (key * 'a) list) : 'a t = of_seq @@ List.to_seq l
-end
-
 type used_nts = bool NTTyMap.t
 
 let empty_used_nts : used_nts = NTTyMap.empty
@@ -55,14 +39,14 @@ let string_of_envm (envm : envm) : string =
       ""
     else
       " NTS " ^ (NTTyMap.bindings envm.used_nts |>
-                 Utilities.string_of_list (fun ((nt, ty), multi) ->
+                 Utilities.string_of_list (fun (nt_ty, multi) ->
                      let multi_info =
                        if multi then
                          " (multiple)"
                        else
                          ""
                      in
-                     string_of_int nt ^ " : " ^ string_of_ty ty ^ multi_info
+                     string_of_nt_ty nt_ty ^ multi_info
                    )
                 )
   in

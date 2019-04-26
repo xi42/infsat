@@ -4,9 +4,11 @@ open Grammar
 open GrammarCommon
 open HGrammar
 open Profiling
+open Proof
 open Sort
 open TargetEnvms
 open Type
+open TypingCommon
 open Utilities
 
 type infsat_result = Infinite | Finite | Unknown
@@ -18,7 +20,7 @@ let string_of_infsat_result = function
 
 exception Max_iterations_reached
 
-exception Positive_cycle_found of DuplicationFactorGraph.dfg_path
+exception Positive_cycle_found of cycle_proof
 
 class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   (* Design note: typing with specific environments occurs in Typing, but this module is used to
@@ -99,46 +101,22 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         );
         SetQueue.enqueue prop_nt_queue nt
       end;
-    let short_proof =
-      if !Flags.verbose_typing then
-        begin
-          let positive_info =
-            if envm.positive then
-              " (+)"
-            else
-              ""
-          in
-          let vars_info =
-            array_listmap envm.env#get_var_itys (fun i ity ->
-                hg#var_name (nt, i) ^ " : " ^ string_of_ity ity
-              )
-          in
-          let nts_info =
-            NTTyMap.bindings envm.used_nts |> List.map (fun ((nt', ty'), multi) ->
-                let multi_info =
-                  if multi then
-                    " (+)"
-                  else
-                    ""
-                in
-                hg#nt_name nt' ^ " : " ^ string_of_ty ty' ^ multi_info
-              )
-          in
-          String.concat ",\n" (vars_info @ nts_info) ^ "\n|- " ^ hg#nt_name nt ^ " : " ^
-          hg#string_of_hterm false (hg#nt_body nt) ^ " : " ^ string_of_ty ty ^ positive_info
-        end
-      else
-        ""
-    in
+    let proof = {
+      derived = (nt, ty);
+      var_assumptions = envm.env#get_var_itys;
+      nt_assumptions = envm.used_nts;
+      positive = envm.positive;
+      initial = false
+    } in
     (* Adding the new typing to the graph and checking for positive cycle. This should
        be performed even if the typing is not new, since set of used nonterminals may be new. *)
-    if dfg#add_vertex nt ty envm.used_nts envm.positive short_proof then
+    if dfg#add_vertex proof then
       begin
         print_verbose !Flags.verbose_typing @@ lazy (
           "The duplication factor graph was updated by adding or modifying " ^
-          "an edge. Short proof for added edges " ^
+          "an edge. Proof for added edges " ^
           "(+ - positive duplication factor/multiple uses):\n" ^
-          short_proof
+          string_of_proof hg None proof
         );
         match dfg#find_positive_cycle hg#start_nt ty_pr with
         | Some path -> raise_notrace @@ Positive_cycle_found path
@@ -146,9 +124,9 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       end
     else
       print_verbose !Flags.verbose_proofs @@ lazy (
-        "The duplicaton factor graph was not modified. Short discarded proof " ^
+        "The duplicaton factor graph was not modified. Discarded proof " ^
         "(+ - positive duplication factor/multiple uses):\n" ^
-        short_proof
+        string_of_proof hg None proof
       )
 
   method register_hterms_hty (id : hterms_id) (hty : hty) =
@@ -365,16 +343,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         dfg#to_string hg#nt_name ^ "\n" ^
         "Computed result after " ^ string_of_int iteration ^ " iterations.\n" ^
         "The input HORS contains paths with arbitrarily many counted terminals.\n" ^
-        "A path in the Duplication Factor Graph proving infiniteness:\n" ^
-        DuplicationFactorGraph.string_of_path hg#nt_name cycle_path
-      );
-      print_verbose !Flags.verbose_typing @@ lazy (
-        "\nShort proofs for edges on the path " ^
-        "(+ - positive duplication factor/multiple uses):\n\n" ^
-        String.concat "\n\n" (dfg#get_proofs_on_path cycle_path) ^
-        "\n\nShort proofs for required typings of other vertices mentioned in proofs " ^
-        "on the path:\n\n" ^
-        String.concat "\n\n" (dfg#get_required_proofs cycle_path)
+        cycle_path#to_string hg
       );
       Infinite
     | Max_iterations_reached ->

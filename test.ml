@@ -1,4 +1,3 @@
-
 open Binding
 open DuplicationFactorGraph
 open Environment
@@ -8,9 +7,11 @@ open HGrammar
 open HtyStore
 open Main
 open OUnit2
+open Proof
 open TargetEnvms
 open Type
 open Typing
+open TypingCommon
 open Utilities
 
 (* --- helper functions --- *)
@@ -21,15 +22,21 @@ let init_flags () =
 
 let rec paths_equal path1 path2 =
   match path1, path2 with
-  | (nt_ty1, (true, _, _)) :: path1', (nt_ty2, (true, _, _)) :: path2'
-  | (nt_ty1, (false, _, _)) :: path1', (nt_ty2, (false, _, _)) :: path2' ->
+  | (nt_ty1, true) :: path1', (nt_ty2, true) :: path2'
+  | (nt_ty1, false) :: path1', (nt_ty2, false) :: path2' ->
     nt_ty_eq nt_ty1 nt_ty2 && paths_equal path1' path2'
   | [], [] -> true
   | _, _ -> false
 
-let assert_equal_paths (expected : (dfg_vertex * bool) list) =
-  assert_equal ~printer:(string_of_path string_of_int) ~cmp:paths_equal
-    (List.map (fun (nt_ty, edge) -> (nt_ty, (edge, NTTySet.empty, ""))) expected)
+let string_of_raw_path =
+  string_of_list (fun (vertex, edge_pos) ->
+      string_of_nt_ty vertex ^ " (" ^ string_of_int (int_of_bool edge_pos) ^ ")"
+    )
+
+let assert_equal_paths (expected : (dfg_vertex * bool) list) (cycle_proof : cycle_proof) =
+  assert_equal ~printer:string_of_raw_path ~cmp:paths_equal
+    expected
+    (cycle_proof#to_raw_edges)
 
 let assert_equal_envms envms1 envms2 =
   assert_equal ~printer:Envms.to_string ~cmp:Envms.equal
@@ -233,6 +240,14 @@ let utilities_test () : test =
       );
   ]
 
+let mk_proof nt ty nt_assumptions positive =
+  { derived = (nt, ty);
+    var_assumptions = [||];
+    nt_assumptions = nt_assumptions;
+    positive = positive;
+    initial = false
+  }
+
 let dfg_test () : test =
   "dfg" >::: [
     (* one node, no edges *)
@@ -240,7 +255,7 @@ let dfg_test () : test =
         assert_equal None @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 ty_np empty_used_nts false "";
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_np empty_used_nts false;
           dfg
         )#find_positive_cycle 0 ty_np
       );
@@ -250,9 +265,9 @@ let dfg_test () : test =
         assert_equal None @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 ty_np empty_used_nts false "";
-          ignore @@ dfg#add_vertex 0 ty_pr empty_used_nts true "";
-          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true "";
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_np empty_used_nts false;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr empty_used_nts true;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
         )#find_positive_cycle 0 ty_np
       );
@@ -263,8 +278,8 @@ let dfg_test () : test =
           [((0, ty_pr), true); ((0, ty_pr), false)] @@
         option_get @@ (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 ty_pr empty_used_nts true "";
-          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true "";
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr empty_used_nts true;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
         )#find_positive_cycle 0 ty_pr
       );
@@ -274,8 +289,8 @@ let dfg_test () : test =
         assert_equal None @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 ty_np empty_used_nts false "";
-          ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 0 ty_np) false "";
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_np empty_used_nts false;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_np (nt_ty_used_once 0 ty_np) false;
           dfg
         )#find_positive_cycle 0 ty_np
       );
@@ -287,13 +302,13 @@ let dfg_test () : test =
            ((3, ty_np), false); ((1, ty_np), false)] @@
         option_get @@ (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 3 ty_np empty_used_nts false "";
-          ignore @@ dfg#add_vertex 2 ty_pr (nt_ty_used_once 3 ty_np) false "";
-          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 2 ty_pr) true "";
-          ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 1 ty_np) false "";
-          ignore @@ dfg#add_vertex 4 ty_np (nt_ty_used_once 3 ty_np) false "";
-          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 4 ty_np) false "";
-          ignore @@ dfg#add_vertex 3 ty_np (nt_ty_used_once 1 ty_np) false "";
+          ignore @@ dfg#add_vertex @@ mk_proof 3 ty_np empty_used_nts false;
+          ignore @@ dfg#add_vertex @@ mk_proof 2 ty_pr (nt_ty_used_once 3 ty_np) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 1 ty_np (nt_ty_used_once 2 ty_pr) true;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_np (nt_ty_used_once 1 ty_np) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 4 ty_np (nt_ty_used_once 3 ty_np) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 1 ty_np (nt_ty_used_once 4 ty_np) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 3 ty_np (nt_ty_used_once 1 ty_np) false;
           dfg
         )#find_positive_cycle 0 ty_np
       );
@@ -305,13 +320,13 @@ let dfg_test () : test =
            ((3, ty_np), false); ((1, ty_np), false)] @@
         option_get @@ (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 3 ty_np empty_used_nts false "";
-          ignore @@ dfg#add_vertex 2 ty_pr (nt_ty_used_once 3 ty_np) false "";
-          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 2 ty_pr) false "";
-          ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 1 ty_np) false "";
-          ignore @@ dfg#add_vertex 4 ty_np (nt_ty_used_once 3 ty_np) false "";
-          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 4 ty_np) true "";
-          ignore @@ dfg#add_vertex 3 ty_np (nt_ty_used_once 1 ty_np) false "";
+          ignore @@ dfg#add_vertex @@ mk_proof 3 ty_np empty_used_nts false;
+          ignore @@ dfg#add_vertex @@ mk_proof 2 ty_pr (nt_ty_used_once 3 ty_np) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 1 ty_np (nt_ty_used_once 2 ty_pr) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_np (nt_ty_used_once 1 ty_np) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 4 ty_np (nt_ty_used_once 3 ty_np) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 1 ty_np (nt_ty_used_once 4 ty_np) true;
+          ignore @@ dfg#add_vertex @@ mk_proof 3 ty_np (nt_ty_used_once 1 ty_np) false;
           dfg
         )#find_positive_cycle 0 ty_np
       );
@@ -321,14 +336,14 @@ let dfg_test () : test =
         assert_equal None @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 1 ty_np empty_used_nts false "";
-          ignore @@ dfg#add_vertex 5 ty_np (nt_ty_used_once 1 ty_np) false "";
-          ignore @@ dfg#add_vertex 4 ty_np (nt_ty_used_once 5 ty_np) false "";
-          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 4 ty_np) false "";
-          ignore @@ dfg#add_vertex 3 ty_np empty_used_nts false "";
-          ignore @@ dfg#add_vertex 2 ty_pr (nt_ty_used_once 3 ty_np) false "";
-          ignore @@ dfg#add_vertex 1 ty_np (nt_ty_used_once 2 ty_pr) true "";
-          ignore @@ dfg#add_vertex 0 ty_np (nt_ty_used_once 1 ty_np) false "";
+          ignore @@ dfg#add_vertex @@ mk_proof 1 ty_np empty_used_nts false;
+          ignore @@ dfg#add_vertex @@ mk_proof 5 ty_np (nt_ty_used_once 1 ty_np) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 4 ty_np (nt_ty_used_once 5 ty_np) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 1 ty_np (nt_ty_used_once 4 ty_np) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 3 ty_np empty_used_nts false;
+          ignore @@ dfg#add_vertex @@ mk_proof 2 ty_pr (nt_ty_used_once 3 ty_np) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 1 ty_np (nt_ty_used_once 2 ty_pr) true;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_np (nt_ty_used_once 1 ty_np) false;
           dfg
         )#find_positive_cycle 0 ty_np
       );
@@ -339,9 +354,9 @@ let dfg_test () : test =
           [((0, ty_pr), true); ((0, ty_pr), false)] @@
         option_get @@ (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 ty_pr empty_used_nts true "";
-          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true "";
-          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) false "";
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr empty_used_nts true;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr (nt_ty_used_once 0 ty_pr) false;
           dfg
         )#find_positive_cycle 0 ty_pr
       );
@@ -351,8 +366,8 @@ let dfg_test () : test =
         assert_equal None @@
         (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 ty_pr empty_used_nts true "";
-          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 0 ty_pr) true "";
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr empty_used_nts true;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
         )#find_positive_cycle 0 ty_np
       );
@@ -363,9 +378,9 @@ let dfg_test () : test =
           [((0, ty_pr), true); ((1, ty_pr), true); ((0, ty_pr), false)] @@
         option_get @@ (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 1 ty_pr empty_used_nts true "";
-          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 1 ty_pr) true "";
-          ignore @@ dfg#add_vertex 1 ty_pr (nt_ty_used_once 0 ty_pr) true "";
+          ignore @@ dfg#add_vertex @@ mk_proof 1 ty_pr empty_used_nts true;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr (nt_ty_used_once 1 ty_pr) true;
+          ignore @@ dfg#add_vertex @@ mk_proof 1 ty_pr (nt_ty_used_once 0 ty_pr) true;
           dfg
         )#find_positive_cycle 0 ty_pr
       );
@@ -376,13 +391,13 @@ let dfg_test () : test =
           [((0, ty_pr), false); ((4, ty_pr), false); ((3, ty_pr), true); ((0, ty_pr), false)] @@
         option_get @@ (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 ty_pr empty_used_nts false "";
-          ignore @@ dfg#add_vertex 3 ty_pr (nt_ty_used_once 0 ty_pr) true "";
-          ignore @@ dfg#add_vertex 2 ty_pr (nt_ty_used_once 3 ty_pr) false "";
-          ignore @@ dfg#add_vertex 1 ty_pr (nt_ty_used_once 2 ty_pr) false "";
-          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 1 ty_pr) false "";
-          ignore @@ dfg#add_vertex 4 ty_pr (nt_ty_used_once 3 ty_pr) false "";
-          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 4 ty_pr) false "";
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr empty_used_nts false;
+          ignore @@ dfg#add_vertex @@ mk_proof 3 ty_pr (nt_ty_used_once 0 ty_pr) true;
+          ignore @@ dfg#add_vertex @@ mk_proof 2 ty_pr (nt_ty_used_once 3 ty_pr) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 1 ty_pr (nt_ty_used_once 2 ty_pr) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr (nt_ty_used_once 1 ty_pr) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 4 ty_pr (nt_ty_used_once 3 ty_pr) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr (nt_ty_used_once 4 ty_pr) false;
           dfg
         )#find_positive_cycle 0 ty_pr
       );
@@ -393,13 +408,13 @@ let dfg_test () : test =
           [((0, ty_pr), false); ((1, ty_pr), false); ((2, ty_pr), true); ((0, ty_pr), false)] @@
         option_get @@ (
           let dfg = new dfg in
-          ignore @@ dfg#add_vertex 0 ty_pr empty_used_nts false "";
-          ignore @@ dfg#add_vertex 2 ty_pr (nt_ty_used_once 0 ty_pr) true "";
-          ignore @@ dfg#add_vertex 1 ty_pr (nt_ty_used_once 2 ty_pr) false "";
-          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 1 ty_pr) false "";
-          ignore @@ dfg#add_vertex 4 ty_pr (nt_ty_used_once 2 ty_pr) false "";
-          ignore @@ dfg#add_vertex 3 ty_pr (nt_ty_used_once 4 ty_pr) false "";
-          ignore @@ dfg#add_vertex 0 ty_pr (nt_ty_used_once 3 ty_pr) false "";
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr empty_used_nts false;
+          ignore @@ dfg#add_vertex @@ mk_proof 2 ty_pr (nt_ty_used_once 0 ty_pr) true;
+          ignore @@ dfg#add_vertex @@ mk_proof 1 ty_pr (nt_ty_used_once 2 ty_pr) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr (nt_ty_used_once 1 ty_pr) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 4 ty_pr (nt_ty_used_once 2 ty_pr) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 3 ty_pr (nt_ty_used_once 4 ty_pr) false;
+          ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr (nt_ty_used_once 3 ty_pr) false;
           dfg
         )#find_positive_cycle 0 ty_pr
       );

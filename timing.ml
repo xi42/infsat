@@ -19,7 +19,7 @@ let report_timings start_t end_t =
   print_verbose !Flags.verbose_profiling @@ lazy (
     let total_timings = List.fold_left (fun acc (_, time) -> acc +. time) 0.0 !timings in
     let other_time = max 0.0 @@ end_t -. start_t -. total_timings in
-    "Elapsed Time: " ^ string_of_float (end_t -. start_t) ^ "s\n" ^
+    "\nElapsed Time: " ^ string_of_float (end_t -. start_t) ^ "s\n" ^
     (List.rev !timings |> concat_map "\n" (fun (name, time) ->
          "  " ^ name ^ ": " ^ string_of_float time ^ "s"
        )) ^
