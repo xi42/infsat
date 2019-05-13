@@ -7,6 +7,8 @@ and midterm = MApp of midhead * midterm list
 type midrule = string * string list * midterm
 type midrules = midrule list
 
+module SS = Set.Make (String)
+
 let new_nt_id nt_counter =
   let x = !nt_counter in
   nt_counter := x + 1;
@@ -97,7 +99,6 @@ let midrules2rules nt_counter nt_names rules vinfo (midrules : midrules) =
   let midrules_indexed = index_list midrules in
   List.iter (midrule2rule nt_counter nt_names rules vinfo) midrules_indexed
 
-
 let add_auxiliary_rules nt_kinds rules =
   let num_of_nts = Array.length rules in
   let nt_kinds' = Array.make num_of_nts ("", O) in
@@ -153,8 +154,6 @@ let elim_fun_from_midrules fun_counter (rules : midrules) : midrules =
   in
   List.rev_append rules' newrules
 
-module SS = Set.Make (String)
-
 let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
   let rec b_tree_aux from_arg to_arg =
     if from_arg = to_arg then
@@ -170,15 +169,15 @@ let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
     else
       vars (k - 1) (("_" ^ string_of_int k) :: acc)
   in
-  if k = 0 then
-    (* converting terminal with no children to e *)
-    MApp (MT E, [])
-  else if k = 1 && List.length arg_terms = 0 && counted then
+  if k = 1 && List.length arg_terms = 0 && counted then
     (* converting counted terminal with no children and arity 1 to a *)
     MApp (MT A, [])
   else
     let (body, wrap_fun) =
-      if k = 1 && List.length arg_terms = 1 then
+      if k = 0 then
+        (* converting terminal with no children to e *)
+        (MApp (MT E, []), false)
+      else if k = 1 && List.length arg_terms = 1 then
         (* removing identities when terminal has one child *)
         (List.hd arg_terms, false)
       else if k = 2 then

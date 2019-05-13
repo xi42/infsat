@@ -1,0 +1,7 @@
+Grammar.
+S -> br (tr S S) q.
+End.
+
+Terminals.
+q -> 0 $.
+End.

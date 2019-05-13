@@ -168,3 +168,19 @@ q1 b -> (1,q1).
 q0 c -> true.
 q1 c -> true.
 %ENDATA
+
+TODO
+----
+* 3 versions of pretty printing of types:
+  (pr -> np) -> np -> pr
+  (pr, (np, (pr, o) -> o) -> (np, o) -> o)
+  (pr, (np, pr -> o) -> np -> o) where sort o is shortened (f, o) to f
+* external app to color matching parens to pipe infsat output through it
+* indexing different used typings of same variable or nonterminal, e.g.,
+  f#1: pr -> np
+  f#2: np /\ pr -> pr
+  X: np /\ pr
+  a: pr -> pr
+  |- f#1 (a (f#2 X)) : pr
+* add info about used typings of terminals, also indexed when needed, same example
+* ascii art with arrows showing the graph
