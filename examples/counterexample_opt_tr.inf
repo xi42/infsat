@@ -1,0 +1,20 @@
+Grammar.
+S ->
+  M X b (b c) X b (b c).
+M x1 s1 t1 x2 s2 t2 ->
+  br
+    (x2 (x1 (N s1 s2)) (tr (b t1) (b t2)))
+    (P (M x2 s2 t2)).
+N s1 s2 t3 ->
+  s1 (s2 t3).
+P y ->
+  y (y X) b (b c).
+X s3 t3 ->
+  s3 (b t3).
+End.
+
+Terminals.
+a -> 2 $.
+b -> 1 $.
+c -> 0.
+End.
