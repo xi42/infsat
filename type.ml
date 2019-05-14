@@ -146,15 +146,28 @@ let string_of_atom : productivity -> string = function
 
 let rec string_of_ty (ty : ty) : string =
   match ty with
-  | Fun (_, [], p) -> string_of_atom p
+  | Fun (_, [], p) ->
+    if !Flags.type_format = "full" then
+      "(" ^ string_of_atom p ^", o)"
+    else
+      string_of_atom p
   | Fun (_, args, p) ->
-    String.concat " -> " (List.map string_of_ity args) ^ " -> " ^ string_of_atom p
+    if !Flags.type_format = "short" then
+      String.concat " -> " (List.map string_of_ity args) ^ " -> " ^ string_of_atom p
+    else
+      "(" ^ string_of_atom p ^ ", " ^
+      String.concat " -> " (List.map string_of_ity args) ^ " -> o)"
 
 and string_of_ity (ity : ity) : string =
   let string_of_ty_w_parens ty =
     match ty with
     | Fun (_, [], _) -> string_of_ty ty
-    | Fun _ -> "(" ^ string_of_ty ty ^ ")"
+    | Fun _ ->
+      let s = string_of_ty ty in
+      if s.[0] = '(' then
+        s
+      else
+        "(" ^ string_of_ty ty ^ ")"
   in
   let ity_list = TyList.to_list ity in
   match ity_list with
@@ -165,7 +178,7 @@ and string_of_ity (ity : ity) : string =
     ) "" ity'
 
 (** The reverse of string_of_ty. Input must be exactly like the one returned by string_of_ty
-    except for whitespace or else the behavior is undefined. *)
+    with short format except for whitespace or else the behavior is undefined. *)
 let rec ty_of_string (ty_str : string) : ty =
   let rec ty_of_string_aux (ty_str : string) (args : ity list) : ty =
     match args, String.trim ty_str with

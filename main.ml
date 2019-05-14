@@ -21,6 +21,14 @@ let options = [
   ("-vprof", Arg.Set Flags.verbose_profiling, "Enables verbose profiling");
   ("-maxiters", Arg.Set_int Flags.maxiters,
    "Maximum number of saturation iterations before giving up");
+  ("-tf", Arg.Symbol (
+      ["full"; "shortened"; "short"],
+      fun f -> Flags.type_format := f
+    ),
+   "Format in which types will be printed. \"full\" for " ^
+   "(pr, (np, (pr, o) -> o) -> (np, o) -> o), \"shortened\" for " ^
+   "(pr, (np, pr -> o) -> np -> o), or \"short\" for (pr -> np) -> np -> pr. " ^
+   "Default is \"full\".");
 ]
 
 (** Parses a file to HORS prerules and automata definition. *)

@@ -10,6 +10,7 @@ let normalization_depth = ref 1
 let quiet : bool ref = ref false
 (* 0 is infinite *)
 let maxiters : int ref = ref 0
+let type_format : string ref = ref "full"
 
 let propagate_flags () : unit =
   if !verbose_all then

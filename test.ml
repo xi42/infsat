@@ -18,6 +18,7 @@ open Utilities
 
 let init_flags () =
   Flags.verbose_all := false;
+  Flags.type_format := "short";
   Flags.propagate_flags ()
 
 let rec paths_equal path1 path2 =
