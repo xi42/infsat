@@ -3,7 +3,7 @@ SOURCE_GEN = infSatParser.mli infSatParser.ml infSatLexer.ml
 SOURCE_POST = grammarCommon.ml grammar.ml conversion.ml etaExpansion.ml hGrammar.ml binding.ml cfa.ml type.ml typingCommon.ml proof.ml htyStore.ml environment.ml targetEnvms.ml typing.ml duplicationFactorGraph.ml saturation.ml main.ml
 SOURCE = $(SOURCE_PRE) $(SOURCE_GEN) $(SOURCE_POST)
 
-all: infsat
+all: infsat parencol
 
 install-dependencies:
 	opam install oUnit utop
@@ -39,6 +39,9 @@ test: $(SOURCE) test.ml test_wrapper.ml
 run-test: test
 	./$^ -runner sequential -no-cache-filename -no-output-file
 
+parencol: parencol.c
+	gcc -o $@ $^
+
 TAGS: $(SOURCE)
 	ctags -e $(SOURCE)
 
@@ -52,4 +55,4 @@ doc: $(SOURCE)
 	all install-dependencies run-test clean
 
 clean:
-	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof-debug test oUnit-*
+	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof-debug test oUnit-* parencol

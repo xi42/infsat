@@ -10,6 +10,7 @@ infsat
 infsat-g
 infsat-debug
 infsat-prof-debug
+parencol
 *.out
 *.callgrind
 *.cpuprofile
