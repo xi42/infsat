@@ -171,11 +171,6 @@ q1 c -> true.
 
 TODO
 ----
-* 3 versions of pretty printing of types:
-  (pr -> np) -> np -> pr
-  (pr, (np, (pr, o) -> o) -> (np, o) -> o)
-  (pr, (np, pr -> o) -> np -> o) where sort o is shortened (f, o) to f
-* external app to color matching parens to pipe infsat output through it
 * indexing different used typings of same variable or nonterminal, e.g.,
   f#1: pr -> np
   f#2: np /\ pr -> pr
