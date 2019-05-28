@@ -171,11 +171,4 @@ q1 c -> true.
 
 TODO
 ----
-* indexing different used typings of same variable or nonterminal, e.g.,
-  f#1: pr -> np
-  f#2: np /\ pr -> pr
-  X: np /\ pr
-  a: pr -> pr
-  |- f#1 (a (f#2 X)) : pr
-* add info about used typings of terminals, also indexed when needed, same example
 * ascii art with arrows showing the graph
