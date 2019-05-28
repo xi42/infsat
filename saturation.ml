@@ -136,7 +136,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       begin
         print_verbose !Flags.verbose_typing @@ lazy (
           "Registering new typing of hterms " ^ string_of_int id ^ ": " ^
-          hg#string_of_hterms id ^ " : " ^
+          hg#string_of_hterms HlocMap.empty id ^ " : " ^
           string_of_hty hty
         );
         TwoLayerQueue.enqueue prop_hterms_hty_queue id hty

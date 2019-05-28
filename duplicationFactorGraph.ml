@@ -1,6 +1,6 @@
 open GrammarCommon
+open HGrammar
 open Proof
-open TargetEnvms
 open Type
 open TypingCommon
 open Utilities

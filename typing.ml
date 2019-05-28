@@ -304,7 +304,8 @@ class typing (hg : hgrammar) = object(self)
         | Some target -> " : " ^ string_of_ty target;
         | None -> ""
       in
-      "Inferring environment for " ^ hg#string_of_hterm true hterm ^ target_info ^ vars_info
+      "Inferring environment for " ^ hg#string_of_hterm true HlocMap.empty hterm ^
+      target_info ^ vars_info
     );
     let var_count = match env_data with
       | Left env -> env#var_count
@@ -387,7 +388,7 @@ class typing (hg : hgrammar) = object(self)
           " type checks with the following targets and environments: " ^
           TargetEnvms.to_string res
       in
-      hg#string_of_hterm true hterm ^ check_info
+      hg#string_of_hterm true HlocMap.empty hterm ^ check_info
     );
     res
 
@@ -425,7 +426,7 @@ class typing (hg : hgrammar) = object(self)
        * flag to choose optimization in order to benchmark them later *)
     (* Iteration over each possible typing of the head *)
     List.fold_left TargetEnvms.union TargetEnvms.empty @@
-    (self#annotate_args args loc h_data |> List.map (fun (args, h_target, envm) ->
+    (self#annotate_args args (loc + 1) h_data |> List.map (fun (args, h_target, envm) ->
          (* computing targets *)
          let head_pr = is_productive h_target in
          let pr_target, np_target = match target with
@@ -462,7 +463,8 @@ class typing (hg : hgrammar) = object(self)
            in
            "* Type checking " ^
            String.concat " -> " (args |> List.map (fun (arg_term, (arg_ity, _)) ->
-               "(" ^ hg#string_of_hterm true arg_term ^ " : " ^ string_of_ity arg_ity ^ ")"
+               "(" ^ hg#string_of_hterm true HlocMap.empty arg_term ^ " : " ^
+               string_of_ity arg_ity ^ ")"
              )) ^
            head_info
          );
@@ -492,7 +494,7 @@ class typing (hg : hgrammar) = object(self)
                   (fun te arg_ty ->
                      print_verbose !Flags.verbose_proofs @@ lazy (
                        "* Typing argument " ^
-                       hg#string_of_hterm true arg_term ^ " : " ^
+                       hg#string_of_hterm true HlocMap.empty arg_term ^ " : " ^
                        string_of_ity arg_ity
                      );
                      indent (+1);

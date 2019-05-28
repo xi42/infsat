@@ -27,48 +27,141 @@ let proof_compare (ignore_initial : bool) (proof1 : proof) (proof2 : proof) : in
     ((proof1.derived, proof1.nt_assumptions), (proof1.positive, proof1.initial || ignore_initial))
     ((proof2.derived, proof2.nt_assumptions), (proof2.positive, proof2.initial || ignore_initial))
 
+type loc_combinations = SingleLocCombination of int HlocMap.t | MultiLocCombination of HlocSet.t
+
 let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
     (proof : proof) : string =
   let nt, ty = proof.derived in
-  let proof_id =
+  let hterm = hg#nt_body nt in
+  let proof_id_title =
     match proof_ids with
     | Some proof_ids ->
       let proof_id = NTTyInitMap.find (proof.derived, proof.initial) proof_ids in
-      "(Proof " ^ string_of_int proof_id ^ ")"
+      "(Proof " ^ string_of_int proof_id ^ ")\n"
     | None -> ""
   in
   let vars_info =
     array_listmap proof.var_assumptions (fun i ity ->
-        hg#var_name (nt, i) ^ " : " ^ string_of_ity ity
+        [hg#var_name (nt, i) ^ " : " ^ string_of_ity ity]
+      )
+  in
+  let loc_combinations =
+    HeadMap.empty |>
+    NTTyMap.fold (fun (nt', _) locs' acc ->
+        acc |> HeadMap.update (HNT nt') (function
+            | Some (SingleLocCombination locs) as single ->
+              if HlocMap.equal (=) locs' locs then
+                single
+              else
+                Some (MultiLocCombination (
+                    HlocSet.union (HlocMap.keys_set locs) (HlocMap.keys_set locs')))
+            | Some (MultiLocCombination locs) ->
+              Some (MultiLocCombination (
+                  HlocSet.union locs (HlocMap.keys_set locs')))
+            | None -> Some (SingleLocCombination locs')
+          )
+      ) proof.nt_assumptions |> 
+    TTyMap.fold (fun (a, _) locs' acc ->
+        acc |> HeadMap.update (HT a) (function
+            | Some (SingleLocCombination locs) as single ->
+              if HlocMap.equal (=) locs' locs then
+                single
+              else
+                Some (MultiLocCombination (
+                    HlocSet.union (HlocMap.keys_set locs) (HlocMap.keys_set locs')))
+            | Some (MultiLocCombination locs) ->
+              Some (MultiLocCombination (
+                  HlocSet.union locs (HlocMap.keys_set locs')))
+            | None ->
+              if locs' |> HlocMap.exists (fun _ count -> count > 1) then
+                Some (MultiLocCombination (HlocMap.keys_set locs'))
+              else
+                Some (SingleLocCombination locs')
+          )
+      ) proof.t_assumptions
+  in
+  let loc2occ = hg#loc2occurenceMap hterm in
+  let multi_locs =
+    HeadMap.fold (fun _ combinations acc ->
+        match combinations with
+        | MultiLocCombination locs -> HlocSet.union acc locs
+        | SingleLocCombination _ -> acc
+      ) loc_combinations HlocSet.empty
+  in
+  let loc2mark =
+    loc2occ |>
+    HlocMap.mapi (fun loc occ ->
+        if HlocSet.mem loc multi_locs then
+          "#" ^ string_of_int (occ + 1)
+        else
+          ""
       )
   in
   let nts_info =
     NTTyMap.bindings proof.nt_assumptions |> List.map (fun ((nt', ty'), locs) ->
-        let multi_info =
-          if HlocMap.sum locs > 1 then
-            " (+)"
-          else
-            ""
-        in
+        (* add occurence mark iff there is are 2+ locations of a nonterminal with non-empty
+           and different different sets of types *)
         let proof_id' =
           match proof_ids with
           | Some proof_ids ->
-            (* There can still be two kinds of proofs - initial (first) and not.
-               First proofs always point at first proofs. Other proofs are proofs of
-               path to cycle and cycle itself, with all dependencies. So, the non-first
-               proof may point at first proof, but first proof will never point at non-first
-               proof unless there is no other choice. *)
+            (* There can still be two kinds of proofs - initial (first registered) and not.
+               Initial proofs can always point at initial proofs. Other proofs are proofs of
+               path to cycle and cycle itself, with all dependencies. So, the non-initial
+               proof may point at initial proof, but initial proof will never point at non-initial
+               proof unless it wasn't in the data. The dependency searched for is with the
+               same initial-ness, and, if it doesn't exist, with reverse initial-ness. *)
             let proof_id' =
               match NTTyInitMap.find_opt ((nt', ty'), proof.initial) proof_ids with
               | Some proof_id' -> proof_id'
-              | None ->
-                NTTyInitMap.find ((nt', ty'), not proof.initial) proof_ids
+              | None -> NTTyInitMap.find ((nt', ty'), not proof.initial) proof_ids
             in
             "(" ^ string_of_int proof_id' ^ ") "
           | None -> ""
         in
-        proof_id' ^ hg#nt_name nt' ^ " : " ^ string_of_ty ty' ^ multi_info
+        let some_loc = fst @@ List.hd @@ HlocMap.bindings locs in
+        if HlocSet.mem some_loc multi_locs then
+          let nonterminal_marks =
+            HlocMap.bindings locs |>
+            List.map (fun (loc, count) ->
+                let count_info =
+                  if count > 1 then
+                    " (x" ^ string_of_int count ^ ")"
+                  else
+                    ""
+                in
+                hg#nt_name nt' ^ "#" ^ string_of_int loc ^ count_info
+              )
+          in
+          [proof_id' ^ String.concat ", " nonterminal_marks ^ " : " ^ string_of_ty ty']
+        else
+          [proof_id' ^ hg#nt_name nt' ^ " : " ^ string_of_ty ty']
       )
+  in
+  let ts_info =
+    TTyMap.bindings proof.t_assumptions |> List.map (fun ((a, ty'), locs) ->
+        (* add occurence mark iff there is are 2+ locations of a nonterminal with non-empty
+           and different different sets of types *)
+        let some_loc = fst @@ List.hd @@ HlocMap.bindings locs in
+        if HlocSet.mem some_loc multi_locs then
+          let terminal_marks =
+            HlocMap.bindings locs |>
+            List.map (fun (loc, count) ->
+                let count_info =
+                  if count > 1 then
+                    " (x" ^ string_of_int count ^ ")"
+                  else
+                    ""
+                in
+                string_of_terminal a ^ "#" ^ string_of_int loc ^ count_info
+              )
+          in
+          ["(|-) " ^ String.concat ", " terminal_marks ^ " : " ^ string_of_ty ty']
+        else
+          ["(|-) " ^ string_of_terminal a ^ " : " ^ string_of_ty ty']
+      )
+  in
+  let annotated_hterm =
+    hg#string_of_hterm false loc2mark hterm
   in
   let positive_info =
     if proof.positive then
@@ -76,10 +169,14 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
     else
       ""
   in
-  proof_id ^ "\n" ^
-  String.concat ",\n" (vars_info @ nts_info) ^
-  "\n|- " ^ hg#nt_name nt ^ " = " ^ hg#string_of_hterm false (hg#nt_body nt) ^ " : " ^
-  string_of_ty ty ^ positive_info
+  let nt_app =
+    String.concat " " @@
+    hg#nt_name nt :: hg#var_names nt
+  in
+  proof_id_title ^
+  String.concat ",\n" (List.concat @@ ts_info @ nts_info @ vars_info) ^
+  "\n|- " ^ nt_app ^ " = " ^ annotated_hterm ^ " : " ^
+  string_of_ty (codomain ty) ^ positive_info
 
 class cycle_proof (path_to_cycle : (proof * bool) list)
     (cycle : (proof * bool) list) (escape : proof) (proofs : proof list) = object(self)

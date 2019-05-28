@@ -18,6 +18,46 @@ type hterm = head * hterms_id list
     from root from left to right. *)
 type hloc = int
 
+module HeadMap = Map.Make (struct
+    type t = head
+    let compare = Pervasives.compare
+  end)
+
+module HlocSet = Set.Make (struct
+    type t = hloc
+    let compare = Pervasives.compare
+  end)
+
+module HlocMap = struct
+  include Map.Make (struct
+      type t = hloc
+      let compare = Pervasives.compare
+    end)
+
+  let string_of_int_binding (loc, count : hloc * int) : string =
+    let count_info =
+      if count = 1 then
+        ""
+      else
+        " (x" ^ string_of_int count ^ ")"
+    in
+    string_of_int loc ^ count_info
+
+  let sum (m : int t) : int =
+    fold (fun _ count acc -> count + acc) m 0
+
+  (** Comparison between two integer hloc maps where two maps are the same iff their sums are both
+      zero, both one, or both at least two. *)
+  let multi_compare (m1 : int t) (m2 : int t) : int =
+    Pervasives.compare (min (sum m1) 2) (min (sum m2) 2)
+
+  let sum_union : int t -> int t -> int t =
+    union (fun _ count1 count2 -> Some (count1 + count2))
+
+  let keys_set (m : 'a t) : HlocSet.t =
+    HlocSet.of_seq @@ Seq.map fst @@ to_seq m
+end
+
 class hgrammar (grammar : grammar) = object(self)
   (** Mapping from int ids to lists of terms. when tab_id_terms[i] = (hterms, terms, vars), then
       hterms is a list of terms [a1; a2; ..; aN], each in head form (h, [i1; i2; ..; iM]).
@@ -61,14 +101,6 @@ class hgrammar (grammar : grammar) = object(self)
   method nt_body (nt : nt_id) : hterm = nt_bodies.(nt)
 
   method hterms_count : int = next_hterms_id
-
-  (** Number of leafs in a hterm. *)
-  method hterm_size (_, ids : hterm) : int =
-    List.fold_left (fun acc id ->
-        List.fold_left (fun acc hterm ->
-            acc + self#hterm_size hterm
-          ) acc @@ self#id2hterms id
-      ) 1 ids
       
   method id2hterms (id : hterms_id) : hterm list =
     let hterms, _, _, _ = hterms_data.(id) in
@@ -109,6 +141,43 @@ class hgrammar (grammar : grammar) = object(self)
 
   method headvars_in_nt (nt : nt_id) : vars =
     headvars_in_term @@ snd @@ grammar#rule nt
+
+  (** Number of leafs in a hterm. *)
+  method hterm_size (_, ids : hterm) : int =
+    List.fold_left (fun acc id ->
+        List.fold_left (fun acc hterm ->
+            acc + self#hterm_size hterm
+          ) acc @@ self#id2hterms id
+      ) 1 ids
+
+  (** Number of occurences of a head in a hterm. *)
+  method count_head_in_hterm (h, ids : hterm) (h' : head) : int =
+    let head_count = int_of_bool (h = h') in
+    List.fold_left (fun acc id ->
+        List.fold_left (fun acc hterm ->
+            acc + self#count_head_in_hterm hterm h'
+          ) acc @@ self#id2hterms id
+      ) head_count ids
+
+  (** Map from hterm locations to 0-indexed occurence of the head. *)
+  method loc2occurenceMap (hterm : hterm) : int HlocMap.t =
+    let rec loc2occurenceMap (h, ids : hterm) (loc : hloc) (h2count : int HeadMap.t)
+        (loc2occ : int HlocMap.t) : hloc * int HeadMap.t * int HlocMap.t =
+      let h2count = HeadMap.update h (function
+          | None -> Some 0
+          | Some c -> Some (c + 1)
+        ) h2count
+      in
+      let occ = HeadMap.find h h2count in
+      let loc2occ = HlocMap.add loc occ loc2occ in
+      List.fold_left (fun acc id ->
+          List.fold_left (fun (loc, h2count, loc2occ) hterm ->
+              loc2occurenceMap hterm loc h2count loc2occ
+            ) acc @@ self#id2hterms id
+        ) (loc + 1, h2count, loc2occ) ids
+    in
+    let _, _, loc2occ = loc2occurenceMap hterm 0 HeadMap.empty HlocMap.empty in
+    loc2occ
 
   (** List of all nonterminals in terms without duplicates. *)
   method nt_in_terms (terms : term list) : nts =
@@ -167,7 +236,7 @@ class hgrammar (grammar : grammar) = object(self)
 
   method nts_in_hterms (nt : nt_id) : nts =
     let terms = self#id2terms nt in (* and is in applicative form list of terms,
-                                           and has variables vars *)
+                                       and has variables vars *)
     self#nt_in_terms terms
 
   (* --- construction --- *)
@@ -241,8 +310,9 @@ class hgrammar (grammar : grammar) = object(self)
     | HNT nt -> grammar#name_of_nt nt
     | HVar v -> grammar#name_of_var v
     | HT a -> string_of_terminal a
-
-  method string_of_hterm (sep_envs : bool) (hterm : hterm) : string =
+  
+  method string_of_hterm (sep_envs : bool) (loc2mark : string HlocMap.t)
+      (hterm : hterm) : string =
     let rec string_of_hterm_aux (is_arg : bool) (h, ids : hterm) : string =
       let arg_strs = (ids |> List.map (fun id ->
           let arg_str = self#id2hterms id |> concat_map " " (string_of_hterm_aux true) in
@@ -260,11 +330,15 @@ class hgrammar (grammar : grammar) = object(self)
     in
     string_of_hterm_aux false hterm
 
-  method string_of_hterms (id : hterms_id) : string =
-    Utilities.string_of_list (self#string_of_hterm false) @@ self#id2hterms id
+  method string_of_hterms (loc2mark : string HlocMap.t) (id : hterms_id) : string =
+    Utilities.string_of_list (self#string_of_hterm false loc2mark) @@ self#id2hterms id
 
   method var_name (v : var_id) : string =
     grammar#name_of_var v
+
+  method var_names (nt : nt_id) : string list =
+    Utilities.range 0 (self#nt_arity nt) |>
+    List.map (fun i -> self#var_name (nt, i))
   
   method to_string : string =
     "hterms_id -> terms:\n" ^

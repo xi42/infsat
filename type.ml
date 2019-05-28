@@ -77,8 +77,11 @@ let mk_fun (args : ity list) (productivity : productivity) : ty =
 let cons_fun (args : ity list) : ty -> ty = function
   | Fun (_, args', p) -> mk_fun (args @ args') p
 
-let rec is_productive : ty -> bool = function
+let is_productive : ty -> bool = function
   | Fun (_, _, p) -> p
+
+let codomain : ty -> ty = function
+  | Fun (_, _, p) -> mk_fun [] p
 
 let with_productivity (p : productivity) : ty -> ty = function
   | Fun (_, args, p') as ty ->
