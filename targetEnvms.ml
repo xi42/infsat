@@ -1,26 +1,42 @@
 open GrammarCommon
 open Environment
+open HGrammar
 open Type
 open TypingCommon
 open Utilities
 
-(** Map from used nonterminal typings to whether they were used twice or more. *)
-type used_nts = bool NTTyMap.t
+(* TODO this doesn't work - it can be same hloc duplicated if in intersection type *)
+
+(** Map from used nonterminal typings to where and how many times they were used in proof's
+    hterm. *)
+type used_nts = int HlocMap.t NTTyMap.t
 
 let empty_used_nts : used_nts = NTTyMap.empty
 
-let nt_ty_used_once (nt : nt_id) (ty : ty) : used_nts =
-  NTTyMap.singleton (nt, ty) false
+let nt_ty_used_once (nt : nt_id) (ty : ty) (loc : hloc) : used_nts =
+  NTTyMap.singleton (nt, ty) @@ HlocMap.singleton loc 1
 
-(** Environment with metadata - whether a duplication occured and whether a productive
-    actual argument was used when computing a given environment. *)
-type envm = { env : env; dup : bool; pr_arg : bool; used_nts : used_nts; positive : bool }
+(** Map from used terminal typings to where they were used in proof's hterm. *)
+type used_ts = int HlocMap.t TTyMap.t
+
+let empty_used_ts : used_ts = TTyMap.empty
+
+let t_ty_used_once (a : terminal) (ty : ty) (loc : hloc) : used_ts =
+  TTyMap.singleton (a, ty) @@ HlocMap.singleton loc 1
+
+(** Environment with metadata - whether a duplication occured, whether a productive
+    actual argument was used when computing given environment, which nonterminal and terminal
+    types were used, if duplication occured anywhere in the whole proof subtree. *)
+type envm = { env : env; dup : bool; pr_arg : bool; used_nts : used_nts; used_ts: used_ts;
+              positive : bool }
 
 let mk_envm_empty_flags (env : env) : envm =
-  { env = env; dup = false; pr_arg = false; used_nts = NTTyMap.empty; positive = false }
+  { env = env; dup = false; pr_arg = false; used_nts = NTTyMap.empty; used_ts = TTyMap.empty;
+    positive = false }
 
-let mk_envm (used_nts : used_nts) (positive : bool) (env : env) : envm =
-  { env = env; dup = false; pr_arg = false; used_nts = used_nts; positive = positive }
+let mk_envm (used_nts : used_nts) (used_ts : used_ts) (positive : bool) (env : env) : envm =
+  { env = env; dup = false; pr_arg = false; used_nts = used_nts; used_ts = used_ts;
+    positive = positive }
 
 let with_dup (dup : bool) (envm : envm) : envm =
   { envm with dup = dup }
@@ -39,19 +55,27 @@ let string_of_envm (envm : envm) : string =
       ""
     else
       " NTS " ^ (NTTyMap.bindings envm.used_nts |>
-                 Utilities.string_of_list (fun (nt_ty, multi) ->
-                     let multi_info =
-                       if multi then
-                         " (multiple)"
-                       else
-                         ""
-                     in
-                     string_of_nt_ty nt_ty ^ multi_info
+                 Utilities.string_of_list (fun (nt_ty, locs) ->
+                     string_of_nt_ty nt_ty ^
+                     Utilities.string_of_list HlocMap.string_of_int_binding @@
+                     HlocMap.bindings locs
+                   )
+                )
+  in
+  let ts_info =
+    if TTyMap.is_empty envm.used_ts then
+      ""
+    else
+      " TS " ^ (TTyMap.bindings envm.used_ts |>
+                 Utilities.string_of_list (fun (t_ty, locs) ->
+                     string_of_t_ty t_ty ^ " " ^
+                     Utilities.string_of_list HlocMap.string_of_int_binding @@
+                     HlocMap.bindings locs
                    )
                 )
   in
   let positive_info = if envm.positive then " POS" else "" in
-  envm.env#to_string ^ dup_info ^ pr_arg_info ^ nts_info ^ positive_info
+  envm.env#to_string ^ dup_info ^ pr_arg_info ^ nts_info ^ ts_info ^ positive_info
 
 (** A set of environments and information whether a duplication occured when computing
     them. In other words, list of possible typings of variables delimited by ANDs, treated as
@@ -62,11 +86,14 @@ module Envms = struct
       let compare envm1 envm2 =
         Utilities.compare_pair
           Pervasives.compare
-          (Utilities.compare_pair env_compare @@ NTTyMap.compare Pervasives.compare)
+          (Utilities.compare_pair env_compare @@
+           NTTyMap.compare @@ HlocMap.multi_compare)
           ((envm1.dup, envm1.pr_arg, envm1.positive), (envm1.env, envm1.used_nts))
           ((envm2.dup, envm2.pr_arg, envm2.positive), (envm2.env, envm2.used_nts))
     end)
-
+  (* TODO keeping info other than multi is good for presentation, but the proof is the same - drop
+   duplicate proofs that differ only with used_ts or with amount of used_nts per nt *)
+      
   (** Conversion of list of envs to an envms assuming default flags. *)
   let of_list_empty_flags (l : env list) : t =
     of_list @@ List.map mk_envm_empty_flags l
@@ -215,7 +242,11 @@ module TargetEnvms = struct
                       dup = envm1.dup || envm2.dup || merged_dup;
                       pr_arg = envm1.pr_arg || envm2.pr_arg;
                       used_nts =
-                        NTTyMap.union (fun _ _ _ -> Some true) envm1.used_nts envm2.used_nts;
+                        NTTyMap.union (fun _ locs1 locs2 -> Some (HlocMap.sum_union locs1 locs2))
+                          envm1.used_nts envm2.used_nts;
+                      used_ts =
+                        TTyMap.union (fun _ locs1 locs2 -> Some (HlocMap.sum_union locs1 locs2))
+                          envm1.used_ts envm2.used_ts;
                       positive = envm1.positive || envm2.positive || merged_dup
                     }
                     in

@@ -5,6 +5,7 @@ open HGrammar
 open HtyStore
 open TargetEnvms
 open Type
+open TypingCommon
 open Utilities
 
 class typing (hg : hgrammar) = object(self)
@@ -210,12 +211,12 @@ class typing (hg : hgrammar) = object(self)
     | Right var_count -> var_count
 
   (** Returns sorted list of typings available for given head term. *)
-  method infer_head_ity (h : head) (env_data : (env, int) either) : (ty * envm) list =
+  method infer_head_ity (h : head) (loc : hloc) (env_data : (env, int) either) : (ty * envm) list =
     match h with
     | HNT nt ->
       let empty = mk_envm_empty_flags @@ empty_env @@ self#var_count env_data in
       nt_ity.(nt) |> TyList.map (fun ty ->
-          (ty, empty |> with_used_nts @@ nt_ty_used_once nt ty)
+          (ty, empty |> with_used_nts @@ nt_ty_used_once nt ty loc)
         )
     | HVar v ->
       begin
@@ -229,8 +230,9 @@ class typing (hg : hgrammar) = object(self)
       end
     | HT a ->
       let empty = empty_env @@ self#var_count env_data in
-      self#terminal_ity a |> TyList.map (fun ty -> (ty,
-          mk_envm empty_used_nts (is_productive ty) empty
+      self#terminal_ity a |> TyList.map (fun ty ->
+          let used_ts = t_ty_used_once a ty loc in
+          (ty, mk_envm empty_used_nts used_ts (is_productive ty) empty
         ))
 
   (** Assume that the target is
@@ -267,13 +269,18 @@ class typing (hg : hgrammar) = object(self)
       argument, and each element of outer list corresponds to one of provided types.
       Combines that in a tuple with the rest of the type, metadata, and a boolean whether
       the whole type is productive. *)
-  method annotate_args : 'a 'b. 'a list -> (ty * 'b) list ->
-    (('a * ity) list * ty * 'b) list =
-    fun terms ->
+  method annotate_args : 'b. hterm list -> hloc -> (ty * 'b) list ->
+    ((hterm * (ity * hloc)) list * ty * 'b) list =
+    fun terms loc ->
     let len = List.length terms in
+    (* computing locations of leafs of arguments *)
+    let arg_locs = List.rev @@ snd @@ List.fold_left (fun (arg_loc, arg_locs) arg_hterm ->
+        let arg_hterm_size = hg#hterm_size arg_hterm in
+        (arg_loc + arg_hterm_size, arg_loc :: arg_locs)
+      ) (loc, []) terms in
     List.map (fun (ty, x) ->
-        let args, codomain = split_ty ty len in
-        (List.combine terms args, codomain, x)
+        let arg_itys, codomain = split_ty ty len in
+        (List.combine terms @@ List.combine arg_itys arg_locs, codomain, x)
       )
         
   (** Infer variable environments under which type checking of hterm : target succeeds. If target
@@ -284,7 +291,7 @@ class typing (hg : hgrammar) = object(self)
       Flag no_pr_vars prevents inference of productive variables. Flag force_pr_var ensures that
       there is at least one productive variable. Only one of these flags may be true. *)
   method type_check (hterm : hterm) (target : ty option) (env_data : (env, int) either)
-      (no_pr_vars : bool) (force_pr_var : bool) : te =
+      (no_pr_vars : bool) (force_pr_var : bool) (loc : hloc) : te =
     assert (not (no_pr_vars && force_pr_var));
     print_verbose !Flags.verbose_proofs @@ lazy (
       let vars_info = match no_pr_vars, force_pr_var with
@@ -326,7 +333,7 @@ class typing (hg : hgrammar) = object(self)
           )
       | HNT nt, [] ->
         filter_ity_list (self#nt_ity nt) (fun ty envm ->
-            envm |> with_used_nts @@ nt_ty_used_once nt ty)
+            envm |> with_used_nts @@ nt_ty_used_once nt ty loc)
       | HVar v, [] ->
         begin
           match target, env_data with
@@ -369,7 +376,7 @@ class typing (hg : hgrammar) = object(self)
         end
       | _ -> (* application *)
         let h, args = hg#decompose_hterm hterm in
-        self#type_check_app h args target env_data no_pr_vars force_pr_var
+        self#type_check_app h args target env_data no_pr_vars force_pr_var loc
     in
     assert (target = None || TargetEnvms.targets_count res <= 1);
     print_verbose !Flags.verbose_proofs @@ lazy (
@@ -385,7 +392,8 @@ class typing (hg : hgrammar) = object(self)
     res
 
   method type_check_app (h : head) (args : hterm list) (target : ty option)
-      (env_data : (env, int) either) (no_pr_vars : bool) (force_pr_var : bool) : te =
+      (env_data : (env, int) either) (no_pr_vars : bool) (force_pr_var : bool)
+      (loc : hloc) : te =
     (* Definitions:
        * target is the type used in type checking hterm h : target and is either restricted to
          type in argument or all possible targets are computed
@@ -395,7 +403,7 @@ class typing (hg : hgrammar) = object(self)
        * head's type is the type of h, where h is a variable, terminal, or nonterminal *)
     let h_arity = List.length args in
     (* Get all h typings *)
-    let all_h_data = self#infer_head_ity h env_data in
+    let all_h_data = self#infer_head_ity h loc env_data in
     (* TODO var in head does not get into the env *)
     (* filtering compatible head types assuming head is not a variable *)
     let h_data = target |> option_map all_h_data
@@ -417,7 +425,7 @@ class typing (hg : hgrammar) = object(self)
        * flag to choose optimization in order to benchmark them later *)
     (* Iteration over each possible typing of the head *)
     List.fold_left TargetEnvms.union TargetEnvms.empty @@
-    (self#annotate_args args h_data |> List.map (fun (args, h_target, envm) ->
+    (self#annotate_args args loc h_data |> List.map (fun (args, h_target, envm) ->
          (* computing targets *)
          let head_pr = is_productive h_target in
          let pr_target, np_target = match target with
@@ -453,7 +461,7 @@ class typing (hg : hgrammar) = object(self)
                " -> ... -> np";
            in
            "* Type checking " ^
-           String.concat " -> " (args |> List.map (fun (arg_term, arg_ity) ->
+           String.concat " -> " (args |> List.map (fun (arg_term, (arg_ity, _)) ->
                "(" ^ hg#string_of_hterm true arg_term ^ " : " ^ string_of_ity arg_ity ^ ")"
              )) ^
            head_info
@@ -476,7 +484,7 @@ class typing (hg : hgrammar) = object(self)
                be productive arguments in head's type, as long as that does not force a
                duplication. *)
          let te = fold_left_short_circuit start_te args TargetEnvms.empty
-             (fun te (arg_term, arg_ity) ->
+             (fun te (arg_term, (arg_ity, arg_loc)) ->
                 (* te contains not only variable environments, but also information whether
                    there was a duplication (for (3) and (NP)) and whether a productive argument
                    was used (for (3)). *)
@@ -507,7 +515,8 @@ class typing (hg : hgrammar) = object(self)
                                 flags. Not passing the force_pr_var flag, since this is one of
                                 many arguments. *)
                              TargetEnvms.retarget pr_target @@
-                             self#type_check arg_term (Some arg_ty) env_data no_pr_vars false
+                             self#type_check arg_term (Some arg_ty)
+                               env_data no_pr_vars false arg_loc
                            | None -> TargetEnvms.empty
                          in
                          (* subcase when actual argument is nonproductive *)
@@ -519,7 +528,7 @@ class typing (hg : hgrammar) = object(self)
                                 argument implies productive variable *)
                              let arg_te =
                                self#type_check arg_term (Some (with_productivity false arg_ty))
-                                 env_data false true
+                                 env_data false true arg_loc
                              in
                              (* both target productivities are valid for nonproductive actual
                                 argument *)
@@ -539,7 +548,7 @@ class typing (hg : hgrammar) = object(self)
                          (* nonproductive target argument implies nonproductive actual argument
                             and no productive vars *)
                          let arg_te =
-                           self#type_check arg_term (Some arg_ty) env_data true false
+                           self#type_check arg_term (Some arg_ty) env_data true false arg_loc
                          in
                          (* both target productivities are valid for nonproductive target
                             argument *)

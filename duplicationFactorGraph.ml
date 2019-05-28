@@ -36,9 +36,9 @@ class dfg = object(self)
   method add_vertex (proof : proof) : bool =
     let vertex = proof.derived in
     (* computing minimum of 2 and number of productive used nonterminals *)
-    let pr_nts_count = NTTyMap.fold (fun vertex' multi acc ->
+    let pr_nts_count = NTTyMap.fold (fun vertex' locs acc ->
         (* when a productive nonterminal is used multiple times, it is counted as two *)
-        acc + (1 + int_of_bool multi) * int_of_bool (is_productive @@ snd vertex')
+        acc + (HlocMap.sum locs) * int_of_bool (is_productive @@ snd vertex')
       ) proof.nt_assumptions 0
     in
     (* function to compute edge positiveness for given vertex *)

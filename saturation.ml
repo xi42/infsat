@@ -105,6 +105,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       derived = (nt, ty);
       var_assumptions = envm.env#get_var_itys;
       nt_assumptions = envm.used_nts;
+      t_assumptions = envm.used_ts;
       positive = envm.positive;
       initial = false
     } in
@@ -162,7 +163,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     let var_count = hg#nt_arity nt in
     let envms = typing#binding2envms var_count None fixed_hterms_hty binding in
     envms |> Envms.iter (fun envm ->
-        let tel = typing#type_check body None (Left envm.env) false false in
+        let tel = typing#type_check body None (Left envm.env) false false 0 in
         tel |> TargetEnvms.iter_fun_ty (fun ty envm ->
             self#register_nt_ty nt ty envm
           )
@@ -194,7 +195,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     let envms = typing#binding2envms var_count (Some mask) None binding in
     envms |> Envms.iter (fun envm ->
         let tels = hterms |> List.map (fun hterm ->
-            typing#type_check hterm None (Left envm.env) false false
+            typing#type_check hterm None (Left envm.env) false false 0
           )
         in
         let hty = tels |> List.map TargetEnvms.targets_as_args in

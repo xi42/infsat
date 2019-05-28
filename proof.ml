@@ -15,7 +15,9 @@ module NTTyInitMap = Map.Make (struct
   end)
 
 (* note that var_assumptions is redundant, since it is included in derived *)
-type proof = { derived : nt_ty; var_assumptions : ity array; nt_assumptions : bool NTTyMap.t;
+type proof = { derived : nt_ty; var_assumptions : ity array;
+               nt_assumptions : int HlocMap.t NTTyMap.t;
+               t_assumptions : int HlocMap.t TTyMap.t;
                positive : bool; initial : bool}
 
 let proof_compare (ignore_initial : bool) (proof1 : proof) (proof2 : proof) : int =
@@ -41,9 +43,9 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
       )
   in
   let nts_info =
-    NTTyMap.bindings proof.nt_assumptions |> List.map (fun ((nt', ty'), multi) ->
+    NTTyMap.bindings proof.nt_assumptions |> List.map (fun ((nt', ty'), locs) ->
         let multi_info =
-          if multi then
+          if HlocMap.sum locs > 1 then
             " (+)"
           else
             ""

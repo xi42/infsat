@@ -14,6 +14,10 @@ type head = HT of terminal | HNT of nt_id | HVar of var_id
     Note that nonterminal bodies have K <= 1 and only bindings may have more. *)
 type hterm = head * hterms_id list
 
+(** Unique identifier of a hterm's leaf. Equal to 0-indexed position while doing DFS
+    from root from left to right. *)
+type hloc = int
+
 class hgrammar (grammar : grammar) = object(self)
   (** Mapping from int ids to lists of terms. when tab_id_terms[i] = (hterms, terms, vars), then
       hterms is a list of terms [a1; a2; ..; aN], each in head form (h, [i1; i2; ..; iM]).
@@ -58,8 +62,14 @@ class hgrammar (grammar : grammar) = object(self)
 
   method hterms_count : int = next_hterms_id
 
-  method hterm_arity (id : hterms_id) : int = List.length @@ self#id2hterms id
-
+  (** Number of leafs in a hterm. *)
+  method hterm_size (_, ids : hterm) : int =
+    List.fold_left (fun acc id ->
+        List.fold_left (fun acc hterm ->
+            acc + self#hterm_size hterm
+          ) acc @@ self#id2hterms id
+      ) 1 ids
+      
   method id2hterms (id : hterms_id) : hterm list =
     let hterms, _, _, _ = hterms_data.(id) in
     hterms
