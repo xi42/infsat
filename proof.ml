@@ -193,40 +193,97 @@ class cycle_proof (path_to_cycle : (proof * bool) list)
   
   method string_of_nt_ty (hg : hgrammar) (nt, ty : nt_ty) : string =
     hg#nt_name nt ^ " : " ^ string_of_ty ty
-
-  method string_of_edge (proof : proof) (edge : bool) : string =
-    let sign =
-      if edge then
-        "+"
-      else
-        "-"
-    in
-    "== (" ^ string_of_int (NTTyInitMap.find (proof.derived, proof.initial) proof_ids) ^ ") " ^
-    sign ^ " ==>"
   
   method string_of_paths (hg : hgrammar) : string =
-    let proof_and_edge (proof, edge) =
-      self#string_of_nt_ty hg proof.derived ^ "\n" ^
-      self#string_of_edge proof edge
+    let prefix_empty = "    " in
+    let prefix_mid = "|   " in
+    let arrow_from_bottom = ".-> " in
+    let string_of_edge (line_prefix : string) (proof : proof) (edge : bool) : string =
+      let sign =
+        if edge then
+          "+"
+        else
+          "-"
+      in
+      let proof_id = NTTyInitMap.find (proof.derived, proof.initial) proof_ids in
+      line_prefix ^ "    |\n" ^ line_prefix ^ "  (" ^ string_of_int proof_id ^ " " ^ sign ^ ") " ^
+      "\n" ^ line_prefix ^ "    |\n" ^ line_prefix ^ "    v"
+    in
+    let string_of_last_edge (proof, edge : proof * bool) : string =
+      let sign =
+        if edge then
+          "+"
+        else
+          "-"
+      in
+      let proof_id = NTTyInitMap.find (proof.derived, proof.initial) proof_ids in
+      "|       |\n" ^
+      "`---- (" ^ string_of_int proof_id ^ " " ^ sign ^ ")\n" ^
+      "        |\n" ^
+      "       ...\n" ^
+      "        |\n" ^
+      "        v"
+    in
+    let proof_and_edge first_line_prefix line_prefix (proof, edge) =
+      first_line_prefix ^ self#string_of_nt_ty hg proof.derived ^ "\n" ^
+      string_of_edge line_prefix proof edge
+    in
+    let path_to_cycle_strs =
+      List.map (proof_and_edge prefix_empty prefix_empty) path_to_cycle
+    in
+    let cycle_len = List.length cycle in
+    let cycle_head = List.hd cycle in
+    let cycle_mid, cycle_last =
+      if cycle_len > 1 then
+        Utilities.split_list (cycle_len - 2) @@ List.tl cycle
+      else
+        ([], [])
+    in
+    let cycle_head_strs =
+      if cycle_len > 1 then
+        [proof_and_edge arrow_from_bottom prefix_mid cycle_head]
+      else
+        [
+          arrow_from_bottom ^ self#string_of_nt_ty hg (fst cycle_head).derived;
+          string_of_last_edge cycle_head
+        ]
+    in
+    let cycle_mid_strs =
+      List.map (proof_and_edge prefix_mid prefix_mid) cycle_mid
+    in
+    let cycle_last_strs =
+      List.map (fun (proof, edge) ->
+          prefix_mid ^ self#string_of_nt_ty hg proof.derived ^ "\n" ^
+          string_of_last_edge (proof, edge)
+        ) cycle_last
+    in
+    let escape_vertex =
+      [prefix_empty ^ self#string_of_nt_ty hg escape.derived]
     in
     let escape_continuation =
-      if NTTyMap.is_empty escape.nt_assumptions then
-        ""
-      else
-        "\n=== (" ^
-        string_of_int (NTTyInitMap.find (escape.derived, escape.initial) proof_ids) ^
-        ") ===>\n" ^
-        "..."
+      let continuation_str =
+        if NTTyMap.is_empty escape.nt_assumptions then
+          " T"
+        else
+          "..."
+      in
+      let proof_id = NTTyInitMap.find (escape.derived, escape.initial) proof_ids in
+      [
+        prefix_empty ^ "    |";
+        prefix_empty ^ "   (" ^ string_of_int proof_id ^ ")";
+        prefix_empty ^ "    |";
+        prefix_empty ^ "    v";
+        prefix_empty ^ "   " ^ continuation_str
+      ]
     in
-    concat_map "\n" proof_and_edge path_to_cycle ^ "\n" ^
-    "(CYCLE START)\n" ^
-    concat_map "\n" proof_and_edge cycle ^ "\n" ^
-    proof_and_edge (List.hd cycle) ^ "\n" ^
-    "...\n" ^
-    "(CYCLE END)\n" ^
-    "===========>\n" ^
-    self#string_of_nt_ty hg escape.derived ^
-    escape_continuation
+    String.concat "\n" (
+      path_to_cycle_strs @
+      cycle_head_strs @
+      cycle_mid_strs @
+      cycle_last_strs @
+      escape_vertex @
+      escape_continuation
+    )
     
   method string_of_proofs (hg : hgrammar) : string =
     concat_map "\n\n" (fun proof ->

@@ -1,0 +1,16 @@
+Grammar.
+S -> X1.
+X1 -> X2.
+X2 -> C1.
+C1 -> C2.
+C2 -> C3.
+C3 -> b (a C1) E1.
+E1 -> E2.
+E2 -> c.
+End.
+
+Terminals.
+a -> 1 $.
+b -> 2.
+c -> 0.
+End.
