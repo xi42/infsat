@@ -1346,7 +1346,7 @@ let cfa_test () : test =
           ]
           (List.sort Pervasives.compare @@ List.map (fun binding ->
                match binding with
-               | [(_, _, id)] -> hg_xyyz#string_of_hterms HlocMap.empty id
+               | [(_, _, id)] -> hg_xyyz#string_of_hterms id
                | _ -> failwith "fail"
              ) @@ cfa_xyyz#lookup_nt_bindings 4)
       );

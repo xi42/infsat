@@ -33,6 +33,7 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
     (proof : proof) : string =
   let nt, ty = proof.derived in
   let hterm = hg#nt_body nt in
+  (* info about proof number *)
   let proof_id_title =
     match proof_ids with
     | Some proof_ids ->
@@ -40,47 +41,41 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
       "(Proof " ^ string_of_int proof_id ^ ")\n"
     | None -> ""
   in
+  (* info which variable has which type *)
   let vars_info =
     array_listmap proof.var_assumptions (fun i ity ->
         [hg#var_name (nt, i) ^ " : " ^ string_of_ity ity]
       )
   in
+  let merge_locs (locs : int HlocMap.t) : loc_combinations option -> loc_combinations option =
+    function
+    | Some (SingleLocCombination locs') as single ->
+      if HlocMap.equal (=) locs' locs && locs |> HlocMap.for_all (fun _ count -> count = 1) then
+        single
+      else
+        Some (MultiLocCombination (
+            HlocSet.union (HlocMap.keys_set locs') (HlocMap.keys_set locs)))
+    | Some (MultiLocCombination locs') ->
+      Some (MultiLocCombination (
+          HlocSet.union locs' (HlocMap.keys_set locs)))
+    | None ->
+      if locs |> HlocMap.for_all (fun _ count -> count = 1) || HlocMap.cardinal locs = 1 then
+        Some (SingleLocCombination locs)
+      else
+        Some (MultiLocCombination (HlocMap.keys_set locs))
+  in
+  (* map from terminals/nonterminals to locations of their occurences and whether they should
+     be marked, i.e., two locations have different sets of non-empty types or it is used multiple
+     times in one location and there is another location where it has non-empty type *)
   let loc_combinations =
     HeadMap.empty |>
-    NTTyMap.fold (fun (nt', _) locs' acc ->
-        acc |> HeadMap.update (HNT nt') (function
-            | Some (SingleLocCombination locs) as single ->
-              if HlocMap.equal (=) locs' locs then
-                single
-              else
-                Some (MultiLocCombination (
-                    HlocSet.union (HlocMap.keys_set locs) (HlocMap.keys_set locs')))
-            | Some (MultiLocCombination locs) ->
-              Some (MultiLocCombination (
-                  HlocSet.union locs (HlocMap.keys_set locs')))
-            | None -> Some (SingleLocCombination locs')
-          )
+    NTTyMap.fold (fun (nt', _) locs acc ->
+        acc |> HeadMap.update (HNT nt') (merge_locs locs)
       ) proof.nt_assumptions |> 
-    TTyMap.fold (fun (a, _) locs' acc ->
-        acc |> HeadMap.update (HT a) (function
-            | Some (SingleLocCombination locs) as single ->
-              if HlocMap.equal (=) locs' locs then
-                single
-              else
-                Some (MultiLocCombination (
-                    HlocSet.union (HlocMap.keys_set locs) (HlocMap.keys_set locs')))
-            | Some (MultiLocCombination locs) ->
-              Some (MultiLocCombination (
-                  HlocSet.union locs (HlocMap.keys_set locs')))
-            | None ->
-              if locs' |> HlocMap.exists (fun _ count -> count > 1) then
-                Some (MultiLocCombination (HlocMap.keys_set locs'))
-              else
-                Some (SingleLocCombination locs')
-          )
+    TTyMap.fold (fun (a, _) locs acc ->
+        acc |> HeadMap.update (HT a) (merge_locs locs)
       ) proof.t_assumptions
   in
-  let loc2occ = hg#loc2occurenceMap hterm in
   let multi_locs =
     HeadMap.fold (fun _ combinations acc ->
         match combinations with
@@ -88,6 +83,7 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
         | SingleLocCombination _ -> acc
       ) loc_combinations HlocSet.empty
   in
+  let loc2occ = hg#loc2occurenceMap hterm in
   let loc2mark =
     loc2occ |>
     HlocMap.mapi (fun loc occ ->
@@ -97,11 +93,38 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
           ""
       )
   in
+  let count_str_of_locs locs =
+    (* it is guaranteed that either all locs have 1 or there is only one loc *)
+    let count = snd @@ List.hd @@ HlocMap.bindings locs in
+    if count > 1 then
+      " (x" ^ string_of_int count ^ ")"
+    else
+      ""
+  in
+  let assumption_str head_str ty locs =
+    (* add occurence mark iff there is are 2+ locations of a nonterminal with non-empty
+       and different different sets of types *)
+    let some_loc = fst @@ List.hd @@ HlocMap.bindings locs in
+    if HlocSet.mem some_loc multi_locs then
+      let terminal_marks =
+        HlocMap.bindings locs |>
+        List.map (fun (loc, count) ->
+            let count_info =
+              if count > 1 then
+                " (x" ^ string_of_int count ^ ")"
+              else
+                ""
+            in
+            head_str ^ HlocMap.find loc loc2mark ^ count_info
+          )
+      in
+      String.concat ", " terminal_marks ^ " : " ^ string_of_ty ty
+    else
+      head_str ^ count_str_of_locs locs ^ " : " ^ string_of_ty ty
+  in
   let nts_info =
     NTTyMap.bindings proof.nt_assumptions |> List.map (fun ((nt', ty'), locs) ->
-        (* add occurence mark iff there is are 2+ locations of a nonterminal with non-empty
-           and different different sets of types *)
-        let proof_id' =
+        let proof_id_str =
           match proof_ids with
           | Some proof_ids ->
             (* There can still be two kinds of proofs - initial (first registered) and not.
@@ -118,50 +141,16 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
             "(" ^ string_of_int proof_id' ^ ") "
           | None -> ""
         in
-        let some_loc = fst @@ List.hd @@ HlocMap.bindings locs in
-        if HlocSet.mem some_loc multi_locs then
-          let nonterminal_marks =
-            HlocMap.bindings locs |>
-            List.map (fun (loc, count) ->
-                let count_info =
-                  if count > 1 then
-                    " (x" ^ string_of_int count ^ ")"
-                  else
-                    ""
-                in
-                hg#nt_name nt' ^ "#" ^ string_of_int loc ^ count_info
-              )
-          in
-          [proof_id' ^ String.concat ", " nonterminal_marks ^ " : " ^ string_of_ty ty']
-        else
-          [proof_id' ^ hg#nt_name nt' ^ " : " ^ string_of_ty ty']
+        [proof_id_str ^ assumption_str (hg#nt_name nt') ty locs]
       )
   in
   let ts_info =
     TTyMap.bindings proof.t_assumptions |> List.map (fun ((a, ty'), locs) ->
-        (* add occurence mark iff there is are 2+ locations of a nonterminal with non-empty
-           and different different sets of types *)
-        let some_loc = fst @@ List.hd @@ HlocMap.bindings locs in
-        if HlocSet.mem some_loc multi_locs then
-          let terminal_marks =
-            HlocMap.bindings locs |>
-            List.map (fun (loc, count) ->
-                let count_info =
-                  if count > 1 then
-                    " (x" ^ string_of_int count ^ ")"
-                  else
-                    ""
-                in
-                string_of_terminal a ^ "#" ^ string_of_int loc ^ count_info
-              )
-          in
-          ["(|-) " ^ String.concat ", " terminal_marks ^ " : " ^ string_of_ty ty']
-        else
-          ["(|-) " ^ string_of_terminal a ^ " : " ^ string_of_ty ty']
+        ["(|-) " ^ assumption_str (string_of_terminal a) ty' locs]
       )
   in
   let annotated_hterm =
-    hg#string_of_hterm false loc2mark hterm
+    hg#string_of_hterm false loc2mark 0 hterm
   in
   let positive_info =
     if proof.positive then

@@ -311,27 +311,33 @@ class hgrammar (grammar : grammar) = object(self)
     | HVar v -> grammar#name_of_var v
     | HT a -> string_of_terminal a
   
-  method string_of_hterm (sep_envs : bool) (loc2mark : string HlocMap.t)
+  method string_of_hterm (sep_envs : bool) (loc2mark : string HlocMap.t) (loc : hloc)
       (hterm : hterm) : string =
-    let rec string_of_hterm_aux (is_arg : bool) (h, ids : hterm) : string =
-      let arg_strs = (ids |> List.map (fun id ->
-          let arg_str = self#id2hterms id |> concat_map " " (string_of_hterm_aux true) in
+    let rec string_of_hterm_aux (is_arg : bool) (loc : hloc) (h, ids : hterm) : string =
+      let arg_strs = List.rev @@ snd @@ List.fold_left (fun (loc', arg_strs') id ->
+          let hterms = self#id2hterms id in
+          let arg_size =
+            List.fold_left (fun acc hterm -> acc + self#hterm_size hterm) 0 hterms
+          in
+          let arg_str = hterms |> concat_map " " (string_of_hterm_aux true loc') in
           if sep_envs then
-            "[" ^ arg_str ^ "]"
+            (loc' + arg_size, ("[" ^ arg_str ^ "]") :: arg_strs')
           else
-            arg_str
-        ))
+            (loc' + arg_size, arg_str :: arg_strs')
+        ) (loc + 1, []) ids
       in
-      let res = String.concat " " @@ self#string_of_head h :: arg_strs in
+      let mark = HlocMap.find_opt loc loc2mark |> Utilities.option_default "" in
+      let head_str = self#string_of_head h ^ mark in
+      let res = String.concat " " @@ head_str :: arg_strs in
       if is_arg && ids <> [] then
         "(" ^ res ^ ")"
       else
         res
     in
-    string_of_hterm_aux false hterm
+    string_of_hterm_aux false loc hterm
 
-  method string_of_hterms (loc2mark : string HlocMap.t) (id : hterms_id) : string =
-    Utilities.string_of_list (self#string_of_hterm false loc2mark) @@ self#id2hterms id
+  method string_of_hterms (id : hterms_id) : string =
+    Utilities.string_of_list (self#string_of_hterm false HlocMap.empty 0) @@ self#id2hterms id
 
   method var_name (v : var_id) : string =
     grammar#name_of_var v

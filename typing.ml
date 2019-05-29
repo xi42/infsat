@@ -304,7 +304,7 @@ class typing (hg : hgrammar) = object(self)
         | Some target -> " : " ^ string_of_ty target;
         | None -> ""
       in
-      "Inferring environment for " ^ hg#string_of_hterm true HlocMap.empty hterm ^
+      "Inferring environment for " ^ hg#string_of_hterm true HlocMap.empty 0 hterm ^
       target_info ^ vars_info
     );
     let var_count = match env_data with
@@ -388,7 +388,7 @@ class typing (hg : hgrammar) = object(self)
           " type checks with the following targets and environments: " ^
           TargetEnvms.to_string res
       in
-      hg#string_of_hterm true HlocMap.empty hterm ^ check_info
+      hg#string_of_hterm true HlocMap.empty 0 hterm ^ check_info
     );
     res
 
@@ -463,7 +463,7 @@ class typing (hg : hgrammar) = object(self)
            in
            "* Type checking " ^
            String.concat " -> " (args |> List.map (fun (arg_term, (arg_ity, _)) ->
-               "(" ^ hg#string_of_hterm true HlocMap.empty arg_term ^ " : " ^
+               "(" ^ hg#string_of_hterm true HlocMap.empty 0 arg_term ^ " : " ^
                string_of_ity arg_ity ^ ")"
              )) ^
            head_info
@@ -494,7 +494,7 @@ class typing (hg : hgrammar) = object(self)
                   (fun te arg_ty ->
                      print_verbose !Flags.verbose_proofs @@ lazy (
                        "* Typing argument " ^
-                       hg#string_of_hterm true HlocMap.empty arg_term ^ " : " ^
+                       hg#string_of_hterm true HlocMap.empty 0 arg_term ^ " : " ^
                        string_of_ity arg_ity
                      );
                      indent (+1);
