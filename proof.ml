@@ -141,7 +141,7 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
             "(" ^ string_of_int proof_id' ^ ") "
           | None -> ""
         in
-        [proof_id_str ^ assumption_str (hg#nt_name nt') ty locs]
+        [proof_id_str ^ assumption_str (hg#nt_name nt') ty' locs]
       )
   in
   let ts_info =
