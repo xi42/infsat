@@ -27,6 +27,8 @@ let proof_compare (ignore_initial : bool) (proof1 : proof) (proof2 : proof) : in
     ((proof1.derived, proof1.nt_assumptions), (proof1.positive, proof1.initial || ignore_initial))
     ((proof2.derived, proof2.nt_assumptions), (proof2.positive, proof2.initial || ignore_initial))
 
+(** Information necessary to categorize given terminal or nonterminal as occuring everywhere with
+    the same types or not. *)
 type loc_combinations = SingleLocCombination of int HlocMap.t | MultiLocCombination
 
 let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
@@ -102,8 +104,6 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
       ""
   in
   let assumption_str h head_str ty locs =
-    (* add occurence mark iff there is are 2+ locations of a nonterminal with non-empty
-       and different different sets of types *)
     if HeadSet.mem h multi_heads then
       let marked =
         HlocMap.bindings locs |>
@@ -166,6 +166,7 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
   "\n|- " ^ nt_app ^ " = " ^ annotated_hterm ^ " : " ^
   string_of_ty (codomain ty) ^ positive_info
 
+(** Full information necessary to prove existence of a cycle and that the cycle is not omega. *)
 class cycle_proof (path_to_cycle : (proof * bool) list)
     (cycle : (proof * bool) list) (escape : proof) (proofs : proof list) = object(self)
   (** Numerical identifiers of proofs, initial on the left, the rest on the right. *)
