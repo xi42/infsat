@@ -27,7 +27,7 @@ let proof_compare (ignore_initial : bool) (proof1 : proof) (proof2 : proof) : in
     ((proof1.derived, proof1.nt_assumptions), (proof1.positive, proof1.initial || ignore_initial))
     ((proof2.derived, proof2.nt_assumptions), (proof2.positive, proof2.initial || ignore_initial))
 
-type loc_combinations = SingleLocCombination of int HlocMap.t | MultiLocCombination of HlocSet.t
+type loc_combinations = SingleLocCombination of int HlocMap.t | MultiLocCombination
 
 let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
     (proof : proof) : string =
@@ -53,16 +53,13 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
       if HlocMap.equal (=) locs' locs && locs |> HlocMap.for_all (fun _ count -> count = 1) then
         single
       else
-        Some (MultiLocCombination (
-            HlocSet.union (HlocMap.keys_set locs') (HlocMap.keys_set locs)))
-    | Some (MultiLocCombination locs') ->
-      Some (MultiLocCombination (
-          HlocSet.union locs' (HlocMap.keys_set locs)))
+        Some MultiLocCombination
+    | Some MultiLocCombination as multi -> multi
     | None ->
       if locs |> HlocMap.for_all (fun _ count -> count = 1) || HlocMap.cardinal locs = 1 then
         Some (SingleLocCombination locs)
       else
-        Some (MultiLocCombination (HlocMap.keys_set locs))
+        Some MultiLocCombination
   in
   (* map from terminals/nonterminals to locations of their occurences and whether they should
      be marked, i.e., two locations have different sets of non-empty types or it is used multiple
@@ -81,7 +78,7 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
     Seq.map fst @@
     Seq.filter (fun (h, combinations) ->
         match combinations with
-        | MultiLocCombination _ -> true
+        | MultiLocCombination -> true
         | SingleLocCombination _ -> false
       ) @@
     HeadMap.to_seq loc_combinations
