@@ -684,26 +684,6 @@ let te_test () : test =
             ])
       );
 
-    (*
-    "intersect-7" >:: (fun _ ->
-        assert_equal_tes
-          (TargetEnvms.of_list_empty_flags [
-              (ty_np, [singleton_env 2 (0, 0) @@ ity_of_string "pr /\\ np";
-                    singleton_env 2 (0, 1) @@ ity_of_string "pr /\\ np";
-                    new env [|sty ty_np; sty ty_pr|];
-                    new env [|sty ty_pr; sty ty_np|]
-                   ]);
-            ]) @@
-        TargetEnvms.intersect
-          (TargetEnvms.of_list_empty_flags [
-              (ty_np, [singleton_env 2 (0, 0) @@ sty ty_np]);
-              (ty_np, [singleton_env 2 (0, 1) @@ sty ty_np])
-            ])
-          (TargetEnvms.of_list_empty_flags [
-              (ty_np, [singleton_env 2 (0, 2) @@ sty ty_np])
-            ])
-      );
-*)
     "size-1" >:: (fun _ ->
         assert_equal ~printer:string_of_int 1 @@
         TargetEnvms.size @@
@@ -1407,7 +1387,9 @@ let cfa_test () : test =
           ]
           (cfa_xyyz#lookup_binding_var (1, 1))
       );
-  ]  
+  ]
+
+
 
 let examples_test () : test =
   init_flags ();
@@ -1428,7 +1410,10 @@ let examples_test () : test =
         filename >:: (fun _ ->
             assert_equal ~printer:Saturation.string_of_infsat_result Finite
               (Main.parse_and_report_finiteness (path filename))))
-      fin_filenames]
+      fin_filenames
+  ]
+
+
 
 let tests () = [
   utilities_test ();

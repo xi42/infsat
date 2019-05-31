@@ -76,18 +76,21 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
         acc |> HeadMap.update (HT a) (merge_locs locs)
       ) proof.t_assumptions
   in
-  let multi_locs =
-    HeadMap.fold (fun _ combinations acc ->
+  let multi_heads =
+    HeadSet.of_seq @@
+    Seq.map fst @@
+    Seq.filter (fun (h, combinations) ->
         match combinations with
-        | MultiLocCombination locs -> HlocSet.union acc locs
-        | SingleLocCombination _ -> acc
-      ) loc_combinations HlocSet.empty
+        | MultiLocCombination _ -> true
+        | SingleLocCombination _ -> false
+      ) @@
+    HeadMap.to_seq loc_combinations
   in
-  let loc2occ = hg#loc2occurenceMap hterm in
+  let loc2occ = hg#loc2head_occurence hterm in
   let loc2mark =
     loc2occ |>
-    HlocMap.mapi (fun loc occ ->
-        if HlocSet.mem loc multi_locs then
+    HlocMap.mapi (fun loc (h, occ) ->
+        if HeadSet.mem h multi_heads then
           "#" ^ string_of_int (occ + 1)
         else
           ""
@@ -101,12 +104,11 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
     else
       ""
   in
-  let assumption_str head_str ty locs =
+  let assumption_str h head_str ty locs =
     (* add occurence mark iff there is are 2+ locations of a nonterminal with non-empty
        and different different sets of types *)
-    let some_loc = fst @@ List.hd @@ HlocMap.bindings locs in
-    if HlocSet.mem some_loc multi_locs then
-      let terminal_marks =
+    if HeadSet.mem h multi_heads then
+      let marked =
         HlocMap.bindings locs |>
         List.map (fun (loc, count) ->
             let count_info =
@@ -118,7 +120,7 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
             head_str ^ HlocMap.find loc loc2mark ^ count_info
           )
       in
-      String.concat ", " terminal_marks ^ " : " ^ string_of_ty ty
+      String.concat ", " marked ^ " : " ^ string_of_ty ty
     else
       head_str ^ count_str_of_locs locs ^ " : " ^ string_of_ty ty
   in
@@ -141,12 +143,12 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
             "(" ^ string_of_int proof_id' ^ ") "
           | None -> ""
         in
-        [proof_id_str ^ assumption_str (hg#nt_name nt') ty' locs]
+        [proof_id_str ^ assumption_str (HNT nt') (hg#nt_name nt') ty' locs]
       )
   in
   let ts_info =
     TTyMap.bindings proof.t_assumptions |> List.map (fun ((a, ty'), locs) ->
-        ["(|-) " ^ assumption_str (string_of_terminal a) ty' locs]
+        ["(|-) " ^ assumption_str (HT a) (string_of_terminal a) ty' locs]
       )
   in
   let annotated_hterm =

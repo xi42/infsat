@@ -23,6 +23,11 @@ module HeadMap = Map.Make (struct
     let compare = Pervasives.compare
   end)
 
+module HeadSet = Set.Make (struct
+    type t = head
+    let compare = Pervasives.compare
+  end)
+
 module HlocSet = Set.Make (struct
     type t = hloc
     let compare = Pervasives.compare
@@ -160,23 +165,23 @@ class hgrammar (grammar : grammar) = object(self)
       ) head_count ids
 
   (** Map from hterm locations to 0-indexed occurence of the head. *)
-  method loc2occurenceMap (hterm : hterm) : int HlocMap.t =
-    let rec loc2occurenceMap (h, ids : hterm) (loc : hloc) (h2count : int HeadMap.t)
-        (loc2occ : int HlocMap.t) : hloc * int HeadMap.t * int HlocMap.t =
+  method loc2head_occurence (hterm : hterm) : (head * int) HlocMap.t =
+    let rec loc2head_occurence_aux (h, ids : hterm) (loc : hloc) (h2count : int HeadMap.t)
+        (loc2occ : (head * int) HlocMap.t) : hloc * int HeadMap.t * (head * int) HlocMap.t =
       let h2count = HeadMap.update h (function
           | None -> Some 0
           | Some c -> Some (c + 1)
         ) h2count
       in
       let occ = HeadMap.find h h2count in
-      let loc2occ = HlocMap.add loc occ loc2occ in
+      let loc2occ = HlocMap.add loc (h, occ) loc2occ in
       List.fold_left (fun acc id ->
           List.fold_left (fun (loc, h2count, loc2occ) hterm ->
-              loc2occurenceMap hterm loc h2count loc2occ
+              loc2head_occurence_aux hterm loc h2count loc2occ
             ) acc @@ self#id2hterms id
         ) (loc + 1, h2count, loc2occ) ids
     in
-    let _, _, loc2occ = loc2occurenceMap hterm 0 HeadMap.empty HlocMap.empty in
+    let _, _, loc2occ = loc2head_occurence_aux hterm 0 HeadMap.empty HlocMap.empty in
     loc2occ
 
   (** List of all nonterminals in terms without duplicates. *)
@@ -313,28 +318,30 @@ class hgrammar (grammar : grammar) = object(self)
   
   method string_of_hterm (sep_envs : bool) (loc2mark : string HlocMap.t) (loc : hloc)
       (hterm : hterm) : string =
-    let rec string_of_hterm_aux (is_arg : bool) (loc : hloc) (h, ids : hterm) : string =
-      let arg_strs = List.rev @@ snd @@ List.fold_left (fun (loc', arg_strs') id ->
-          let hterms = self#id2hterms id in
-          let arg_size =
-            List.fold_left (fun acc hterm -> acc + self#hterm_size hterm) 0 hterms
-          in
-          let arg_str = hterms |> concat_map " " (string_of_hterm_aux true loc') in
-          if sep_envs then
-            (loc' + arg_size, ("[" ^ arg_str ^ "]") :: arg_strs')
-          else
-            (loc' + arg_size, arg_str :: arg_strs')
-        ) (loc + 1, []) ids
-      in
+    let rec string_of_hterm_aux (is_arg : bool) (loc : hloc) (h, ids : hterm) : hloc * string =
       let mark = HlocMap.find_opt loc loc2mark |> Utilities.option_default "" in
       let head_str = self#string_of_head h ^ mark in
-      let res = String.concat " " @@ head_str :: arg_strs in
+      let loc, rev_args_strs = List.fold_left (fun (loc, args_strs) id ->
+          let loc, rev_arg_strs =
+            List.fold_left (fun (loc, acc) hterm ->
+                let loc, arg_str = string_of_hterm_aux true loc hterm in
+                (loc, arg_str :: acc)
+              ) (loc, []) @@ self#id2hterms id
+          in
+          let args_str = String.concat " " @@ List.rev rev_arg_strs in
+          if sep_envs then
+            (loc, ("[" ^ args_str ^ "]") :: args_strs)
+          else
+            (loc, args_str :: args_strs)
+        ) (loc + 1, []) ids
+      in
+      let res = String.concat " " @@ head_str :: List.rev rev_args_strs in
       if is_arg && ids <> [] then
-        "(" ^ res ^ ")"
+        (loc, "(" ^ res ^ ")")
       else
-        res
+        (loc, res)
     in
-    string_of_hterm_aux false loc hterm
+    snd @@ string_of_hterm_aux false loc hterm
 
   method string_of_hterms (id : hterms_id) : string =
     Utilities.string_of_list (self#string_of_hterm false HlocMap.empty 0) @@ self#id2hterms id

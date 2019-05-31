@@ -116,7 +116,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         print_verbose !Flags.verbose_typing @@ lazy (
           "The duplication factor graph was updated by adding or modifying " ^
           "an edge. Proof for added edges " ^
-          "(+ - positive duplication factor/multiple uses):\n" ^
+          "(+ - positive duplication factor):\n" ^
           string_of_proof hg None proof
         );
         match dfg#find_positive_cycle hg#start_nt ty_pr with
