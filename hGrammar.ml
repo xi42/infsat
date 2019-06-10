@@ -135,7 +135,9 @@ class hgrammar (grammar : grammar) = object(self)
         | SFun (_, codomain) -> codomain
         | SAtom -> failwith "Expected a function sort"
     done;
-    !fun_sort
+    match !fun_sort with
+    | SFun (var_sort, _) -> var_sort
+    | SAtom -> failwith "Expected a function sort"
 
   (* --- operations --- *)
   

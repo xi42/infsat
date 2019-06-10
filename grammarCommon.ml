@@ -35,5 +35,16 @@ let string_of_terminal (a : terminal) : string =
   | E -> "e"
   | T -> "t"
 
-(* computed sorts of nonterminals *)
+(* computed sorts of terms *)
 type sort = SFun of sort * sort | SAtom
+
+let sort_of_terminal (a : terminal) : sort =
+  match a with
+  | A -> SFun (SAtom, SAtom)
+  | B -> SFun (SAtom, SFun (SAtom, SAtom))
+  | E -> SAtom
+  | T -> SFun (SAtom, SFun (SAtom, SAtom))
+
+let rec string_of_sort : sort -> string = function
+  | SAtom -> "o"
+  | SFun (s1, s2) -> "(" ^ string_of_sort s1 ^ ") -> " ^ string_of_sort s2

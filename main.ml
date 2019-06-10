@@ -12,7 +12,7 @@ let program_info = "InfSat 0.1: Saturation-based finiteness checker for higher-o
 
 let options = [
   ("-q", Arg.Set Flags.quiet, "Enables quiet mode");
-  ("-f", Arg.Set Flags.force_unsafe, "Force check even if terms unsafe");
+  ("-f", Arg.Set Flags.force_unsafe, "Skip term safety check");
   ("-v", Arg.Set Flags.verbose_main, "Enables basic verbosity");
   ("-vv", Arg.Set Flags.verbose_all, "Enables full verbosity");
   ("-vprep", Arg.Set Flags.verbose_preprocessing, "Enables verbose parsing and preprocessing");
