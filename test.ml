@@ -50,8 +50,8 @@ let assert_equal_tes te1 te2 =
     (TargetEnvms.with_empty_temp_flags te1) (TargetEnvms.with_empty_temp_flags te2)
 
 let mk_grammar rules =
-  let nonterminals = Array.mapi (fun i _ -> ("N" ^ string_of_int i, O)) rules in
-  let g = new grammar nonterminals [||] rules in
+  let nt_names = Array.mapi (fun i _ -> "N" ^ string_of_int i) rules in
+  let g = new grammar nt_names [||] rules in
   print_string @@ "Creating grammar:\n" ^
                   g#grammar_info ^ "\n";
   EtaExpansion.eta_expand g;

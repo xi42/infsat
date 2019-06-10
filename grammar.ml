@@ -2,9 +2,6 @@ open GrammarCommon
 open Utilities
 
 type term = TE of terminal | NT of nt_id | Var of var_id | App of term * term
-type sort = O | KFun of sort * sort
-
-type nonterminal = (string * sort)
 
 (* store the original name of each non-terminal and its sort *)
 type var_names = string array array (* store the original name of each variable *)
@@ -33,9 +30,6 @@ let rec subst_nt_in_term s term =
       with Not_found -> term
     end
   | App (t1, t2) -> App (subst_nt_in_term s t1, subst_nt_in_term s t2)
-
-let rec arity2sort k =
-  if k = 0 then O else KFun(O, arity2sort(k - 1))
    
 let rec size_of_term t =
   match t with
@@ -44,30 +38,46 @@ let rec size_of_term t =
 
 let rec size_of_rule r = size_of_term (snd r)
 
-class grammar nonterminals var_names rules = object(self)
-  val nonterminals : nonterminal array = nonterminals
-  (** Names of variables in nonterminals used for pretty printing. May be empty and will be
-      replaced by generic v1, v2, etc. in that case. *)
+(** A raw grammar.
+    nonterminals are nonterminal names. var_names are names of variables in nonterminals
+    used for pretty printing. May be empty and will be replaced by generic v1, v2, etc. in
+    that case. rules are bodies of nonterminals. *)
+class grammar (nt_names : string array) (var_names : string array array)
+    (rules : rule array) = object(self)
   val var_names : string array array = var_names
-  val rules : rule array = rules
 
-  method start_nt = 0
+  (** Sorts of nonterminals. *)
+  val sorts : sort array = Array.make (Array.length rules) SAtom
+
+  method start_nt : nt_id = 0
   method rule (nt : nt_id) : rule = rules.(nt)
-  method replace_rule (nt : nt_id) (rule : rule) = rules.(nt) <- rule
+  method replace_rule (nt : nt_id) (rule : rule) : unit = rules.(nt) <- rule
   method nt_count : int = Array.length rules
   method arity_of_nt (nt : nt_id) : int = fst rules.(nt)
   method rules = rules
 
   method size = Array.fold_left (fun n r -> n + (size_of_rule r)) 0 rules
 
-  method name_of_nt (nt : nt_id) : string = fst nonterminals.(nt)
-      
+  (* --- sorts --- *)
+
+  method update_sorts (new_sorts : sort array) : unit =
+    for nt = 0 to Array.length rules - 1 do
+      sorts.(nt) <- new_sorts.(nt)
+    done
+
+  method nt_sort (nt : nt_id) : sort =
+    sorts.(nt)
+
+  (* --- printing and name lookups --- *)
+  
+  method name_of_nt (nt : nt_id) : string = nt_names.(nt)
+
   method nt_with_name (nt_name : string) : nt_id =
     let res = ref (-1) in
-    Array.iteri (fun nt (name, _) ->
+    Array.iteri (fun nt name ->
         if nt_name = name then
           res := nt
-      ) nonterminals;
+      ) nt_names;
     if !res = (-1) then
       failwith ("Nonterminal with name " ^ nt_name ^ " not found")
     else
@@ -104,10 +114,6 @@ class grammar nonterminals var_names rules = object(self)
     self#to_string ^
     "\n\nThe number of rewrite rules: " ^ string_of_int self#nt_count ^ "\n" ^
     "The size of recursion scheme: " ^ string_of_int self#size
-
-  initializer
-    if snd nonterminals.(self#start_nt) <> O then
-      failwith "Starting nonterminal should have sort o"
 end
 
 (** change normal tree with app nodes to tree with (head, list-of-arg-terms) nodes *)
@@ -174,8 +180,4 @@ let rec nt_in_term (term : term) : SortedNTs.t =
   | TE _ | Var _ -> SortedNTs.empty
   | NT x -> SortedNTs.singleton x
   | App (t1, t2) ->
-    SortedNTs.merge (nt_in_term t1)  (nt_in_term t2) 
-      
-let rec arity_of_sort = function
-  | O -> 0
-  | KFun (k1, k2) -> 1 + arity_of_sort k2
+    SortedNTs.merge (nt_in_term t1)  (nt_in_term t2)

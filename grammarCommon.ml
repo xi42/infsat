@@ -34,3 +34,6 @@ let string_of_terminal (a : terminal) : string =
   | B -> "b"
   | E -> "e"
   | T -> "t"
+
+(* computed sorts of nonterminals *)
+type sort = SFun of sort * sort | SAtom

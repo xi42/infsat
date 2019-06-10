@@ -6,16 +6,18 @@ open GrammarCommon
 open Utilities
 
 type tvar = int
-type st = STvar of (st option) ref | STbase | STfun of st * st 
-let dummy_type = STbase
+(* term sorts *)
+type tsort = TSVar of (tsort option) ref | TSFun of tsort * tsort | TSAtom
+
+let dummy_type = TSAtom
 
 let new_tvid () = ref None
 
-let new_tvar () = STvar (new_tvid ())
+let new_tvar () = TSVar (new_tvid ())
 
-let rec deref_st (st : st) : st =
+let rec deref_st (st : tsort) : tsort =
   match st with
-  | STvar tref ->
+  | TSVar tref ->
     begin
       match !tref with
       | None -> st
@@ -26,40 +28,39 @@ let rec deref_st (st : st) : st =
     end
   | _ -> st
 
-let rec arity2sty n =
-  if n<0 then assert false
-  else if n=0 then STbase
-  else STfun(STbase, arity2sty (n-1))
+let rec arity2sty (n : int) : tsort =
+  if n < 0 then assert false
+  else if n = 0 then TSAtom
+  else TSFun (TSAtom, arity2sty (n-1))
 
-let rec sty2arity sty =
+let rec sty2arity (sty : tsort) : int=
   let sty' = deref_st sty in
   match sty' with
-  | STvar _ -> 0
-  | STbase -> 0
-  | STfun (_, sty1) -> (sty2arity sty1) + 1
+  | TSVar _ -> 0
+  | TSAtom -> 0
+  | TSFun (_, sty1) -> (sty2arity sty1) + 1
 
-exception UnifFailure of st * st
+exception UnifFailure of tsort * tsort
 
 let is_stfun sty =
   let sty' = deref_st sty in
   match sty' with
-    STfun _ -> true
+  | TSFun _ -> true
   | _ -> false
-
 
 let subst_id = []
 
 let rec app_subst sub st =
   match st with
-    STvar v -> (try List.assoc v sub with Not_found -> st)
-  | STfun(st1,st2) -> STfun(app_subst sub st1, app_subst sub st2)
+  | TSVar v -> (try List.assoc v sub with Not_found -> st)
+  | TSFun(st1,st2) -> TSFun(app_subst sub st1, app_subst sub st2)
   | _ -> st
 
-let rec inst_var st =
+let rec inst_var (st : tsort) : tsort =
   let st' = deref_st st in
   match st' with
-  | STvar vref -> STbase
-  | STfun(st1,st2) -> STfun(inst_var st1, inst_var st2)
+  | TSVar vref -> TSAtom
+  | TSFun(st1,st2) -> TSFun(inst_var st1, inst_var st2)
   | _ -> st'
 
 let comp_subst sub1 sub2 =
@@ -70,8 +71,8 @@ let comp_subst sub1 sub2 =
 
 let rec occur v sty =
   match sty with
-    STvar(v1) -> v==v1
-  | STfun(sty1,sty2) -> (occur v sty1)||(occur v sty2)
+  | TSVar(v1) -> v==v1
+  | TSFun(sty1,sty2) -> (occur v sty1)||(occur v sty2)
   | _ -> false
 
 (* effectively graph of relations between elements is kinda like find-union but without keeping height of the tree *)
@@ -79,23 +80,23 @@ let rec unify_sty sty1 sty2 =
   let sty1' = deref_st sty1 in
   let sty2' = deref_st sty2 in
   match sty1', sty2' with
-  | STvar v1, STvar v2 ->
+  | TSVar v1, TSVar v2 ->
     if not (v1 == v2) then
       v1 := Some sty2'
-  | STvar v1, _ ->
+  | TSVar v1, _ ->
     if occur v1 sty2' then
       raise_notrace (UnifFailure (sty1', sty2'))
     else
       v1 := Some sty2'
-  | _, STvar v2 -> 
+  | _, TSVar v2 -> 
     if occur v2 sty1' then
       raise_notrace (UnifFailure (sty1', sty2'))
     else
       v2 := Some sty1'
-  | STfun (st11, st12), STfun (st21, st22) ->
+  | TSFun (st11, st12), TSFun (st21, st22) ->
     unify_sty st11 st21;
     unify_sty st12 st22
-  | STbase, STbase -> ()
+  | TSAtom, TSAtom -> ()
   | _ -> raise_notrace (UnifFailure (sty1, sty2))
 
 (** Starting with pairs like tvar P ~ fun X Y or any type ~ type, it updates what vars actually point at through unification, i.e., vars' contents will be equal to appropriate type. Some vars may remain if we unify two vars. *)
@@ -115,11 +116,11 @@ let rec stys2sty stys =
     unify_sty sty sty1;
     sty
 
-let rec string_of_sty (sty : st) : string =
+let rec string_of_sty (sty : tsort) : string =
   match sty with
-  | STvar tv -> "'a" ^ string_of_int (Obj.magic @@ Obj.repr tv)
-  | STbase -> "o"
-  | STfun (sty1, sty2) ->
+  | TSVar tv -> "'a" ^ string_of_int (Obj.magic @@ Obj.repr tv)
+  | TSAtom -> "o"
+  | TSFun (sty1, sty2) ->
     let left =
       if is_stfun sty1 then
         "(" ^ string_of_sty sty1 ^ ")"
@@ -155,25 +156,25 @@ let rec tcheck_term t vte nte =
     let (sty1, c1) = tcheck_term t1 vte nte in
     let (sty2, c2) = tcheck_term t2 vte nte in
     let sty3 = new_tvar () in
-    let sty4 = STfun (sty2, sty3) in
+    let sty4 = TSFun (sty2, sty3) in
     (sty3, (sty1, sty4) :: (c2 @ c1))
 
 let rec mk_functy stys sty =
   match stys with
   | [] -> sty
-  | sty1::stys' ->
-    STfun (sty1, mk_functy stys' sty)
+  | sty1 :: stys' ->
+    TSFun (sty1, mk_functy stys' sty)
 
 let tcheck_rule f (arity, body) nste =
-  let vste = Array.make arity dummy_type in
+  let vste : tsort array = Array.make arity dummy_type in
   for i = 0 to arity - 1 do
     vste.(i) <- new_tvar ()
   done;
   (* type var for each rule *)
   let sty, c1 = tcheck_term body vste nste in
-  let fty1 = mk_functy (Array.to_list vste) sty (* STbase*) in
+  let fty1 = mk_functy (Array.to_list vste) sty (* SAtom*) in
   let fty2 = lookup_stype_nt f nste in
-  (*    (sty,STbase):: *) (* add this if we wish to enforce the right-hand side has ground type *)
+  (*    (sty,SAtom):: *) (* add this if we wish to enforce the right-hand side has ground type *)
   (fty1, fty2) :: c1
 
 let tcheck_rules rules nste =
@@ -183,9 +184,9 @@ let tcheck_rules rules nste =
   done;
   !cstr
 
-let rec order_of_sty sty =
+let rec order_of_sty (sty : tsort) : int =
   match sty with
-  | STfun (sty1, sty2) -> max ((order_of_sty sty1) + 1) (order_of_sty sty2)
+  | TSFun (sty1, sty2) -> max ((order_of_sty sty1) + 1) (order_of_sty sty2)
   | _ -> 0
 
 let order_of_nste nste =
@@ -201,7 +202,7 @@ let string_of_order gram nt ord : string =
 let rec mk_vste i vste arity sty =
   if i < arity then
     match sty with
-    | STfun (sty1, sty') -> 
+    | SFun (sty1, sty') -> 
       vste.(i) <- sty1;
       mk_vste (i + 1) vste arity sty'
     | _ -> assert false (* arity and sty contradict *)
@@ -217,13 +218,18 @@ let update_arity_of_nt gram nste =
       gram#replace_rule nt (arity, body')
   done
 
+let rec clean_sort : tsort -> sort = function
+  | TSAtom -> SAtom
+  | TSFun (s1, s2) -> SFun (clean_sort s1, clean_sort s2)
+  | TSVar _ -> failwith "Expected no variables when cleaning sorts"
+
 (** Eta-expand each rule in the grammar so that its body is of sort o. Compute sorts of
     nonterminals through unification and save them in the grammar. The sorts in the input are
-    ignored. *)
-let eta_expand (gram : grammar) =
+    ignored. Returns whether the input is a safe term. *)
+let eta_expand (gram : grammar) : unit =
   (* creating a new type var for each nonterminal *)
   let num_of_nts = gram#nt_count in
-  let nste = Array.make num_of_nts dummy_type in
+  let nste : tsort array = Array.make num_of_nts dummy_type in
   for i = 0 to num_of_nts - 1 do
     nste.(i) <- new_tvar ()
   done;
@@ -249,6 +255,8 @@ let eta_expand (gram : grammar) =
   let f, ord = order_of_nste nste in
   (* eta-expanding bodies of non-terminals so that their bodies are of sort O *)
   update_arity_of_nt gram nste;
+  let cleaned_nt_sorts = Array.map clean_sort nste in
+  gram#update_sorts cleaned_nt_sorts;
   print_verbose !Flags.verbose_preprocessing @@ lazy (
     string_of_nste gram nste ^ "\n\n" ^
     string_of_order gram f ord

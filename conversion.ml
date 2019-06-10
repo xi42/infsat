@@ -19,21 +19,18 @@ let new_fun_name fun_counter =
   fun_counter := !fun_counter + 1;
   "_fun" ^ string_of_int x
 
-let register_nt nt_counter nt_kinds nt_names nt_name =
-  if Hashtbl.mem nt_names nt_name then
+let register_nt nt_counter nt_names_lookup_arr nt_name =
+  if Hashtbl.mem nt_names_lookup_arr nt_name then
     failwith @@ "Duplicated nonterminal " ^ nt_name
   else 
     let nt = new_nt_id nt_counter in 
-    Hashtbl.add nt_names nt_name nt;
-    (* setting dummy kind *)
-    nt_kinds.(nt) <- (nt_name, O)
+    Hashtbl.add nt_names_lookup_arr nt_name nt
 
 let lookup_nt_id nt_names nt_name =
   try Hashtbl.find nt_names nt_name
   with Not_found -> failwith @@ "Undefined nonterminal " ^ nt_name
 
-let aux_rules = ref []
-let register_new_rule f arity body =
+let register_new_rule f arity body aux_rules =
    aux_rules := (f, arity, body) :: !aux_rules
 
 let rec depth_of_term term =
@@ -41,7 +38,7 @@ let rec depth_of_term term =
   | TE _ | NT _ | Var _ -> 0
   | App (t1, t2) -> max (depth_of_term t1) (depth_of_term t2 + 1)
 
-let rec midterm2term nt_counter nt_names vmap pterm =
+let rec midterm2term aux_rules nt_counter nt_names vmap pterm =
   match pterm with
   | MApp (h, pterms) ->
     let h' = 
@@ -57,15 +54,15 @@ let rec midterm2term nt_counter nt_names vmap pterm =
       | MFun _ -> failwith "Expected no functions at this point"
       | MT a -> TE a
     in
-    let terms = List.map (midterm2term nt_counter nt_names vmap) pterms in
+    let terms = List.map (midterm2term aux_rules nt_counter nt_names vmap) pterms in
     let terms' = if !Flags.normalize then
-        List.map (normalize_term nt_counter) terms
+        List.map (normalize_term aux_rules nt_counter) terms
       else
         terms
     in
     mk_app h' terms'
 
-and normalize_term nt_counter term =
+and normalize_term aux_rules nt_counter term =
   match term with
   | App _ -> (* reduces outer applications *)
     if depth_of_term term > !Flags.normalization_depth then
@@ -76,7 +73,7 @@ and normalize_term nt_counter term =
           (List.map (fun i-> Var (nt, i)) (range 0 arity))
       in
       let term' = Grammar.subst_term subst term in
-      register_new_rule nt arity term';
+      register_new_rule nt arity term' aux_rules;
       mk_app (NT nt) (List.map (fun i -> Var i) vars)
     else
       term
@@ -84,34 +81,34 @@ and normalize_term nt_counter term =
 
 let dummy_vname = "dummy_var"
 let dummy_term = NT 0
-let dummy_ntname = "DummyNT"
+let dummy_nt_name = "DummyNT"
 
-let midrule2rule nt_counter nt_names rules vinfo (f, (_, ss, pterm)) =
+let midrule2rule aux_rules nt_counter nt_names rules vinfo (f, (_, ss, pterm)) =
   let ss' = index_list ss in
   let arity = List.length ss in
   let vmap = List.map (fun (i, v) -> (v, (f, i))) ss' in (* [(arg name, (nonterm ix, arg ix)) *)
   vinfo.(f) <- Array.make arity dummy_vname;
   List.iter (fun (i,v) -> (vinfo.(f).(i) <- v)) ss'; (* vinfo[nonterm id][arg ix] = arg name *)
-  let term = midterm2term nt_counter nt_names vmap pterm in
+  let term = midterm2term aux_rules nt_counter nt_names vmap pterm in
   rules.(f) <- (arity, term) (* F x_1 .. x_n = t => rules[F] = (n, potentially normalized term with names changed either to var or to terminal) *)
 
-let midrules2rules nt_counter nt_names rules vinfo (midrules : midrules) =
+let midrules2rules aux_rules nt_counter nt_names rules vinfo (midrules : midrules) =
   let midrules_indexed = index_list midrules in
-  List.iter (midrule2rule nt_counter nt_names rules vinfo) midrules_indexed
+  List.iter (midrule2rule aux_rules nt_counter nt_names rules vinfo) midrules_indexed
 
-let add_auxiliary_rules nt_kinds rules =
+let add_auxiliary_rules aux_rules nt_names rules =
   let num_of_nts = Array.length rules in
-  let nt_kinds' = Array.make num_of_nts ("", O) in
+  let nt_names' = Array.make num_of_nts dummy_nt_name in
   let rules' = Array.make num_of_nts (0, dummy_term) in
-   for i = 0 to Array.length rules - 1 do
-      nt_kinds'.(i) <- nt_kinds.(i);
-      rules'.(i) <- rules.(i)
-   done;
-   List.iter (fun (f, arity, body) ->
+  for i = 0 to Array.length rules - 1 do
+    nt_names'.(i) <- nt_names.(i);
+    rules'.(i) <- rules.(i)
+  done;
+  List.iter (fun (f, arity, body) ->
       rules'.(f) <- (arity, body);
-      nt_kinds'.(f) <- ("$NT" ^ string_of_int f, O)
+      nt_names'.(f) <- "$NT" ^ string_of_int f
     ) !aux_rules;
-   (nt_kinds', rules')
+  (nt_names', rules')
 
 let rec elim_fun_from_midterm fun_counter vl (term : midterm) newrules : midterm * midrules =
   let MApp (h, pterms) = term in
@@ -294,25 +291,24 @@ let prerules2gram
   let midrules : midrules = prerules2midrules prerules preterminals in
   let fun_counter = ref 0 in
   let midrules = elim_fun_from_midrules fun_counter midrules in
-  let nt_names_list = List.map (fun (x, _, _) -> x) midrules in
-  let num_of_nts = List.length nt_names_list in
-  (* map nt id -> nt name, nt kind *)
-  let nt_kinds = Array.make num_of_nts (dummy_ntname, O) in
+  let nt_names : string array = Array.of_list @@ List.map (fun (x, _, _) -> x) midrules in
+  let num_of_nts = Array.length nt_names in
   (* assigning a unique number to each nonterminal *)
   let nt_counter = ref 0 in
-  let nt_names = Hashtbl.create 1000 in
-  List.iter (register_nt nt_counter nt_kinds nt_names) nt_names_list;
+  let nt_names_lookup_arr = Hashtbl.create 1000 in
+  Array.iter (register_nt nt_counter nt_names_lookup_arr) nt_names;
   (* map nt id -> arity, term *)
   let rules = Array.make num_of_nts (0, dummy_term) in
-  let vinfo = Array.make num_of_nts [||] in
-  midrules2rules nt_counter nt_names rules vinfo midrules;
-  let nt', rules' = 
+  let var_names = Array.make num_of_nts [||] in
+  let aux_rules : (nt_id * int * term) list ref = ref [] in
+  midrules2rules aux_rules nt_counter nt_names_lookup_arr rules var_names midrules;
+  let nt_names', rules' =
     if !Flags.normalize then
-      add_auxiliary_rules nt_kinds rules
+      add_auxiliary_rules aux_rules nt_names rules
     else
-      (nt_kinds, rules)
+      (nt_names, rules)
   in
-  let g = new Grammar.grammar nt' vinfo rules' in
+  let g = new Grammar.grammar nt_names' var_names rules' in
   print_verbose !Flags.verbose_preprocessing @@ lazy (
     "Grammar after conversion from prerules:\n" ^ g#grammar_info
   );

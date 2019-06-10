@@ -12,6 +12,7 @@ let program_info = "InfSat 0.1: Saturation-based finiteness checker for higher-o
 
 let options = [
   ("-q", Arg.Set Flags.quiet, "Enables quiet mode");
+  ("-f", Arg.Set Flags.force_unsafe, "Force check even if terms unsafe");
   ("-v", Arg.Set Flags.verbose_main, "Enables basic verbosity");
   ("-vv", Arg.Set Flags.verbose_all, "Enables full verbosity");
   ("-vprep", Arg.Set Flags.verbose_preprocessing, "Enables verbose parsing and preprocessing");
@@ -90,16 +91,34 @@ let report_finiteness input : Saturation.infsat_result =
   let grammar = time "conversion" (fun () -> Conversion.prerules2gram input) in
   time "eta-expansion" (fun () -> EtaExpansion.eta_expand grammar);
   let hgrammar = time "head conversion" (fun () -> new HGrammar.hgrammar grammar) in
-  let cfa = time "0CFA" (fun () ->
-      let cfa = new Cfa.cfa hgrammar in
-      cfa#expand;
-      cfa#compute_dependencies;
-      cfa)
+  let safety_error =
+    if !Flags.force_unsafe then
+      begin
+        if not !Flags.quiet then
+          print_string "Skipping term safety check.\n";
+        None
+      end
+    else
+      Safety.check_safety hgrammar
   in
-  time "saturation" (fun () ->
-      let saturation = new Saturation.saturation hgrammar cfa in
-      saturation#saturate
-    )
+  match safety_error with
+  | None ->
+    let cfa = time "0CFA" (fun () ->
+        let cfa = new Cfa.cfa hgrammar in
+        cfa#expand;
+        cfa#compute_dependencies;
+        cfa)
+    in
+    time "saturation" (fun () ->
+        let saturation = new Saturation.saturation hgrammar cfa in
+        saturation#saturate
+      )
+  | Some error ->
+    if not !Flags.quiet then
+      print_string @@ "Aborting computations, because one of the terms is not safe:\n" ^
+                      error ^ "\n\n" ^
+                      "If you wish to ignore the safety check, use -f option.\n";
+    Saturation.Unknown
 
 (** Parses given file or stdin and returns whether the HORS is finite. *)
 let parse_and_report_finiteness (filename : string option) : Saturation.infsat_result =

@@ -123,6 +123,20 @@ class hgrammar (grammar : grammar) = object(self)
     let _, _, _, nt = hterms_data.(id) in
     nt
 
+  (* --- sorts --- *)
+
+  method nt_sort (nt : nt_id) : sort =
+    grammar#nt_sort nt
+
+  method var_sort ((nt, i) : var_id) : sort =
+    let fun_sort = ref @@ self#nt_sort nt in
+    for j = 0 to i - 1 do
+      fun_sort := match !fun_sort with
+        | SFun (_, codomain) -> codomain
+        | SAtom -> failwith "Expected a function sort"
+    done;
+    !fun_sort
+
   (* --- operations --- *)
   
   (** Changes (H, [ID]) into (H, [arg 1, arg 2, ...]) and (H, [ID1, ID2, ...]) into
