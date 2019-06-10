@@ -75,7 +75,4 @@ Examples can be found in directory "examples".
 
 TODO
 ----
-* implement checking if terms are safe
-superficially safe <=> for every free variable x in term M ord(M) <= ord(x)
-safe <=> for every head form K L1...Ln and n >= 1, K, L1...Ln superficially safe
 * implement optimization of removing unused variables from functions
