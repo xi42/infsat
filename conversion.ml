@@ -110,6 +110,26 @@ let add_auxiliary_rules aux_rules nt_names rules =
     ) !aux_rules;
   (nt_names', rules')
 
+let filter_used_vars (pterm : midterm) (vars : string list)
+    (exclude_vars : string list) : string list =
+  let rec gather_used_vars (MApp (h, pterms) : midterm) : SS.t =
+    let used =
+      List.fold_left (fun acc pterm ->
+          SS.union acc @@ gather_used_vars pterm
+        ) SS.empty pterms
+    in
+    match h with
+    | MT _ -> used
+    | MNT _ -> used
+    | MVar v ->
+      SS.add v used
+    | MFun (fun_vars, body) ->
+      (* TODO what if names in fun_vars and scope_vars clash? *)
+      SS.union used @@ SS.diff (gather_used_vars body) (SS.of_list fun_vars)
+  in
+  let used = SS.diff (gather_used_vars pterm) @@ SS.of_list exclude_vars in
+  vars |> List.filter (fun v -> SS.mem v used)
+
 let rec elim_fun_from_midterm fun_counter vl (term : midterm) newrules : midterm * midrules =
   let MApp (h, pterms) = term in
   let pterms', newrules' = elim_fun_from_midterms fun_counter vl pterms newrules in
@@ -124,15 +144,17 @@ and elim_fun_from_midterms fun_counter vl (terms : midterm list) newrules =
     let pterm', newrules'' = elim_fun_from_midterm fun_counter vl pterm newrules' in
     (pterm' :: pterms', newrules'')
     
-and elim_fun_from_head fun_counter vl (h : midhead) newrules : midterm * midrules =
+and elim_fun_from_head (fun_counter : int ref) (scope_vars : string list) (h : midhead)
+    newrules : midterm * midrules =
   match h with
   | MT _ | MNT _ | MVar _ -> (MApp (h, []), newrules)
-  | MFun (vl1, pterm) ->
-    let vl' = vl @ vl1 in (* what if names in vl and vl1 clashe? *)
-    let pterm', newrules' = elim_fun_from_midterm fun_counter vl' pterm newrules in
+  | MFun (fun_vars, pterm) ->
+    let used_scope_vars = filter_used_vars pterm scope_vars fun_vars in
+    let fun_nt_vars = used_scope_vars @ fun_vars in
+    let pterm', newrules' = elim_fun_from_midterm fun_counter fun_nt_vars pterm newrules in
     let f = new_fun_name fun_counter in
-    let terms1 = List.map (fun v -> MApp (MVar v, [])) vl in
-    (MApp (MNT f, terms1), (f, vl', pterm') :: newrules')
+    let terms1 = List.map (fun v -> MApp (MVar v, [])) used_scope_vars in
+    (MApp (MNT f, terms1), (f, fun_nt_vars, pterm') :: newrules')
 
 let elim_fun_from_midrule fun_counter (rule : midrule) newrules : midrule * midrules =
   let f, vl, term = rule in

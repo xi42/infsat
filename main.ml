@@ -115,9 +115,10 @@ let report_finiteness input : Saturation.infsat_result =
       )
   | Some error ->
     if not !Flags.quiet then
-      print_string @@ "Aborting computations, because one of the terms is not safe:\n" ^
+      print_string @@ "Aborting computations, because one of the terms is not safe :\n" ^
                       error ^ "\n\n" ^
-                      "If you wish to ignore the safety check, use -f option.\n";
+                      "If you wish to ignore the safety check, use -f option. However, " ^
+                      "correctness of the output will depend on unproven hypothesis.\n";
     Saturation.Unknown
 
 (** Parses given file or stdin and returns whether the HORS is finite. *)
