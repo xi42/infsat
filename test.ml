@@ -19,7 +19,7 @@ open Utilities
 let init_flags () =
   Flags.verbose_all := false;
   Flags.type_format := "short";
-  Flags.force_unsafe := true;
+  Flags.force_unsafe := false;
   Flags.propagate_flags ()
 
 let rec paths_equal path1 path2 =
@@ -1401,16 +1401,29 @@ let examples_test () : test =
   let fin_filenames = List.filter (fun f ->
       String.sub f (String.length f - 8) 8 = "_fin.inf") filenames_in_dir in
   let path filename = Some (String.concat "" ["examples/"; filename]) in
+  let run filename =
+    if String.length filename > 15 &&
+       String.sub filename (String.length filename - 15) 7 = "_unsafe" then
+      begin
+        let unsafe_before = !Flags.force_unsafe in
+        Flags.force_unsafe := true;
+        let res = Main.parse_and_report_finiteness (path filename) in
+        Flags.force_unsafe := unsafe_before;
+        res
+      end
+    else
+      Main.parse_and_report_finiteness (path filename)
+  in
   "Examples" >::: [
     "Infinite examples" >::: List.map (fun filename ->
         filename >:: (fun _ ->
-            assert_equal ~printer:Saturation.string_of_infsat_result Infinite
-              (Main.parse_and_report_finiteness (path filename))))
+            assert_equal ~printer:Saturation.string_of_infsat_result Infinite @@
+            run filename))
       inf_filenames;
     "Finite examples" >::: List.map (fun filename ->
         filename >:: (fun _ ->
-            assert_equal ~printer:Saturation.string_of_infsat_result Finite
-              (Main.parse_and_report_finiteness (path filename))))
+            assert_equal ~printer:Saturation.string_of_infsat_result Finite @@
+            run filename))
       fin_filenames
   ]
 
