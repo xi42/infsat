@@ -14,7 +14,7 @@ type head = HT of terminal | HNT of nt_id | HVar of var_id
     Note that nonterminal bodies have K <= 1 and only bindings may have more. *)
 type hterm = head * hterms_id list
 
-(** Unique identifier of a hterm's leaf. Equal to 0-indexed position while doing DFS
+(** Unique identifier of a hterm's leaf. Equal to 0-indexed leaf position while doing DFS
     from root from left to right. *)
 type hloc = int
 
