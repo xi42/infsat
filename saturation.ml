@@ -321,8 +321,10 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     self#process_nt_queue ||
     self#process_hterms_queue
   
-  (** Performs saturation and returns whether the language is finite. *)
-  method saturate : infsat_result =
+  (** Performs saturation and returns whether the language is finite. Takes optional safety error
+      message if the term is unsafe. When flag force_unsafe is false (default) and the output
+      is finite language, it returns Unknown with appropriate message instead. *)
+  method saturate (safety_error : string option) : infsat_result =
     try
       while self#process_queues do
         if iteration = !Flags.maxiters then
@@ -335,7 +337,17 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         "The input HORS contains only paths with uniformly bounded number " ^
         "of counted terminals.";
       );
-      Finite
+      match !Flags.force_unsafe, safety_error with
+      | false, Some error ->
+        print_verbose (not !Flags.quiet) @@ lazy (
+          "\nHowever, one of the terms is unsafe:\n" ^
+          error ^ "\n\n" ^
+          "The correctness of this output depends on an unproven hypothesis that the type " ^
+          "system used in this work is correct for all term. If you wish to assume that this " ^
+          "hypothesis holds, use -f option."
+        );
+        Unknown
+      | _, _ -> Finite
     with
     | Positive_cycle_found cycle_path ->
       reset_indentation ();

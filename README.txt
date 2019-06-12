@@ -77,7 +77,6 @@ TODO
 ----
 * implement marks for differently typed same variable atoms
 * terminals to a -> <children> [counted] <universal/existential (optional if children <= 1>.
-* move safety check to end only if didn't found a cycle
 * grammars to test displaying proofs when escape path crosses path to cycle - counting number of gathered proofs
 * benchmark on horsat tests
 * update documentation

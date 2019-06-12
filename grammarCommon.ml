@@ -47,4 +47,5 @@ let sort_of_terminal (a : terminal) : sort =
 
 let rec string_of_sort : sort -> string = function
   | SAtom -> "o"
+  | SFun (SAtom, s2) -> "o -> " ^ string_of_sort s2
   | SFun (s1, s2) -> "(" ^ string_of_sort s1 ^ ") -> " ^ string_of_sort s2

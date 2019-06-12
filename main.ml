@@ -77,8 +77,12 @@ let parse_stdin () =
     try
       InfSatParser.main InfSatLexer.token lexbuf
     with 
-    | Failure _ -> exit (-1) (* exception raised by the lexical analyer *)
-    | Parsing.Parse_error -> (print_string "Parse error\n";exit(-1)) 
+    | Failure _ ->
+      (* exception raised by the lexical analyer *)
+      exit (-1)
+    | Parsing.Parse_error ->
+      print_string "Parse error:\n";
+      exit (-1)
   in
     result
 
@@ -91,35 +95,17 @@ let report_finiteness input : Saturation.infsat_result =
   let grammar = time "conversion" (fun () -> Conversion.prerules2gram input) in
   time "eta-expansion" (fun () -> EtaExpansion.eta_expand grammar);
   let hgrammar = time "head conversion" (fun () -> new HGrammar.hgrammar grammar) in
-  let safety_error =
-    if !Flags.force_unsafe then
-      begin
-        if not !Flags.quiet then
-          print_string "Skipping term safety check.\n";
-        None
-      end
-    else
-      Safety.check_safety hgrammar
+  let safety_error = Safety.check_safety hgrammar in
+  let cfa = time "0CFA" (fun () ->
+      let cfa = new Cfa.cfa hgrammar in
+      cfa#expand;
+      cfa#compute_dependencies;
+      cfa)
   in
-  match safety_error with
-  | None ->
-    let cfa = time "0CFA" (fun () ->
-        let cfa = new Cfa.cfa hgrammar in
-        cfa#expand;
-        cfa#compute_dependencies;
-        cfa)
-    in
-    time "saturation" (fun () ->
-        let saturation = new Saturation.saturation hgrammar cfa in
-        saturation#saturate
-      )
-  | Some error ->
-    if not !Flags.quiet then
-      print_string @@ "Aborting computations, because one of the terms is not safe :\n" ^
-                      error ^ "\n\n" ^
-                      "If you wish to ignore the safety check, use -f option. However, " ^
-                      "correctness of the output will depend on unproven hypothesis.\n";
-    Saturation.Unknown
+  time "saturation" (fun () ->
+      let saturation = new Saturation.saturation hgrammar cfa in
+      saturation#saturate safety_error
+    )
 
 (** Parses given file or stdin and returns whether the HORS is finite. *)
 let parse_and_report_finiteness (filename : string option) : Saturation.infsat_result =
