@@ -95,7 +95,20 @@ let report_finiteness input : Saturation.infsat_result =
   let grammar = time "conversion" (fun () -> Conversion.prerules2gram input) in
   time "eta-expansion" (fun () -> EtaExpansion.eta_expand grammar);
   let hgrammar = time "head conversion" (fun () -> new HGrammar.hgrammar grammar) in
+  print_verbose (not !Flags.quiet) @@ lazy (
+    "Rewritten input grammar:\n\n" ^
+    hgrammar#to_string ^ "\n"
+  );
   let safety_error = Safety.check_safety hgrammar in
+  begin
+    match safety_error with
+    | Some error ->
+      print_verbose (not !Flags.quiet) @@ lazy (
+        "The grammar contains unsafe terms:\n" ^
+        error ^ "\n"
+      )
+    | None -> ()
+  end;
   let cfa = time "0CFA" (fun () ->
       let cfa = new Cfa.cfa hgrammar in
       cfa#expand;

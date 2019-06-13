@@ -6,6 +6,8 @@ open Syntax
 %token <string> NONTERM
 %token <int> INT
 %token COUNTED
+%token EXISTENTIAL
+%token UNIVERSAL
 %token ARROW
 %token FUN
 %token PERIOD
@@ -29,11 +31,13 @@ open Syntax
 %%
 
 main:
-  rules terminals EOF
-  {($1, $2)};
+| rules terminals EOF
+  {($1, $2)}
+| rules EOF
+  {($1, [])};
 
 rules:
-  BEGING rules_list END
+| BEGING rules_list END
   {$2};
 
 rules_list:
@@ -55,7 +59,8 @@ subterm:
   {PApp (Name($1), [])}
 | LPAR term RPAR
   {match $2 with
-   | PApp _ -> $2};
+   | PApp _ -> $2
+  };
 
 term:
 | terms_list
@@ -91,6 +96,14 @@ terminals_list:
 
 terminal:
 | NAME ARROW INT PERIOD
-  {Terminal ($1, $3, false)}
+  {Terminal ($1, $3, false, false)}
+| NAME ARROW INT EXISTENTIAL PERIOD
+  {Terminal ($1, $3, false, false)}
 | NAME ARROW INT COUNTED PERIOD
-  {Terminal ($1, $3, true)};
+  {Terminal ($1, $3, true, false)}
+| NAME ARROW INT EXISTENTIAL COUNTED PERIOD
+  {Terminal ($1, $3, true, false)}
+| NAME ARROW INT UNIVERSAL PERIOD
+  {Terminal ($1, $3, false, true)}
+| NAME ARROW INT UNIVERSAL COUNTED PERIOD
+  {Terminal ($1, $3, true, true)};

@@ -173,14 +173,14 @@ let elim_fun_from_midrules fun_counter (rules : midrules) : midrules =
   in
   List.rev_append rules' newrules
 
-let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
-  let rec b_tree_aux from_arg to_arg =
+let bin_tree (mid : terminal) (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
+  let rec bin_tree_aux from_arg to_arg =
     if from_arg = to_arg then
       MApp (MVar ("_" ^ string_of_int from_arg), [])
     else
       let mid_arg = (from_arg + to_arg) / 2 in
-      let args = [b_tree_aux from_arg mid_arg; b_tree_aux (mid_arg + 1) to_arg] in
-      MApp (MT B, args)
+      let args = [bin_tree_aux from_arg mid_arg; bin_tree_aux (mid_arg + 1) to_arg] in
+      MApp (MT mid, args)
   in
   let rec vars k acc =
     if k = 0 then
@@ -200,12 +200,12 @@ let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
         (* removing identities when terminal has one child *)
         (List.hd arg_terms, false)
       else if k = 2 then
-        (* converting terminal with two children to b *)
-        (MApp (MT B, arg_terms), false)
+        (* converting terminal with two children to b/t *)
+        (MApp (MT mid, arg_terms), false)
       else
         (* converting terminal with more than two children to a binary tree with that many
-           leaves and b in non-leaf nodes *)
-        (b_tree_aux 1 k, true)
+           leaves and b/t in non-leaf nodes *)
+        (bin_tree_aux 1 k, true)
     in
     (* adding _a above counted ones *)
     let body = if counted then
@@ -220,7 +220,7 @@ let b_tree (k : int) (counted : bool) (arg_terms : midterm list) : midterm =
 
 (** Replaces preterminals with minimal set of standard terminals - a, b, e, t. a, b, e are like
     in paper, t is a terminal that has type * -> * -> np for * = np or pr.
-    Checks for name conflicts between variables, terminals, and br/tr. Replacing is done by changing
+    Checks for name conflicts between variables, terminals, and b/t. Replacing is done by changing
     terminals of arity k with a lambda-term with b-tree (with branches) with all k arguments of
     height log2(k)+1. If k=0, the terminal is replaced with _e instead. If the terminal is
     counted, a is added above that tree. *)
@@ -230,15 +230,19 @@ let prerules2midrules (prerules : Syntax.prerules)
   let preterminals_map = Hashtbl.create 1000 in
   List.iter (fun t ->
       match t with
-      | Syntax.Terminal (name, arity, counted) ->
+      | Syntax.Terminal (name, arity, counted, universal) ->
         if Hashtbl.mem preterminals_map name then
           failwith @@ "Terminal " ^ name ^ " defined twice"
-        else if name = "br" then
-          failwith "Terminal br is reserved for nondeterministic choice"
-        else if name = "tr" then
-          failwith "Terminal tr is reserved for binary tree node"
+        else if name = "a" then
+          failwith "Terminal a is reserved for counted node"
+        else if name = "b" then
+          failwith "Terminal b is reserved for nondeterministic choice node"
+        else if name = "e" then
+          failwith "Terminal e is reserved for leaf node"
+        else if name = "t" then
+          failwith "Terminal t is reserved for binary tree node"
         else
-          Hashtbl.add preterminals_map name (arity, counted)) preterminals;
+          Hashtbl.add preterminals_map name (arity, counted, universal)) preterminals;
   let prerule2midrule (nt, args_list, preterm) : midrule =
     let rec preterm2midterm (vars : SS.t) (preterm : Syntax.preterm) : midterm =
       match preterm with
@@ -249,21 +253,33 @@ let prerules2midrules (prerules : Syntax.prerules)
           if SS.mem name vars then
             (* converting variables *)
             MApp (MVar name, arg_preterms)
-          else if name = "br" then
-            (* converting br *)
+          else if name = "a" then
+            (* converting a *)
+            MApp (MT A, arg_preterms)
+          else if name = "b" then
+            (* converting b *)
             MApp (MT B, arg_preterms)
-          else if name = "tr" then
+          else if name = "e" then
+            (* converting e *)
+            MApp (MT E, arg_preterms)
+          else if name = "t" then
             (* converting tr *)
             MApp (MT T, arg_preterms)
           else
             (* converting terminals *)
             begin
               try
-                let arity, counted = Hashtbl.find preterminals_map name in
+                let arity, counted, universal = Hashtbl.find preterminals_map name in
                 if List.length a > arity then
                   failwith @@ "Terminal " ^ name ^ " applied to more arguments than its arity"
                 else
-                  b_tree arity counted arg_preterms
+                  let mid_terminal =
+                    if universal then
+                      T
+                    else
+                      B
+                  in
+                  bin_tree mid_terminal arity counted arg_preterms
               with
               | Not_found ->
                 failwith @@ "Unbounded name " ^ name ^ " in the body of nonterminal " ^ nt
@@ -274,7 +290,8 @@ let prerules2midrules (prerules : Syntax.prerules)
           let fun_args = List.fold_left (fun acc arg ->
               if SS.mem arg acc then
                 failwith @@ "Variable " ^ arg ^ " defined twice in function in nonterminal " ^ nt
-              else if Hashtbl.mem preterminals_map arg || arg = "br" || arg = "tr" then
+              else if Hashtbl.mem preterminals_map arg || arg = "a" || arg = "b" ||
+                      arg = "e" || arg = "t" then
                 failwith @@ "Variable " ^ arg ^ " in function in nonterminal " ^ nt ^
                             " conflicts with a terminal with the same name"
               else
@@ -288,7 +305,8 @@ let prerules2midrules (prerules : Syntax.prerules)
     let args = List.fold_left (fun acc arg ->
         if SS.mem arg acc then
           failwith @@ "Variable " ^ arg ^ " defined twice in nonterminal " ^ nt
-        else if Hashtbl.mem preterminals_map arg || arg = "br" || arg = "tr" then
+        else if Hashtbl.mem preterminals_map arg || arg = "a" || arg = "b" ||
+                arg = "e" || arg = "t" then
           failwith @@ "Variable " ^ arg ^ " in nonterminal " ^ nt ^
                       " conflicts with a terminal with the same name"
         else

@@ -1,13 +1,8 @@
 Grammar.
 S -> A.
-A -> br B D.
+A -> b B D.
 B -> a C.
 C -> a A.
 D -> a E.
-E -> c.
-End.
-
-Terminals.
-a -> 1 $.
-c -> 0.
+E -> e.
 End.

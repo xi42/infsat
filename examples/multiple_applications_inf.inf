@@ -1,10 +1,4 @@
 Grammar.
-S -> X (X (X c)).
+S -> X (X (X e)).
 X x -> b (a (X x)) x.
-End.
-
-Terminals.
-a -> 1 $.
-b -> 2.
-c -> 0.
 End.

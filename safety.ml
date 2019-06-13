@@ -56,7 +56,7 @@ let rec check_hterm_safety (hg : hgrammar) (h, ids : hterm) : (string, order) ei
       Left ("Encountered term " ^ hg#string_of_hterm false HlocMap.empty 0 (h, ids) ^
             " with sort " ^ string_of_sort !term_sort ^ " of order " ^ string_of_int term_order ^
             ", while minimum order of sort " ^
-            "of a variable was " ^ string_of_int min_var_order ^ ".")
+            "of a variable in this term was " ^ string_of_int min_var_order ^ ".")
     else
       Right min_var_order
   | Left _ -> min_var_order

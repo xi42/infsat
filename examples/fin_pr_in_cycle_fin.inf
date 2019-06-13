@@ -6,10 +6,3 @@ C -> b e F.
 D -> b (a e) F.
 F -> Z.
 End.
-
-(* a, b, e terminals correspond directly to the ones from the paper. *)
-Terminals.
-a -> 1 $.
-b -> 2.
-e -> 0.
-End.

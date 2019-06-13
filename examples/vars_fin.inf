@@ -3,10 +3,3 @@ N0 -> N1 a e.
 N1 x y -> N2 x (x y).
 N2 x y -> x y.
 End.
-
-(* a, b, e terminals correspond directly to the ones from the paper. *)
-Terminals.
-a -> 1 $.
-b -> 2.
-e -> 0.
-End.

@@ -436,10 +436,11 @@ let conversion_test () : test =
   (* These preterminals are defined in a way so that they should be converted to respective
      terminals from paper without creating additional terms (such as functions). *)
   let preserved_preterminals = [
-    Syntax.Terminal ("a", 1, true);
-    Syntax.Terminal ("b", 2, false);
-    Syntax.Terminal ("e", 0, false);
-    Syntax.Terminal ("id", 1, false)
+    Syntax.Terminal ("a_", 1, true, false);
+    Syntax.Terminal ("b_", 2, false, false);
+    Syntax.Terminal ("e_", 0, false, false);
+    Syntax.Terminal ("t_", 2, false, true);
+    Syntax.Terminal ("id", 1, false, false)
   ] in
   (* This grammar aims to test all combinations of applications of terminals a, b, e with
      all possible numbers of applied arguments. It also tests that not counted terminal
@@ -468,11 +469,15 @@ let conversion_test () : test =
          Syntax.PApp (Syntax.Name "e", [])
        ]));
     ("ID", [], Syntax.PApp (Syntax.Name "id", []));
-    ("BR", [], Syntax.PApp (Syntax.Name "br", []));
-    ("BRe", [], Syntax.PApp (Syntax.Name "br", [
+    ("BR", [], Syntax.PApp (Syntax.Name "b", []));
+    ("BRe", [], Syntax.PApp (Syntax.Name "b", [
          Syntax.PApp (Syntax.Name "e", [])
        ]));
-    ("BRxy", ["x"; "y"], Syntax.PApp (Syntax.Name "br", [
+    ("TRee", [], Syntax.PApp (Syntax.Name "t", [
+         Syntax.PApp (Syntax.Name "e", []);
+         Syntax.PApp (Syntax.Name "e", [])
+       ]));
+    ("BRxy", ["x"; "y"], Syntax.PApp (Syntax.Name "b", [
          Syntax.PApp (Syntax.Name "x", []);
          Syntax.PApp (Syntax.Name "y", [])
        ]))
@@ -489,14 +494,14 @@ let conversion_test () : test =
        should be no functions apart from the one from identity without arguments, i.e.,
        exactly one extra rule. *)
     "prerules2gram-1" >:: (fun _ ->
-        assert_equal ~printer:string_of_int 13 @@
+        assert_equal ~printer:string_of_int 14 @@
         Array.length gram#rules
       );
 
     (* Checking that number of leaf terms is correct - nothing extra was added or removed
        aside from extra rule from identity without arguments. *)
     "prerules2gram-2" >:: (fun _ ->
-        assert_equal ~printer:string_of_int 23
+        assert_equal ~printer:string_of_int 26
         gram#size
       );
   ]

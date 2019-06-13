@@ -37,6 +37,10 @@ rule token = parse
   { RPAR }
 | "$"
   { COUNTED }
+| "+"
+  { EXISTENTIAL }
+| "*"
+  { UNIVERSAL }
 | "."
   { PERIOD }
 | digit digit* 

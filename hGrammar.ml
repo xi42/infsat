@@ -369,7 +369,7 @@ class hgrammar (grammar : grammar) = object(self)
     Utilities.range 0 (self#nt_arity nt) |>
     List.map (fun i -> self#var_name (nt, i))
   
-  method to_string : string =
+  method info : string =
     "hterms_id -> terms:\n" ^
     String.concat "\n" @@ List.filter (fun x -> x <> "") @@
     (range 0 next_hterms_id |> List.map (fun id ->
@@ -380,6 +380,14 @@ class hgrammar (grammar : grammar) = object(self)
          else
            ""
        )
+    )
+
+  method to_string : string =
+    String.concat "\n" @@ Array.to_list (
+      nt_bodies |>
+      Array.mapi (fun nt body ->
+          self#nt_name nt ^ " -> " ^ self#string_of_hterm false HlocMap.empty 0 body ^ "."
+        )
     )
      
   (* --- debugging --- *)
@@ -408,6 +416,6 @@ class hgrammar (grammar : grammar) = object(self)
       nt_bodies.(nt) <- hterm (* nt_bodies now contains (arity, (H, [ID])), where H is a var/nonterminal/terminal and ID points in hterms_data at list of terms normalized to (H, [ID]) or (H, []) if there are no args *)
     done;
     print_verbose !Flags.verbose_preprocessing @@ lazy (
-      self#to_string ^ "\n"
+      self#info ^ "\n"
     )
 end

@@ -2,9 +2,3 @@ Grammar.
 S -> Z e.
 Z x -> b (a x) (Z x).
 End.
-
-Terminals.
-a -> 1 $.
-b -> 2.
-e -> 0.
-End.

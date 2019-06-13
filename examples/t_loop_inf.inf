@@ -1,5 +1,5 @@
 Grammar.
-S -> br (tr S S) q.
+S -> b (t S S) q.
 End.
 
 Terminals.

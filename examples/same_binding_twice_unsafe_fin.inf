@@ -1,60 +1,35 @@
-Grammar.
-S -> br S1 S2.
-(* B is applied with two same hterms - a and a *)
-S1 -> A (B a).
-A x -> x a.
-B x y -> x (y e).
 (*
-y x
-y <- D x
-(D x) x
+This is an example that makes 0-CFA detect application of the same sequence of terms to a
+nonterminal, but from two different contexts and containing a variable. This is needed to
+test some rare border cases when creating environments.
 
-D : k1 -> k1 -> k3
-D x : k1 -> k3
-y : k1 -> k3
-x : k1
+Basically, 0-CFA detects which sequences of terms are applied to which nonterminals. The
+terms are grouped by context, so application
 
-We need a binding C [x] [t1] ... [tK] [tL] ... [tM] [x] where each of these [x] is separate hterms.
-It cannot be achieved without substitution, because without substitution there can be at most one
-hterm. We need a subterm y [tL] ... [tM] [x] where y = C [x] [t1] ... [tK].
+S -> NT t1 t2 t3
 
-TODO note that C does not need to be the thing where y is defined in.
+will detect a single sequence of terms in application NT [t1 t2 t3]. These terms are applied to
+first, second, and third argument of nonterminal NT. Multiple sequences can occur only in
+case of partial application, e.g.:
 
-, so we need a term y [x] where y = (C [x]) or (C [x] [t]) for some hterms t.
+S -> NT1 t2 t3
+where
+NT1 -> NT2 t1
 
-If y = (C [x]) then:
-C : k1 -> k2 -> k3
-x : k1
-C x = y : k2 -> k3
-but y : k2, so k2 = k2 -> k3, which means that unification failed.
+gives us application of two sequences of terms to nonterminal NT2 - NT2 [t1] [t2 t3].
 
-If y = (C [x] [t1] ... [tN]) then
-C : k1 -> k2 -> k3
+There are some rare border cases that occur only when such a sequence contains variables
+that are from the same nonterminal. These are tricky to construct, because simply writing
 
+NT x x
 
+would always construct a sequence [x x] instead of [x] [x].
 
-
-C [x] [x]
-y [x], y <- C [x]
-
-x and y are variables from D (which can be equal to C).
-
-C [x] [x]
-only way is
-y [x] with y <- C [x]
-
-since application is needed, C [x] must come from same nonterminal as [x] - it must be a recursive call to self
-
-D x y -> x y | D (C x) y
-x = a, C = id?
+This grammar achieves that border case by partially applying nonterminal D with [y], and then
+completing the partial application with [y] in the same nonterminal in another call.
 *)
-S2 -> C a e.
+Grammar.
+S -> C a e.
 C x y -> b (x y) (C (D y) y).
 D x y -> x.
-End.
-
-Terminals.
-a -> 1 $.
-b -> 2.
-e -> 0.
 End.

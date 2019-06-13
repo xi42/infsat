@@ -1,9 +1,9 @@
 Grammar.
-S -> a c (a S c).
+S -> p r (p S r).
 End.
 
 Terminals.
-a -> 2 $.
-b -> 1 $.
-c -> 0 $.
+p -> 2 $.
+q -> 1 $.
+r -> 0 $.
 End.

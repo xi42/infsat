@@ -1,10 +1,4 @@
 Grammar.
-S -> b S (b (a (a (tr (X S) (X S)))) (b c c)).
+S -> b S (b (a (a (t (X S) (X S)))) (b e e)).
 X x -> b x x.
-End.
-
-Terminals.
-a -> 1 $.
-b -> 2.
-c -> 0.
 End.

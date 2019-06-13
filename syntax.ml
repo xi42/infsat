@@ -11,7 +11,8 @@ type preformula = FConst of string
                 | FOr of preformula * preformula
 type ata_trans = (string * string) * preformula
 
-type preterminal = Terminal of string * int * bool
+(** Name, arity, counting flag, and universal flag of a terminal. *)
+type preterminal = Terminal of string * int * bool * bool
 type preterminals = preterminal list
 
 let rec string_of_vars vl =
@@ -51,13 +52,18 @@ let string_of_prerules prerules =
 
 let string_of_preterminal pt =
   match pt with
-  | Terminal (name, arity, counted) ->
+  | Terminal (name, arity, counted, universal) ->
     let string_of_counted counted =
       match counted with
       | true -> " $"
       | false -> ""
     in
-    name^" -> "^(string_of_int arity)^(string_of_counted counted)
+    let string_of_universal universal =
+      match universal with
+      | true -> " *"
+      | false -> " +"
+    in
+    name ^ " -> " ^ string_of_int arity ^ string_of_universal universal ^ string_of_counted counted
 
 let rec string_of_preterminals pts =
   let rec string_of_preterminals_aux pts =

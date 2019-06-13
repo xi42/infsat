@@ -4,10 +4,3 @@ NoHeadVars x y -> Combine (A x) y.
 A x y -> a (x y).
 Combine x y z -> x (y z).
 End.
-
-(* a, b, e terminals correspond directly to the ones from the paper. *)
-Terminals.
-a -> 1 $.
-b -> 2.
-e -> 0.
-End.
