@@ -103,9 +103,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       end;
     let proof = {
       derived = (nt, ty);
-      var_assumptions = envm.env#get_var_itys;
-      nt_assumptions = envm.used_nts;
-      t_assumptions = envm.used_ts;
+      used_nts = envm.used_nts;
+      loc_types = envm.loc_types;
       positive = envm.positive;
       initial = false
     } in

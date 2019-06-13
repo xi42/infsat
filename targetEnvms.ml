@@ -5,38 +5,41 @@ open Type
 open TypingCommon
 open Utilities
 
-(* TODO this doesn't work - it can be same hloc duplicated if in intersection type *)
-
-(** Map from used nonterminal typings to where and how many times they were used in proof's
-    hterm. *)
-type used_nts = int HlocMap.t NTTyMap.t
+(** Map from used nonterminal typings to whether they were used at least twice in the proof
+    tree. *)
+type used_nts = bool NTTyMap.t
 
 let empty_used_nts : used_nts = NTTyMap.empty
 
-let nt_ty_used_once (nt : nt_id) (ty : ty) (loc : hloc) : used_nts =
-  NTTyMap.singleton (nt, ty) @@ HlocMap.singleton loc 1
+let nt_ty_used_once (nt : nt_id) (ty : ty) : used_nts =
+  NTTyMap.singleton (nt, ty) false
 
 (** Map from used terminal typings to where they were used in proof's hterm. *)
-type used_ts = int HlocMap.t TTyMap.t
+type loc_types = int TyMap.t HlocMap.t
 
-let empty_used_ts : used_ts = TTyMap.empty
+let empty_loc_types : loc_types = HlocMap.empty
 
-let t_ty_used_once (a : terminal) (ty : ty) (loc : hloc) : used_ts =
-  TTyMap.singleton (a, ty) @@ HlocMap.singleton loc 1
+let loc_with_single_type (loc : hloc) (ty : ty) : loc_types =
+  HlocMap.singleton loc @@ TyMap.singleton ty 1
 
 (** Environment with metadata - whether a duplication occured, whether a productive
     actual argument was used when computing given environment, which nonterminal and terminal
-    types were used, if duplication occured anywhere in the whole proof subtree. *)
-type envm = { env : env; dup : bool; pr_arg : bool; used_nts : used_nts; used_ts: used_ts;
-              positive : bool }
+    types were used, if duplication occured anywhere in the whole proof subtree.
+    Note that used_nts is redundant, due to loc_types, but allows for quick search of relevant
+    for duplication graph info. loc_types is only used for pretty-printing proofs. *)
+type envm = { env : env; dup : bool; pr_arg : bool; used_nts : used_nts;
+              loc_types : loc_types; positive : bool }
 
-let mk_envm_empty_flags (env : env) : envm =
-  { env = env; dup = false; pr_arg = false; used_nts = NTTyMap.empty; used_ts = TTyMap.empty;
-    positive = false }
-
-let mk_envm (used_nts : used_nts) (used_ts : used_ts) (positive : bool) (env : env) : envm =
-  { env = env; dup = false; pr_arg = false; used_nts = used_nts; used_ts = used_ts;
+(** Make environment with given metadata, but with no duplications. *)
+let mk_envm (used_nts : used_nts) (loc_types : loc_types) (positive : bool) (env : env) : envm =
+  { env = env; dup = false; pr_arg = false; used_nts = used_nts; loc_types = loc_types;
     positive = positive }
+
+(** Creates an environment with empty metadata. Careful with making sure that location types are
+    eventually added. *)
+let mk_envm_empty_meta env =
+    { env = env; dup = false; pr_arg = false; used_nts = NTTyMap.empty;
+    loc_types = HlocMap.empty; positive = false }
 
 let with_dup (dup : bool) (envm : envm) : envm =
   { envm with dup = dup }
@@ -47,6 +50,9 @@ let with_positive (positive : bool) (envm : envm) : envm =
 let with_used_nts (used_nts : used_nts) (envm : envm) : envm =
   { envm with used_nts = used_nts }
 
+let with_single_loc_ty (loc : hloc) (ty : ty) (envm : envm) : envm =
+  { envm with loc_types = loc_with_single_type loc ty }
+
 let string_of_envm (envm : envm) : string =
   let dup_info = if envm.dup then " DUP" else "" in
   let pr_arg_info = if envm.pr_arg then " PR_ARG" else "" in
@@ -55,27 +61,29 @@ let string_of_envm (envm : envm) : string =
       ""
     else
       " NTS " ^ (NTTyMap.bindings envm.used_nts |>
-                 Utilities.string_of_list (fun (nt_ty, locs) ->
-                     string_of_nt_ty nt_ty ^
-                     Utilities.string_of_list HlocMap.string_of_int_binding @@
-                     HlocMap.bindings locs
+                 Utilities.string_of_list (fun (nt_ty, multi) ->
+                     let multi_str =
+                       if multi then
+                         "+"
+                       else
+                         ""
+                     in
+                     string_of_nt_ty nt_ty ^ multi_str
                    )
                 )
   in
-  let ts_info =
-    if TTyMap.is_empty envm.used_ts then
-      ""
-    else
-      " TS " ^ (TTyMap.bindings envm.used_ts |>
-                 Utilities.string_of_list (fun (t_ty, locs) ->
-                     string_of_t_ty t_ty ^ " " ^
-                     Utilities.string_of_list HlocMap.string_of_int_binding @@
-                     HlocMap.bindings locs
-                   )
-                )
+  let loc_types_str =
+    " LOC " ^ (HlocMap.bindings envm.loc_types |>
+               Utilities.string_of_list (fun (loc, ty_counts) ->
+                   string_of_int loc ^ ": " ^
+                   Utilities.string_of_list (fun (ty, count) ->
+                       string_of_ty ty ^ " x" ^ string_of_int count
+                     ) (TyMap.bindings ty_counts)
+                 )
+              )
   in
   let positive_info = if envm.positive then " POS" else "" in
-  envm.env#to_string ^ dup_info ^ pr_arg_info ^ nts_info ^ ts_info ^ positive_info
+  envm.env#to_string ^ dup_info ^ pr_arg_info ^ nts_info ^ loc_types_str ^ positive_info
 
 (** A set of environments and information whether a duplication occured when computing
     them. In other words, list of possible typings of variables delimited by ANDs, treated as
@@ -83,25 +91,28 @@ let string_of_envm (envm : envm) : string =
 module Envms = struct
   include Set.Make (struct
       type t = envm
+      (* keeping info other than multi is good for presentation, but the proof is the same
+         for the purpose of duplication factor graph - compare ignores these differences, i.e.,
+         specific counts per locations aside 2+ count for nonterminals (which is included
+         in used_nts anyway) *)
       let compare envm1 envm2 =
         Utilities.compare_pair
           Pervasives.compare
           (Utilities.compare_pair env_compare @@
-           NTTyMap.compare @@ HlocMap.multi_compare)
+           NTTyMap.compare Pervasives.compare)
           ((envm1.dup, envm1.pr_arg, envm1.positive), (envm1.env, envm1.used_nts))
           ((envm2.dup, envm2.pr_arg, envm2.positive), (envm2.env, envm2.used_nts))
     end)
-  (* TODO keeping info other than multi is good for presentation, but the proof is the same - drop
-   duplicate proofs that differ only with used_ts or with amount of used_nts per nt *)
       
-  (** Conversion of list of envs to an envms assuming default flags. *)
-  let of_list_empty_flags (l : env list) : t =
-    of_list @@ List.map mk_envm_empty_flags l
+  (** Conversion of list of envs to an envms without metadata. Careful with making sure that
+      location types are added elsewhere. *)
+  let of_list_empty_meta (l : env list) : t =
+    of_list @@ List.map mk_envm_empty_meta l
 
   (** Returns the same envms with flags set to default values. *)
-  let with_empty_temp_flags (envms : t) : t =
+  let with_empty_temp_flags_and_locs (envms : t) : t =
     map (fun envm -> {
-          envm with dup = false; pr_arg = false
+          envm with dup = false; pr_arg = false; loc_types = empty_loc_types
         }) envms
 
   let to_string (envms : t) : string =
@@ -122,13 +133,13 @@ module TargetEnvms = struct
   (** Empty TE. *)
   let empty : t = M.empty
 
-  (** Singleton TE with mapping from target to envm *)
+  (** Singleton TE with mapping from target to envm. *)
   let singleton_of_envm (target : ty) (envm : envm) =
     M.singleton target @@ Envms.singleton envm
 
-  (** Singleton TE with mapping from target to env with no duplication *)
-  let singleton (target : ty) (env : env) =
-    singleton_of_envm target @@ mk_envm_empty_flags env
+  (** Singleton TE with mapping from target to env with no duplication. For testing purposes. *)
+  let singleton_empty_meta (target : ty) (env : env) =
+    singleton_of_envm target @@ mk_envm_empty_meta env
 
   let union : t -> t -> t =
     M.union (fun target envms1 envms2 ->
@@ -147,10 +158,11 @@ module TargetEnvms = struct
         (target, Envms.of_list envms)) @@
     List.to_seq l
 
-  (** Conversion of list of pairs target-envms to respective TE assuming default flags. *)
-  let of_list_empty_flags (l : (ty * env list) list) : t =
+  (** Conversion of list of pairs target-envms to respective TE assuming default flags and
+      no location info. *)
+  let of_list_empty_flags_empty_meta (l : (ty * env list) list) : t =
     of_list @@ (l |> List.map (fun (target, envms) ->
-        (target, List.map mk_envm_empty_flags envms)))
+        (target, List.map mk_envm_empty_meta envms)))
 
   let to_list (te : t) : (ty * envm list) list =
     List.map (fun (target, envms) -> (target, Envms.elements envms)) @@ M.bindings te
@@ -173,8 +185,8 @@ module TargetEnvms = struct
     M.filter (fun target envms -> not @@ Envms.is_empty envms)
 
   (** Returns TE with flags of environments set to default values and removes duplicates. *)
-  let with_empty_temp_flags : t -> t =
-    M.map Envms.with_empty_temp_flags
+  let with_empty_temp_flags_and_locs : t -> t =
+    M.map Envms.with_empty_temp_flags_and_locs
 
   (** Changes target of the sole element of TE. Requires TE to have exactly one target.
       Also removes duplication flag and sets productive actual argument flag to whether previous
@@ -242,11 +254,14 @@ module TargetEnvms = struct
                       dup = envm1.dup || envm2.dup || merged_dup;
                       pr_arg = envm1.pr_arg || envm2.pr_arg;
                       used_nts =
-                        NTTyMap.union (fun _ locs1 locs2 -> Some (HlocMap.sum_union locs1 locs2))
+                        NTTyMap.union (fun _ _ _ -> Some true)
                           envm1.used_nts envm2.used_nts;
-                      used_ts =
-                        TTyMap.union (fun _ locs1 locs2 -> Some (HlocMap.sum_union locs1 locs2))
-                          envm1.used_ts envm2.used_ts;
+                      loc_types =
+                        HlocMap.union (fun _ ty_counts1 ty_counts2 ->
+                            Some (TyMap.union (fun _ count1 count2 ->
+                                Some (count1 + count2)
+                              ) ty_counts1 ty_counts2)
+                          ) envm1.loc_types envm2.loc_types;
                       positive = envm1.positive || envm2.positive || merged_dup
                     }
                     in

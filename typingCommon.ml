@@ -32,13 +32,8 @@ module NTTySet = struct
     of_seq @@ Seq.map fst @@ NTTyMap.to_seq m
 end
 
-type t_ty = terminal * ty
-
-let string_of_t_ty (t, ty : t_ty) : string =
-  string_of_terminal t ^ " : " ^ string_of_ty ty
-
-module TTyMap =
+module TyMap =
   Map.Make (struct
-    type t = t_ty
-    let compare = Utilities.compare_pair Pervasives.compare Ty.compare
+    type t = ty
+    let compare = Ty.compare
   end)

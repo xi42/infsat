@@ -173,7 +173,7 @@ class typing (hg : hgrammar) = object(self)
       id typed as fixed hty. *)
   method binding2envms (var_count : int) (mask : vars option)
       (fixed_hterms_hty : (hterms_id * hty) option) (binding : hterms_id binding) : envms =
-    Envms.of_list_empty_flags @@
+    Envms.of_list_empty_meta @@
     List.map (hty_binding2env var_count) @@
     self#binding2hty_bindings mask binding fixed_hterms_hty
 
@@ -214,25 +214,31 @@ class typing (hg : hgrammar) = object(self)
   method infer_head_ity (h : head) (loc : hloc) (env_data : (env, int) either) : (ty * envm) list =
     match h with
     | HNT nt ->
-      let empty = mk_envm_empty_flags @@ empty_env @@ self#var_count env_data in
+      let empty_env = empty_env @@ self#var_count env_data in
       nt_ity.(nt) |> TyList.map (fun ty ->
-          (ty, empty |> with_used_nts @@ nt_ty_used_once nt ty loc)
+          let loc_types = loc_with_single_type loc ty in
+          let used_nts = nt_ty_used_once nt ty in
+          (* positiveness of nonterminals does not propagate in order to construct the graph *)
+          (ty,
+           mk_envm used_nts loc_types false empty_env)
         )
     | HVar v ->
       begin
         match env_data with
         | Left env ->
           env#get_var_ity v |> TyList.map (fun ty ->
+              let loc_types = loc_with_single_type loc ty in
+              let env = singleton_env (self#var_count env_data) v @@ sty ty in
               (with_productivity false ty,
-               mk_envm_empty_flags @@ singleton_env (self#var_count env_data) v @@ sty ty)
+               mk_envm empty_used_nts loc_types false env)
             )
         | Right _ -> failwith "Expected environment provided for a term with head variables"
       end
     | HT a ->
       let empty = empty_env @@ self#var_count env_data in
       self#terminal_ity a |> TyList.map (fun ty ->
-          let used_ts = t_ty_used_once a ty loc in
-          (ty, mk_envm empty_used_nts used_ts (is_productive ty) empty
+          let loc_types = loc_with_single_type loc ty in
+          (ty, mk_envm empty_used_nts loc_types (is_productive ty) empty
         ))
 
   (** Assume that the target is
@@ -322,7 +328,7 @@ class typing (hg : hgrammar) = object(self)
           | None -> ity
         in
         TargetEnvms.of_list @@
-        TyList.map (fun ty -> (ty, [mod_env ty @@ mk_envm_empty_flags @@ empty_env var_count])) @@
+        TyList.map (fun ty -> (ty, [mod_env ty @@ mk_envm_empty_meta @@ empty_env var_count])) @@
         filtered
       else
         TargetEnvms.empty
@@ -330,11 +336,11 @@ class typing (hg : hgrammar) = object(self)
     let res = match hterm with
       | HT a, [] ->
         filter_ity_list (self#terminal_ity a) (fun ty envm ->
-            envm |> with_positive @@ is_productive ty
+            envm |> with_positive @@ is_productive ty |> with_single_loc_ty loc ty
           )
       | HNT nt, [] ->
         filter_ity_list (self#nt_ity nt) (fun ty envm ->
-            envm |> with_used_nts @@ nt_ty_used_once nt ty loc)
+            envm |> with_used_nts @@ nt_ty_used_once nt ty |> with_single_loc_ty loc ty)
       | HVar v, [] ->
         begin
           match target, env_data with
@@ -347,7 +353,9 @@ class typing (hg : hgrammar) = object(self)
                 | Right _ -> true
               in
               if available then
-                TargetEnvms.singleton target @@ singleton_env var_count v @@ sty ty
+                TargetEnvms.singleton_of_envm target @@
+                (mk_envm_empty_meta @@ singleton_env var_count v @@ sty ty |>
+                 with_single_loc_ty loc ty)
               else
                 TargetEnvms.empty
             in
@@ -367,9 +375,13 @@ class typing (hg : hgrammar) = object(self)
             (* if we're in this branch with None target then this must be a head variable or the
                whole term is a variable *)
             (* TODO maybe change definition of headvar to include var-only terms *)
-            TargetEnvms.of_list_empty_flags @@
+            TargetEnvms.of_list @@
             TyList.map (fun ty ->
-                (with_productivity false ty, [singleton_env var_count v @@ sty ty])
+                let envm =
+                  mk_envm_empty_meta @@ singleton_env var_count v @@ sty ty |>
+                  with_single_loc_ty loc ty
+                in
+                (with_productivity false ty, [envm])
               ) @@
             env#get_var_ity v
           | None, Right _ -> failwith @@ "Type checking of terms with head variables or " ^

@@ -36,19 +36,19 @@ class dfg = object(self)
   method add_vertex (proof : proof) : bool =
     let vertex = proof.derived in
     (* computing minimum of 2 and number of productive used nonterminals *)
-    let pr_nts_count = NTTyMap.fold (fun vertex' locs acc ->
+    let pr_nts_count : int = NTTyMap.fold (fun vertex' multi acc ->
         (* when a productive nonterminal is used multiple times, it is counted as two *)
-        acc + (HlocMap.sum locs) * int_of_bool (is_productive @@ snd vertex')
-      ) proof.nt_assumptions 0
+        acc + (1 + int_of_bool multi) * int_of_bool (is_productive @@ snd vertex')
+      ) proof.used_nts 0
     in
     (* function to compute edge positiveness for given vertex *)
     let edge_pos_for_vertex (vertex' : dfg_vertex) : bool =
       proof.positive || pr_nts_count > 1 ||
       pr_nts_count = 1 && not @@ is_productive @@ snd vertex'
     in
-    let out_vertices = NTTySet.set_of_map_keys proof.nt_assumptions in
+    let out_vertices = NTTySet.set_of_map_keys proof.used_nts in
     (* updating out edges of current vertex *)
-    match NTTyMap.is_empty proof.nt_assumptions, NTTyMap.find_opt vertex graph with
+    match NTTyMap.is_empty proof.used_nts, NTTyMap.find_opt vertex graph with
     (* There are nonterminal dependencies, so adding missing edges and adding the vertex
        with first proof if it doesn't exist yet. *)
     | false, Some (out_edges, first) ->
@@ -113,7 +113,7 @@ class dfg = object(self)
     (* there are no nonterminal dependencies, so adding a leaf proof if it does not exist yet
        or replacing the first proof with leaf proof *)
     | true, Some (out_edges, first) ->
-      if NTTyMap.is_empty first.nt_assumptions then
+      if NTTyMap.is_empty first.used_nts then
         begin
           (* there already exists a vertex, but not a leaf proof *)
           graph <- NTTyMap.add vertex (out_edges, { proof with initial = true }) graph;
@@ -177,7 +177,7 @@ class dfg = object(self)
               -1
             else
               acc + first_proof_tree_size vertex'
-          ) first.nt_assumptions 1
+          ) first.used_nts 1
         in
         first_proof_tree_sizes := NTTyMap.add vertex res !first_proof_tree_sizes;
         res
@@ -204,7 +204,7 @@ class dfg = object(self)
       if not @@ NTTySet.mem proof.derived !visited then
         visited := NTTySet.add proof.derived !visited;
       add_proof proof;
-      proof.nt_assumptions |> NTTyMap.iter (fun vertex' _ ->
+      proof.used_nts |> NTTyMap.iter (fun vertex' _ ->
           let first : proof = snd @@ (NTTyMap.find vertex' graph) in
           add_escape_proof_tree first
         )
@@ -212,7 +212,7 @@ class dfg = object(self)
     add_escape_proof_tree escape;
     (* adding to queue all required nonterminals *)
     path_to_end_of_cycle |> List.iter (fun (proof, _) ->
-        proof.nt_assumptions |>
+        proof.used_nts |>
         NTTyMap.iter (fun vertex _ ->
             if not @@ NTTySet.mem vertex !visited then
               add_to_queue_if_not_visited vertex
@@ -228,8 +228,8 @@ class dfg = object(self)
          in the vertex *)
       let first = snd @@ NTTyMap.find vertex graph in
       add_proof first;
-      if not @@ NTTyMap.is_empty first.nt_assumptions then
-        NTTySet.diff (NTTySet.set_of_map_keys first.nt_assumptions) !visited |>
+      if not @@ NTTyMap.is_empty first.used_nts then
+        NTTySet.diff (NTTySet.set_of_map_keys first.used_nts) !visited |>
         NTTySet.iter add_to_queue_if_not_visited
     done;
     (* it's more readable when following the order it was added in *)

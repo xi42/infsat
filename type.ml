@@ -107,42 +107,6 @@ let remove_args (ty : ty) (count : int) : ty =
 (** Alias for singleton intersection types. *)
 let sty : ty -> ity = TyList.singleton
 
-(* TODO design subtyping where NP args may be added/removed
-let tab_subtype = Hashtbl.create 100000
-
-(** Computes whether aty1 is a subtype of aty2. If Flags.nosubtype is true then it instead computes
-    if aty1 = aty2. If Flags.subtype_hash is true then it memoizes the results in tab_subtype.
-    t1 <= t2 - t1 is subtype of t2.
-    The rules are as follows:
-    - q <= q for any base type (state) q
-    - t1 -> t2 <= t3 -> t4 iff t3 <= t1 and t2 <= t4
-    - /\_i ti <= /\_j rj if for all j there exists i such that ti <= rj
-    The intuition is that these types are restrictions and <= is subset relation in the model of
-    values that satisfy these restrictions. Removing or weakening these restrictions makes the set
-    of elements in the model satisfying them grow. *)
-let rec subtype aty1 aty2 =
- if !Flags.nosubtype then id_of_ity aty1=id_of_ity aty2
- else
-  match (aty1,aty2) with
-    (ItyQ(q1), ItyQ(q2)) -> q1=q2
-  | (ItyFun(id1,ty1,aty11), ItyFun(id2,ty2, aty21)) ->
-      if !Flags.subtype_hash then 
-        if codom_of_ity aty1 = codom_of_ity aty2 then
-         try 
-           Hashtbl.find tab_subtype (id1,id2)
-         with Not_found -> 
-         ( let r = (subtype aty11 aty21) && (subtype_ty ty2 ty1)
-(*                  (List.for_all (fun aty12 -> List.exists (fun aty22 -> subtype aty22 aty12) ty2) ty1) *)
-          in Hashtbl.add tab_subtype (id1,id2) r; r)
-        else false
-      else (subtype aty11 aty21) && (subtype_ty ty2 ty1)
-(*            (List.for_all (fun aty12 -> List.exists (fun aty22 -> subtype aty22 aty12) ty2) ty1)*)
-  | _ -> false
-(* set-like subset ty1 <= ty2 modulo further subtyping, e.g., [q1,q2] <= [q1] *)
-and subtype_ty ty1 ty2 =
-   List.for_all (fun ity2 -> List.exists (fun ity1 -> subtype ity1 ity2) ty1) ty2
-*)
-
 let string_of_atom : productivity -> string = function
   | false -> "np"
   | true -> "pr"

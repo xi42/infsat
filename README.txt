@@ -75,8 +75,9 @@ Examples can be found in directory "examples".
 
 TODO
 ----
-* implement marks for differently typed same variable atoms
 * terminals to a -> <children> [counted] <universal/existential (optional if children <= 1>.
 * grammars to test displaying proofs when escape path crosses path to cycle - counting number of gathered proofs
+* check TODOs in code and resolve them or move here
+* types of variables will be displayed directly, not as not-productive - is this a problem?
 * benchmark on horsat tests
 * update documentation

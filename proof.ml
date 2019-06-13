@@ -1,5 +1,7 @@
+open Environment
 open GrammarCommon
 open HGrammar
+open TargetEnvms
 open Type
 open TypingCommon
 open Utilities
@@ -14,22 +16,28 @@ module NTTyInitMap = Map.Make (struct
     let compare = Pervasives.compare
   end)
 
+module HeadTyMap = Map.Make (struct
+    type t = head * ty
+    let compare = Utilities.compare_pair Pervasives.compare Ty.compare
+  end)
+
 (* note that var_assumptions is redundant, since it is included in derived *)
-type proof = { derived : nt_ty; var_assumptions : ity array;
-               nt_assumptions : int HlocMap.t NTTyMap.t;
-               t_assumptions : int HlocMap.t TTyMap.t;
-               positive : bool; initial : bool}
+type proof = { derived : nt_ty;
+               used_nts: used_nts;
+               loc_types : loc_types;
+               positive : bool;
+               initial : bool}
 
 let proof_compare (ignore_initial : bool) (proof1 : proof) (proof2 : proof) : int =
   compare_pair
     (compare_pair nt_ty_compare @@ NTTyMap.compare Pervasives.compare)
     Pervasives.compare
-    ((proof1.derived, proof1.nt_assumptions), (proof1.positive, proof1.initial || ignore_initial))
-    ((proof2.derived, proof2.nt_assumptions), (proof2.positive, proof2.initial || ignore_initial))
-
+    ((proof1.derived, proof1.used_nts), (proof1.positive, proof1.initial || ignore_initial))
+    ((proof2.derived, proof2.used_nts), (proof2.positive, proof2.initial || ignore_initial))
+    
 (** Information necessary to categorize given terminal or nonterminal as occuring everywhere with
     the same types or not. *)
-type loc_combinations = SingleLocCombination of int HlocMap.t | MultiLocCombination
+type head_types = SingleLocCombination of int TyMap.t | MultiLocCombination
 
 let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
     (proof : proof) : string =
@@ -43,39 +51,30 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
       "(Proof " ^ string_of_int proof_id ^ ")\n"
     | None -> ""
   in
-  (* info which variable has which type *)
-  let vars_info =
-    array_listmap proof.var_assumptions (fun i ity ->
-        [hg#var_name (nt, i) ^ " : " ^ string_of_ity ity]
-      )
-  in
-  let merge_locs (locs : int HlocMap.t) : loc_combinations option -> loc_combinations option =
+  let merge_loc_types (loc : hloc)
+      (ty_counts : int TyMap.t) : head_types option -> head_types option =
     function
-    | Some (SingleLocCombination locs') as single ->
-      if HlocMap.equal (=) locs' locs && locs |> HlocMap.for_all (fun _ count -> count = 1) then
+    | Some (SingleLocCombination existing_ty_counts) as single ->
+      if TyMap.equal (fun count1 count2 -> count1 = count2 && count1 = 1)
+          existing_ty_counts ty_counts then
         single
       else
         Some MultiLocCombination
     | Some MultiLocCombination as multi -> multi
     | None ->
-      if locs |> HlocMap.for_all (fun _ count -> count = 1) || HlocMap.cardinal locs = 1 then
-        Some (SingleLocCombination locs)
-      else
-        Some MultiLocCombination
+      Some (SingleLocCombination ty_counts)
   in
+  let loc2occ = hg#loc2head_occurence hterm in
   (* map from terminals/nonterminals to locations of their occurences and whether they should
      be marked, i.e., two locations have different sets of non-empty types or it is used multiple
      times in one location and there is another location where it has non-empty type *)
-  let loc_combinations =
+  let loc_combinations : head_types HeadMap.t =
     HeadMap.empty |>
-    NTTyMap.fold (fun (nt', _) locs acc ->
-        acc |> HeadMap.update (HNT nt') (merge_locs locs)
-      ) proof.nt_assumptions |> 
-    TTyMap.fold (fun (a, _) locs acc ->
-        acc |> HeadMap.update (HT a) (merge_locs locs)
-      ) proof.t_assumptions
+    HlocMap.fold (fun loc ty_counts acc ->
+        acc |> HeadMap.update (fst @@ HlocMap.find loc loc2occ) (merge_loc_types loc ty_counts)
+      ) proof.loc_types
   in
-  let multi_heads =
+  let multi_heads : HeadSet.t =
     HeadSet.of_seq @@
     Seq.map fst @@
     Seq.filter (fun (h, combinations) ->
@@ -85,7 +84,6 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
       ) @@
     HeadMap.to_seq loc_combinations
   in
-  let loc2occ = hg#loc2head_occurence hterm in
   let loc2mark =
     loc2occ |>
     HlocMap.mapi (fun loc (h, occ) ->
@@ -95,57 +93,65 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
           ""
       )
   in
-  let count_str_of_locs locs =
-    (* it is guaranteed that either all locs have 1 or there is only one loc *)
-    let count = snd @@ List.hd @@ HlocMap.bindings locs in
-    if count > 1 then
-      " (x" ^ string_of_int count ^ ")"
-    else
-      ""
+  let head_ty_locs : HlocSet.t HeadTyMap.t =
+    HlocMap.bindings proof.loc_types |>
+    List.fold_left (fun acc (loc, ty_counts) ->
+        let head = fst @@ HlocMap.find loc loc2occ in
+        TyMap.fold (fun ty _ acc ->
+            acc |>
+            HeadTyMap.update (head, ty) (function
+                | Some locs -> Some (HlocSet.add loc locs)
+                | None -> Some (HlocSet.singleton loc)
+              )
+          ) ty_counts acc
+      ) HeadTyMap.empty
   in
-  let assumption_str h head_str ty locs =
-    if HeadSet.mem h multi_heads then
-      let marked =
-        HlocMap.bindings locs |>
-        List.map (fun (loc, count) ->
-            let count_info =
-              if count > 1 then
-                " (x" ^ string_of_int count ^ ")"
-              else
-                ""
-            in
-            head_str ^ HlocMap.find loc loc2mark ^ count_info
-          )
-      in
-      String.concat ", " marked ^ " : " ^ string_of_ty ty
-    else
-      head_str ^ count_str_of_locs locs ^ " : " ^ string_of_ty ty
-  in
-  let nts_info =
-    NTTyMap.bindings proof.nt_assumptions |> List.map (fun ((nt', ty'), locs) ->
-        let proof_id_str =
-          match proof_ids with
-          | Some proof_ids ->
-            (* There can still be two kinds of proofs - initial (first registered) and not.
-               Initial proofs can always point at initial proofs. Other proofs are proofs of
-               path to cycle and cycle itself, with all dependencies. So, the non-initial
-               proof may point at initial proof, but initial proof will never point at non-initial
-               proof unless it wasn't in the data. The dependency searched for is with the
-               same initial-ness, and, if it doesn't exist, with reverse initial-ness. *)
-            let proof_id' =
-              match NTTyInitMap.find_opt ((nt', ty'), proof.initial) proof_ids with
-              | Some proof_id' -> proof_id'
-              | None -> NTTyInitMap.find ((nt', ty'), not proof.initial) proof_ids
-            in
-            "(" ^ string_of_int proof_id' ^ ") "
-          | None -> ""
+  (* info which atom has which type *)
+  let assumptions : string list =
+    HeadTyMap.bindings head_ty_locs |>
+    List.map (fun ((head, ty), locs) ->
+        let prefix =
+          match head with
+          | HT a ->
+            "(|-) "
+          | HNT nt ->
+            begin
+              match proof_ids with
+              | Some proof_ids ->
+                (* There can still be two kinds of proofs - initial (first registered) and not.
+                   Initial proofs can always point at initial proofs. Other proofs are proofs of
+                   path to cycle and cycle itself, with all dependencies. So, the non-initial
+                   proof may point at initial proof, but initial proof will never point at
+                   non-initial proof unless it wasn't in the data. The dependency searched for
+                   is with the same initial-ness, and, if it doesn't exist, with reverse
+                   initial-ness. *)
+                let proof_id =
+                  match NTTyInitMap.find_opt ((nt, ty), proof.initial) proof_ids with
+                  | Some proof_id' -> proof_id'
+                  | None -> NTTyInitMap.find ((nt, ty), not proof.initial) proof_ids
+                in
+                "(" ^ string_of_int proof_id ^ ") "
+              | None -> ""
+            end
+          | HVar v -> ""
         in
-        [proof_id_str ^ assumption_str (HNT nt') (hg#nt_name nt') ty' locs]
-      )
-  in
-  let ts_info =
-    TTyMap.bindings proof.t_assumptions |> List.map (fun ((a, ty'), locs) ->
-        ["(|-) " ^ assumption_str (HT a) (string_of_terminal a) ty' locs]
+        let count_str_for_loc (loc : hloc) : string =
+          let count : int = TyMap.find ty @@ HlocMap.find loc proof.loc_types in
+          if count = 1 then
+            ""
+          else
+            " (x" ^ string_of_int count ^ ")"
+        in
+        let heads_str : string =
+          if HeadSet.mem head multi_heads then
+            concat_map ", " (fun loc ->
+                hg#string_of_head head ^ HlocMap.find loc loc2mark ^ count_str_for_loc loc
+              ) @@ HlocSet.elements locs
+          else
+            (* it is guaranteed that either all locs have 1 or there is only one loc *)
+            hg#string_of_head head ^ count_str_for_loc (HlocSet.choose locs)
+        in
+        prefix ^ heads_str ^ " : " ^ string_of_ty ty
       )
   in
   let annotated_hterm =
@@ -162,7 +168,7 @@ let string_of_proof (hg : hgrammar) (proof_ids : int NTTyInitMap.t option)
     hg#nt_name nt :: hg#var_names nt
   in
   proof_id_title ^
-  String.concat ",\n" (List.concat @@ ts_info @ nts_info @ vars_info) ^
+  String.concat ",\n" assumptions ^
   "\n|- " ^ nt_app ^ " = " ^ annotated_hterm ^ " : " ^
   string_of_ty (codomain ty) ^ positive_info
 
@@ -251,7 +257,7 @@ class cycle_proof (path_to_cycle : (proof * bool) list)
     in
     let escape_continuation =
       let continuation_str =
-        if NTTyMap.is_empty escape.nt_assumptions then
+        if NTTyMap.is_empty escape.used_nts then
           " T"
         else
           "..."
