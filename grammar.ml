@@ -3,6 +3,10 @@ open Utilities
 
 type term = TE of terminal | NT of nt_id | Var of var_id | App of term * term
 
+let rec term_head : term -> term = function
+  | App (t, _) -> term_head t
+  | t -> t
+
 (* store the original name of each non-terminal and its sort *)
 type var_names = string array array (* store the original name of each variable *)
 
