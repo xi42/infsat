@@ -1,0 +1,16 @@
+Grammar.
+E -> e.
+ATTT -> attt.
+TTT -> ttt.
+BBBB -> bbbb.
+AE -> ae.
+AU -> au.
+End.
+
+Terminals.
+attt -> 3 * $.
+ttt -> 3 *.
+bbbb -> 4 +.
+ae -> 0 * $.
+au -> 1 * $.
+End.

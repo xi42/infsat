@@ -484,7 +484,7 @@ let conversion_test () : test =
   ] in
   let t_gram = Conversion.prerules2gram (test_terminals_prerules, preserved_preterminals) in
   print_verbose !Flags.verbose_preprocessing @@ lazy (
-    "Conversion terminals test grammar:\n" ^ t_gram#grammar_info ^ "\n"
+    "Basic-like terminals test grammar:\n" ^ t_gram#grammar_info ^ "\n"
   );
   (* This grammar is used to test function conversion. *)
   let f_prerules = [
@@ -499,32 +499,50 @@ let conversion_test () : test =
   ] in
   let f_gram = Conversion.prerules2gram (f_prerules, []) in
   print_verbose !Flags.verbose_preprocessing @@ lazy (
-    "Conversion fun test grammar:\n" ^ t_gram#grammar_info ^ "\n"
+    "Fun test grammar:\n" ^ t_gram#grammar_info ^ "\n"
   );
   (* This grammar is used to test custom terminals that are not preserved as one of default
      terminals. *)
   let c_preterminals = [
-    Syntax.Terminal ("attt", 1, true, true);
-    Syntax.Terminal ("bbbb", 2, false, false);
+    Syntax.Terminal ("attt", 3, true, true);
+    Syntax.Terminal ("ttt", 3, false, true);
+    Syntax.Terminal ("bbbb", 4, false, false);
     Syntax.Terminal ("ae", 0, true, true);
     Syntax.Terminal ("auniv", 1, true, true);
   ] in
   let c_prerules = [
     ("ATTT", [], Syntax.PApp (Syntax.Name "attt", []));
+    ("TTT", [], Syntax.PApp (Syntax.Name "ttt", []));
     ("BBBB", [], Syntax.PApp (Syntax.Name "bbbb", []));
     ("AE", [], Syntax.PApp (Syntax.Name "ae", []));
     ("AU", [], Syntax.PApp (Syntax.Name "auniv", []))
   ] in
   let c_gram = Conversion.prerules2gram (c_prerules, c_preterminals) in
   print_verbose !Flags.verbose_preprocessing @@ lazy (
-    "Conversion custom terminals test grammar:\n" ^ c_gram#grammar_info ^ "\n"
+    "Custom terminals test grammar:\n" ^ c_gram#grammar_info ^ "\n"
+  );
+  (* This grammar is used to test function variable scopes. *)
+  let s_prerules = [
+    (* F -> (fun x -> fun x -> fun x -> x) e e e *)
+    ("F", [], Syntax.PApp (
+        Syntax.Fun (["x"], Syntax.PApp (
+            Syntax.Fun (["x"], Syntax.PApp (
+                Syntax.Fun (["x"], Syntax.PApp (
+                    Syntax.Name "x", []
+                  )),
+                [])),
+            [])),
+        [Syntax.PApp (Syntax.Name "e", []);
+         Syntax.PApp (Syntax.Name "e", []);
+         Syntax.PApp (Syntax.Name "e", [])]
+      ))
+  ] in
+  let s_gram = Conversion.prerules2gram (s_prerules, []) in
+  print_verbose !Flags.verbose_preprocessing @@ lazy (
+    "Function scope test grammar:\n" ^ s_gram#grammar_info ^ "\n"
   );
   "conversion" >::: [
-    (* Terminals
-       a -> 1 $.
-       b -> 2.
-       e -> 0.
-       should be preserved as in the paper, without needless conversion. Therefore, there
+    (* Terminals a, b, e, t should be preserved without needless conversion. Therefore, there
        should be no functions apart from the one from identity without arguments, i.e.,
        exactly one extra rule. *)
     "prerules2gram-t1" >:: (fun _ ->
@@ -566,7 +584,7 @@ let conversion_test () : test =
     "prerules2gram-f2" >:: (fun _ ->
         let f_nt : nt_id = f_gram#nt_count - 1 in
         assert_equal (2, App (
-            App(
+            App (
               NT f_nt,
               Var (f_gram#nt_with_name "F", 1)
             ),
@@ -576,11 +594,64 @@ let conversion_test () : test =
       );
 
     "prerules2gram-c1" >:: (fun _ ->
-        (* TODO *)
-        let f_nt : nt_id = f_gram#nt_count - 1 in
-        let arity = fst @@ f_gram#rules.(f_nt) in
-        assert_equal ["y"; "p"; "q"] @@
-        List.map (fun i -> f_gram#name_of_var (f_nt, i)) @@ range 0 arity
+        assert_equal ~printer:string_of_int 8 @@
+        Array.length c_gram#rules
+      );
+
+    "prerules2gram-c2" >:: (fun _ ->
+        match c_gram#rules.(c_gram#nt_with_name "ATTT") with
+        | 0, NT nt ->
+          let rule = c_gram#rules.(nt) in
+          assert_equal (3, 6, TE A) @@
+          (fst @@ rule, size_of_rule rule, term_head @@ snd rule)
+        | _, _ -> assert_failure "wrong conversion"
+      );
+
+    "prerules2gram-c3" >:: (fun _ ->
+        match c_gram#rules.(c_gram#nt_with_name "TTT") with
+        | 0, NT nt ->
+          let rule = c_gram#rules.(nt) in
+          assert_equal (3, 5, TE T) @@
+          (fst @@ rule, size_of_rule rule, term_head @@ snd rule)
+        | _, _ -> assert_failure "wrong conversion"
+      );
+
+    "prerules2gram-c4" >:: (fun _ ->
+        match c_gram#rules.(c_gram#nt_with_name "BBBB") with
+        | 0, NT nt ->
+          let rule = c_gram#rules.(nt) in
+          assert_equal (4, 7, TE B) @@
+          (fst @@ rule, size_of_rule rule, term_head @@ snd rule)
+        | _, _ -> assert_failure "wrong conversion"
+      );
+
+    "prerules2gram-c5" >:: (fun _ ->
+        assert_equal (0, App (TE A, TE E)) @@
+        c_gram#rules.(c_gram#nt_with_name "AE")
+      );
+
+    "prerules2gram-c6" >:: (fun _ ->
+        assert_equal (0, TE A) @@
+        c_gram#rules.(c_gram#nt_with_name "AU")
+      );
+
+    (* Three nested functions convert to three new nonterminals. *)
+    "prerules2gram-s1" >:: (fun _ ->
+        assert_equal ~printer:string_of_int 4 @@
+        Array.length s_gram#rules
+      );
+
+    (* Since each function shadows x from closure, none of them should take a variable from
+       closure into nonterminal definition. *)
+    "prerules2gram-s2" >:: (fun _ ->
+        assert_equal [0; 1; 1; 1] @@
+        List.map fst @@ Array.to_list s_gram#rules
+      );
+
+    (* Inner function should use its own x. *)
+    "prerules2gram-s3" >:: (fun _ ->
+        assert_equal (Var (3, 0)) @@
+        snd @@ s_gram#rules.(3)
       );
   ]
 

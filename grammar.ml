@@ -34,7 +34,8 @@ let rec subst_nt_in_term s term =
       with Not_found -> term
     end
   | App (t1, t2) -> App (subst_nt_in_term s t1, subst_nt_in_term s t2)
-   
+
+(** Number of leaves in a term. *)
 let rec size_of_term t =
   match t with
   | TE _ | NT _ | Var _ -> 1
