@@ -55,8 +55,9 @@ let assert_equal_tes te1 te2 =
 let mk_grammar rules =
   let nt_names = Array.mapi (fun i _ -> "N" ^ string_of_int i) rules in
   let g = new grammar nt_names [||] rules in
-  print_string @@ "Creating grammar:\n" ^
-                  g#grammar_info ^ "\n";
+  print_verbose (not !Flags.quiet) @@ lazy (
+    "Creating grammar:\n" ^ g#grammar_info ^ "\n"
+  );
   EtaExpansion.eta_expand g;
   g
 
@@ -397,7 +398,7 @@ let dfg_test () : test =
         )#find_positive_cycle 0 ty_pr
       );
 
-    (* two cycles, one shorter *)
+    (* two cycles, one shorter, the shorter one should be selected *)
     "dfg-10" >:: (fun _ ->
         assert_equal_paths
           [((0, ty_pr), false); ((4, ty_pr), false); ((3, ty_pr), true); ((0, ty_pr), false)] @@
@@ -414,7 +415,7 @@ let dfg_test () : test =
         )#find_positive_cycle 0 ty_pr
       );
 
-    (* two cycles, one shorter - another order *)
+    (* two cycles, one shorter - another order, the shorter one should be selected *)
     "dfg-11" >:: (fun _ ->
         assert_equal_paths
           [((0, ty_pr), false); ((1, ty_pr), false); ((2, ty_pr), true); ((0, ty_pr), false)] @@
@@ -429,6 +430,101 @@ let dfg_test () : test =
           ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr (nt_ty_used_once 3 ty_pr) false;
           dfg
         )#find_positive_cycle 0 ty_pr
+      );
+
+    (* add_vertex should return whether new edge was added, checking other data *)
+    "dfg-12" >:: (fun _ ->
+        let proof1 = mk_proof 0 ty_np empty_used_nts false in
+        let proof2 = mk_proof 0 ty_pr (nt_ty_used_once 0 ty_np) true in
+        let proof3 = mk_proof 0 ty_pr (nt_ty_used_once 0 ty_np) false in
+        let proof4 = mk_proof 0 ty_pr (nt_ty_used_once 0 ty_pr) true in
+        let dfg = new dfg in
+        assert_equal None @@ dfg#find_positive_cycle 0 ty_pr;
+        (* note that no edge is added, only vertex, so expecting false *)
+        assert_equal false @@ dfg#add_vertex proof1;
+        assert_equal None @@ dfg#find_positive_cycle 0 ty_pr;
+        assert_equal true @@ dfg#add_vertex proof3;
+        (* edge should be replaced with positive one *)
+        assert_equal true @@ dfg#add_vertex proof2;
+        assert_equal None @@ dfg#find_positive_cycle 0 ty_pr;
+        (* these edges should be ignored as there is already a positive edge present there *)
+        assert_equal false @@ dfg#add_vertex proof2;
+        assert_equal false @@ dfg#add_vertex proof3;
+        assert_equal None @@ dfg#find_positive_cycle 0 ty_pr;
+        assert_equal true @@ dfg#add_vertex proof4;
+        let cycle = option_get @@ dfg#find_positive_cycle 0 ty_pr in
+        let path_to_cycle, cycle, escape, proofs = cycle#raw_data in
+        assert_equal 0 @@ List.length path_to_cycle;
+        assert_equal 1 @@ List.length cycle;
+        assert_equal proof4 @@ fst @@ List.hd cycle;
+        (* no need to define custom equality, since dfg modifies only initial flag *)
+        assert_equal {proof3 with initial = true} escape;
+        assert_equal 3 @@ List.length proofs
+      );
+
+    (* checking a border case where initial proof tree crosses path to cycle - this is another
+       case aside from escape vertex where the same vertex can be included in list of proofs
+       twice. *)
+    "dfg-13" >:: (fun _ ->
+        let dfg = new dfg in
+        (* 10, 11 <- 9 <- 2 *)
+        ignore @@ dfg#add_vertex @@ mk_proof 10 ty_np empty_used_nts false;
+        ignore @@ dfg#add_vertex @@ mk_proof 11 ty_np empty_used_nts false;
+        ignore @@ dfg#add_vertex @@ mk_proof 9 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((10, ty_np), false); ((11, ty_np), false)]) true;
+        ignore @@ dfg#add_vertex @@ mk_proof 2 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((9, ty_pr), false)]) false;
+        (* 8, 2 <- 5 *)
+        ignore @@ dfg#add_vertex @@ mk_proof 8 ty_np empty_used_nts false;
+        ignore @@ dfg#add_vertex @@ mk_proof 5 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((2, ty_pr), false); ((8, ty_np), false)]) false;
+        (* 5 <- 7 *)
+        ignore @@ dfg#add_vertex @@ mk_proof 7 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((5, ty_pr), false)]) false;
+        (* 8 <- 6 *)
+        ignore @@ dfg#add_vertex @@ mk_proof 6 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((8, ty_np), true)]) true;
+        (* cycle: 5 : pr, 6 : pr <- 4 : pr; 4 : pr, 6 : pr <- 5 : pr *)
+        ignore @@ dfg#add_vertex @@ mk_proof 4 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((5, ty_pr), false); ((6, ty_pr), false)]) false;
+        ignore @@ dfg#add_vertex @@ mk_proof 5 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((4, ty_pr), false); ((6, ty_pr), false)]) false;
+        (* 7 <- 4 - this should be ignored *)
+        ignore @@ dfg#add_vertex @@ mk_proof 4 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((7, ty_pr), false)]) false;
+        (* 4 <- 3 <- 2 <- 1 <- 0 *)
+        ignore @@ dfg#add_vertex @@ mk_proof 3 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((4, ty_pr), false)]) false;
+        ignore @@ dfg#add_vertex @@ mk_proof 2 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((3, ty_pr), false)]) false;
+        ignore @@ dfg#add_vertex @@ mk_proof 1 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((2, ty_pr), false)]) false;
+        ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr
+          (NTTyMap.of_seq @@ List.to_seq [((1, ty_pr), false)]) false;
+        (* 0 -> 1 -> 2 -> 3 -> [4 -> 5 -> ...] -> 5 -> 8, 2 -> 9 -> 10, 11
+           Note that 4 -> 7 -> 5 branch should be ignored, as it should not be found as start of
+           escape path, since it goes back to the cycle.
+           Additionally, 9, 10, 11 should not be forgotten just because 2 -> 1, since 2 -> 1
+           is not an initial proof.
+           We have proofs of 0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, again 2 and again 5 *)
+        let cycle = option_get @@ dfg#find_positive_cycle 0 ty_pr in
+        let path_to_cycle, cycle, escape, proofs = cycle#raw_data in
+        (* checking cycle *)
+        assert_equal ~printer:(Utilities.string_of_list string_of_int)
+          [4; 5] @@
+        List.sort Pervasives.compare @@ List.map (fun n -> let p = fst n in fst p.derived)
+          cycle;
+        (* checking path to cycle *)
+        assert_equal ~printer:(Utilities.string_of_list string_of_int)
+          [0; 1; 2; 3] @@
+        List.sort Pervasives.compare @@ List.map (fun n -> let p = fst n in fst p.derived)
+          path_to_cycle;
+        assert_equal ~printer:string_of_int 5 @@ fst @@ escape.derived;
+        (* checking that all required proofs and only required proofs (i.e., except 7) are
+           present *)
+        assert_equal ~printer:(Utilities.string_of_list string_of_int)
+          [0; 1; 2; 2; 3; 4; 5; 5; 6; 8; 9; 10; 11] @@
+        List.sort Pervasives.compare @@ List.map (fun p -> fst @@ p.derived) proofs
       );
   ]
 
@@ -1542,6 +1638,17 @@ let cfa_test () : test =
 
 
 
+let proof_test () : test =
+  init_flags ();
+  "proof" >::: [
+    "proof-1" >:: (fun _ ->
+        (* load grammar from file, process, check that proofs contain decent path/cycle/etc., that are short, then grep for x2s in textual output *)
+        assert_equal 1 1
+      );
+  ]
+
+
+
 let examples_test () : test =
   init_flags ();
   let filenames_in_dir = List.filter (fun f -> String.length f > 8)
@@ -1587,5 +1694,6 @@ let tests () = [
   te_test ();
   type_test ();
   typing_test ();
+  proof_test ();
   examples_test ()
 ]

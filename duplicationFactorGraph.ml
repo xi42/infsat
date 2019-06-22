@@ -20,7 +20,8 @@ type dfg_path = (dfg_vertex * dfg_edge) list
 (** Duplication Factor graph with typings of nonterminals (nt : ty) in vertices and edges to
     nonterminal typings used in one of proofs of that typing with boolean label whether the proof
     generated a new duplication factor (i.e., used typing of terminal a or had a duplication of a
-    productive variable) or used a proof of typing of another nonterminal that was productive. *)
+    productive variable) or used a proof of typing of another nonterminal that was productive.
+    Proofs in DFG have identical values as in input aside from initial flag. *)
 class dfg = object(self)
   (** List of edges to out-neighbours and either leaf proof or first proof for each vertex.
       Leaf proofs are proofs of nonterminal typings that do not use other nonterminals. First
@@ -31,6 +32,8 @@ class dfg = object(self)
   (** List of in-neighbours of each vertex with label whether the edge is positive. *)
   val mutable rev_graph : NTTySet.t NTTyMap.t = NTTyMap.empty
 
+  (* ----- adding vertices ----- *)
+  
   (** Adds edges from nt : ty to typings of used nonterminals and adds missing vertices. Returns
       whether an edge was added or updated. *)
   method add_vertex (proof : proof) : bool =
@@ -128,7 +131,178 @@ class dfg = object(self)
       rev_graph <- NTTyMap.add vertex NTTySet.empty rev_graph;
       false
 
-  method private complete_proof
+  (* ----- searching for positive cycles ----- *)
+  
+  (** Computes strongly connected components in the subgraph with vertices reachable from
+      start_vertex. Linear time, based on Kosaraju's algorithm. Empty result when start_vertex
+      is not in the graph. *)
+  method private reachable_sccs (start_vertex : dfg_vertex) : dfg_vertex NTTyMap.t =
+    (* Computing the order of reverse traversal of the graph, but not starting from each
+       vertex like in Kosaraju's algorithm, but only form start_vertex, since
+       we're only interested in vertices reachable from the start vertex. *)
+    if NTTyMap.mem start_vertex graph then
+      begin
+        let order : dfg_vertex list ref = ref [] in
+        let visited : NTTySet.t ref = ref NTTySet.empty in
+        let rec visit (vertex : dfg_vertex) : unit =
+          if not @@ NTTySet.mem vertex !visited then
+            begin
+              visited := NTTySet.add vertex !visited;
+              (* should exist *)
+              let out_edges = fst @@ NTTyMap.find vertex graph in
+              out_edges |> NTTyMap.iter (fun vertex' _ ->
+                  visit vertex'
+                );
+              order := vertex :: !order
+            end
+        in
+        visit start_vertex;
+        (* Computing strongly connected components by reverse traversing of the graph, but only
+           through the vertices that were visited (i.e., reachable from start). *)
+        let scc_roots : dfg_vertex NTTyMap.t ref = ref NTTyMap.empty in
+        let rec assign (vertex : dfg_vertex) (root : dfg_vertex) : unit =
+          if not @@ NTTyMap.mem vertex !scc_roots then
+            begin
+              scc_roots := NTTyMap.add vertex root !scc_roots;
+              (* should exist *)
+              let in_edges = NTTyMap.find vertex rev_graph in
+              in_edges |> NTTySet.iter (fun vertex' ->
+                  if NTTySet.mem vertex' !visited then
+                    assign vertex' root
+                )
+            end
+        in
+        !order |> List.iter (fun vertex ->
+            assign vertex vertex
+          );
+        !scc_roots
+      end
+    else
+      (* when start vertex is not in the graph *)
+      NTTyMap.empty
+
+  (** Computing positive edges in cycles by checking if any positive edge connects vertices
+      from the same strongly connected component, i.e., is a part of a cycle.
+      Note that it also works for self-loops. *)
+  method private find_positive_edges_in_cycles
+      (scc_roots : dfg_vertex NTTyMap.t) : (dfg_vertex * dfg_vertex) list =
+    NTTyMap.fold (fun vertex1 root acc ->
+        NTTyMap.fold (fun vertex2 (_, edge_pos) acc ->
+            if edge_pos && nt_ty_eq root @@ NTTyMap.find vertex2 scc_roots then
+              (* We found an edge vertex -> vertex' that is a part of the positive cycle. We
+                 save the root of this SCC and the vertices of the positive edge. *)
+              (vertex1, vertex2) :: acc
+            else
+              acc
+          ) (fst @@ NTTyMap.find vertex1 graph) acc
+      ) scc_roots []
+
+  (** Construct a path from vertex that loops on itself to start_vertex based on visited.
+      This includes start_vertex and the looping vertex. If these were the same vertices, only
+      one copy will be in the path. *)
+  method private backtrack (start_vertex : dfg_vertex)
+      (visited : dfg_vertex NTTyMap.t) : dfg_vertex list =
+    let rec backtrack vertex acc =
+      let source = NTTyMap.find vertex visited in
+      if nt_ty_eq source vertex then
+        vertex :: acc
+      else
+        backtrack source (vertex :: acc)
+    in
+    backtrack start_vertex []
+
+  (** Produces (v1, edge v1->v2), ..., (vK, edge vK -> v(K+1)) from
+      v1 -> v2 -> ... -> vK -> v(K+1). *)
+  method private add_edges (vertices : dfg_vertex list) =
+    let rec add_edges (acc : dfg_edge list) : dfg_vertex list -> dfg_edge list = function
+      | vertex :: (next_vertex :: _ as vertices) ->
+        let edge = (fst @@ NTTyMap.find vertex graph) |> NTTyMap.find next_vertex in
+        add_edges (edge :: acc) vertices
+      | [last_vertex] -> List.rev acc
+      | [] -> failwith "Unexpected empty path"
+    in
+    add_edges [] vertices
+
+  (** Finds a path from vertex2 to vertex1 of minimal length contained in a single SCC. *)
+  method private find_short_cycle (scc_roots : dfg_vertex NTTyMap.t) (vertex1 : dfg_vertex)
+      (vertex2 : dfg_vertex) : dfg_vertex list =
+    let queue : dfg_vertex Queue.t = Queue.create () in
+    Queue.push vertex2 queue;
+    (* visited contains the vertex from which the vertex was visited. It is used to
+       construct the path from start_vertex. Loop marks the beginning. *)
+    let visited : dfg_vertex NTTyMap.t ref =
+      ref @@ NTTyMap.singleton vertex2 vertex2 in
+    let root = NTTyMap.find vertex2 scc_roots in
+    (* BFS *)
+    let searching = ref true in
+    while !searching do
+      (* this should not fail if there is a cycle containing vertex1 -> vertex2 *)
+      let vertex = Queue.pop queue in
+      (fst @@ NTTyMap.find vertex graph) |> NTTyMap.iter (fun vertex' _ ->
+          (* following only edges in the same SCC *)
+          if nt_ty_eq root @@ NTTyMap.find vertex' scc_roots then
+            begin
+              if not @@ NTTyMap.mem vertex' !visited then
+                begin
+                  visited := NTTyMap.add vertex' vertex !visited;
+                  Queue.push vertex' queue
+                end;
+              (* checking also visited to take care of vertex1 = vertex2 *)
+              if nt_ty_eq vertex1 vertex' then
+                searching := false
+            end
+        )
+    done;
+    (* Either result was found, or exception was thrown (and algorithm is invalid).
+       Constructing path from vertex2 to vertex1. *)
+    self#backtrack vertex1 !visited
+
+  (** Put the front of the lit with cycle at the end until it is equal to the expected first
+      element. *)
+  method private roll_cycle (cycle : dfg_edge list) (first : dfg_vertex) =
+    let rec roll_cycle (es1 : dfg_edge list) (es2 : dfg_edge list) : dfg_edge list =
+      match es1 with
+      | (p, _) as e :: es ->
+        if nt_ty_eq p.derived first then
+          es1 @ List.rev es2
+        else
+          roll_cycle es @@ e :: es2
+      | [] -> failwith "Expected a non-empty cycle that contains first"
+    in
+    roll_cycle cycle []
+
+  (** Computes path o minimal length from start_vertex to one of vertices in cycle. The path
+      includes exactly one vertex from the cycle, even if start_vertex is in cycle. *)
+  method private find_path_to_cycle (start_vertex : dfg_vertex) (cycle : dfg_vertex list) =
+    let queue : dfg_vertex Queue.t = Queue.create () in
+    Queue.push start_vertex queue;
+    (* visited contains the vertex from which the vertex was visited. It is used to construct the
+       path from start_vertex. *)
+    let visited : dfg_vertex NTTyMap.t ref =
+      ref @@ NTTyMap.singleton start_vertex start_vertex in
+    let cycle = NTTySet.of_list cycle in
+    (* BFS *)
+    let nearest_cycle_vertex = ref None in
+    while !nearest_cycle_vertex = None do
+      (* this should not fail if vertices from cycle are reachable *)
+      let vertex = Queue.pop queue in
+      if NTTySet.mem vertex cycle then
+        (* detecting cycle member here takes care of start_vertex being in cycle *)
+        nearest_cycle_vertex := Some vertex
+      else
+        (fst @@ NTTyMap.find vertex graph) |> NTTyMap.iter (fun vertex' _ ->
+            if not @@ NTTyMap.mem vertex' !visited then
+              begin
+                visited := NTTyMap.add vertex' vertex !visited;
+                Queue.push vertex' queue
+              end
+          )
+    done;
+    self#backtrack (option_get !nearest_cycle_vertex) !visited
+  
+  (** Recursively finds all necessary proofs of typings on given path to cycle and cycle.
+      Tries to minimize the amount of additional proofs using heuristic approach. *)
+  method private add_missing_proofs
       (path_to_cycle, cycle : dfg_edge list * dfg_edge list) : cycle_proof =
     let path_to_end_of_cycle = path_to_cycle @ cycle in
     (* marking vertices on the path as visited *)
@@ -138,7 +312,7 @@ class dfg = object(self)
     in
     (* LIFO is used instead of FIFO because it produces better readability with relevant
        proofs next to each other, and there is only one solution when following first proofs
-       anyway, so no need for bfs that finds shortest *)
+       anyway, so no need for BFS that finds the shortest. *)
     let queue : dfg_vertex Stack.t = Stack.create () in
     let add_to_queue_if_not_visited vertex =
       if not @@ NTTySet.mem vertex !visited then
@@ -198,7 +372,7 @@ class dfg = object(self)
        may not stop at visited nodes that are on the path to the cycle (and is guaranteed to
        not stop at the cycle itself). *)
     (* TODO there is a chance of duplicated proof when path to cycle and proof of escape vertex
-       have common edge *)
+       have common edge and the proof in the path to cycle is the same as initial *)
     let escape : proof = snd @@ NTTyMap.find (fst escape_vertex) graph in
     let rec add_escape_proof_tree proof =
       if not @@ NTTySet.mem proof.derived !visited then
@@ -235,168 +409,34 @@ class dfg = object(self)
     (* it's more readable when following the order it was added in *)
     let proofs = List.rev !proofs in
     new cycle_proof path_to_cycle cycle escape proofs
-
-  method private find_short_cycle_proof (start_vertex : dfg_vertex)
-      (scc_roots : dfg_vertex NTTyMap.t) (vertex1 : dfg_vertex)
-      (vertex2 : dfg_vertex) : cycle_proof =
-    (* To make the proof short, a shortest path from start to vertex is found, then the positive
-       edge to vertex' is added and then shortest cycle is found. *)
-    let queue : dfg_vertex Queue.t = Queue.create () in
-    Queue.push start_vertex queue;
-    (* visited contains the vertex from which the vertex was visited in order to construct the
-       path in the end. *)
-    let visited : dfg_vertex NTTyMap.t ref =
-      ref @@ NTTyMap.singleton start_vertex start_vertex in
-    (* construct a path from start to given vertex based on visited. *)
-    let rec backtrack vertex acc =
-      if nt_ty_eq start_vertex vertex then
-        start_vertex :: acc
-      else
-        backtrack (NTTyMap.find vertex !visited) (vertex :: acc)
-    in
-    while not @@ NTTyMap.mem vertex1 !visited do
-      (* this should not fail if vertex1 is reachable *)
-      let vertex = Queue.pop queue in
-      (fst @@ NTTyMap.find vertex graph) |> NTTyMap.iter (fun vertex' _ ->
-          if not @@ NTTyMap.mem vertex' !visited then
-            begin
-              visited := NTTyMap.add vertex' vertex !visited;
-              Queue.push vertex' queue
-            end
-        )
-    done;
-    let path_to_vertex1 = backtrack vertex1 [] in
-    let vertices_on_path_to_vertex1 = NTTySet.of_list path_to_vertex1 in
-    let root = NTTyMap.find vertex1 scc_roots in
-    let path : dfg_vertex list =
-      if NTTySet.mem vertex2 vertices_on_path_to_vertex1 then
-        (* already found a cycle, since a path to vertex1 was found with vertex2 on the way *)
-        path_to_vertex1 @ [vertex2]
-      else
-        begin
-          (* found a path from start_vertex to vertex1 - clearing visited from everything else and
-             clearing the queue *)
-          visited := !visited |> NTTyMap.filter (fun vertex _ ->
-              NTTySet.mem vertex vertices_on_path_to_vertex1);
-          Queue.clear queue;
-          (* manually adding vertex2 as visited from vertex1 to include the positive edge *)
-          visited := NTTyMap.add vertex2 vertex1 !visited;
-          Queue.push vertex2 queue;
-          let result : (dfg_vertex * dfg_vertex) option ref = ref None in
-          while !result = None do
-            (* this should not fail if there is a cycle containing vertex2 *)
-            let vertex = Queue.pop queue in
-            (fst @@ NTTyMap.find vertex graph) |> NTTyMap.iter (fun vertex' _ ->
-                (* following only edges in the same SCC *)
-                if nt_ty_eq root @@ NTTyMap.find vertex' scc_roots then
-                  if NTTyMap.mem vertex' !visited then
-                    begin
-                      (* a cycle was found *)
-                      if NTTySet.mem vertex' vertices_on_path_to_vertex1 then
-                        (* a cycle containing the correct edge was found *)
-                        result := Some (vertex, vertex')
-                    end
-                  else
-                    begin
-                      visited := NTTyMap.add vertex' vertex !visited;
-                      Queue.push vertex' queue
-                    end
-              )
-          done;
-          let prev_last_vertex, last_vertex = option_get !result in
-          (* constructing the path from start to end of cycle *)
-          backtrack prev_last_vertex [] @ [last_vertex]
-        end
-    in
-    (* adding inward edges on the path, except for the first (start) node, splitting the path
-       into part leading to the cycle and the cycle itself *)
-    let rec split_path (acc : dfg_edge list) (path : dfg_edge list) =
-      match path with
-      | (proof, _ as edge) :: path' ->
-        if nt_ty_eq root @@ NTTyMap.find proof.derived scc_roots then
-          split_path (edge :: acc) path'
-        else
-          (List.rev path, acc)
-      | [] -> ([], acc)
-    in
-    let rec add_edges (acc : dfg_edge list) = function
-      | vertex :: (next_vertex :: _ as vertices) ->
-        let edge = (fst @@ NTTyMap.find vertex graph) |> NTTyMap.find next_vertex in
-        add_edges (edge :: acc) vertices
-      | [last_vertex] -> split_path [] acc
-      | [] -> failwith "Unexpected empty path"
-    in
-    self#complete_proof @@ add_edges [] path
   
   (** DFS with checking for existence of positive edge in a cycle reachable from
-      (start_nt, start_ty). Linear time, based on Kosaraju's algorithm.
+      (start_nt, start_ty).
       Returns cycle and its proofs with information on path from start to the cycle,
       then throughout the cycle, and escaping from cycle, along with required proofs. *)
   method find_positive_cycle
       (start_nt : nt_id) (start_ty : ty) : cycle_proof option =
-    (* Computing the order of reverse traversal of the graph, but not starting from each
-       vertex like in Kosaraju's algorithm, but only form (start_nt, start_ty), since
-       we're only interested in vertices reachable from the start vertex. *)
     let start_vertex = (start_nt, start_ty) in
-    if NTTyMap.mem start_vertex graph then
-      begin
-        let order : dfg_vertex list ref = ref [] in
-        let visited : NTTySet.t ref = ref NTTySet.empty in
-        let rec visit (vertex : dfg_vertex) : unit =
-          if not @@ NTTySet.mem vertex !visited then
-            begin
-              visited := NTTySet.add vertex !visited;
-              (* should exist *)
-              let out_edges = fst @@ NTTyMap.find vertex graph in
-              out_edges |> NTTyMap.iter (fun vertex' _ ->
-                  visit vertex'
-                );
-              order := vertex :: !order
-            end
-        in
-        visit start_vertex;
-        (* Computing strongly connected components by reverse traversing of the graph, but only
-           through the vertices that were visited (i.e., reachable from start). *)
-        let scc_roots : dfg_vertex NTTyMap.t ref = ref NTTyMap.empty in
-        let rec assign (vertex : dfg_vertex) (root : dfg_vertex) : unit =
-          if not @@ NTTyMap.mem vertex !scc_roots then
-            begin
-              scc_roots := NTTyMap.add vertex root !scc_roots;
-              (* should exist *)
-              let in_edges = NTTyMap.find vertex rev_graph in
-              in_edges |> NTTySet.iter (fun vertex' ->
-                  if NTTySet.mem vertex' !visited then
-                    assign vertex' root
-                )
-            end
-        in
-        !order |> List.iter (fun vertex ->
-            assign vertex vertex
-          );
-        (* Computing the result by checking if any positive edge connects vertices from the same
-           strongly connected component, i.e., is a part of a cycle. Note that it also works for
-           self-loops. *)
-        let cycle_data =
-          NTTyMap.fold (fun vertex root acc ->
-              NTTyMap.fold (fun vertex' (_, edge_pos) acc ->
-                  if acc = None && edge_pos &&
-                     nt_ty_eq root @@ NTTyMap.find vertex' !scc_roots then
-                    (* We found an edge vertex -> vertex' that is a part of the positive cycle. We
-                       save the root of this SCC and the vertices of the positive edge. *)
-                    Some (root, vertex, vertex')
-                  else
-                    acc
-                ) (fst @@ NTTyMap.find vertex graph) acc
-            ) !scc_roots None
-        in
-        match cycle_data with
-        | Some (root, vertex, vertex') ->
-          Some (self#find_short_cycle_proof start_vertex !scc_roots vertex vertex')
-        | None -> None
-      end
-    else
-      (* when start vertex is not in the graph *)
-      None
+    let scc_roots = self#reachable_sccs start_vertex in
+    let positive_cycle_edges = self#find_positive_edges_in_cycles scc_roots in
+    match positive_cycle_edges with
+    | (vertex1, vertex2) :: _ ->
+      (* TODO iterate over each pair and take shortest by amount of proofs *)
+      let cycle_vertices = self#find_short_cycle scc_roots vertex1 vertex2 in
+      (* the extra vertex is dropped *)
+      let cycle = self#add_edges @@ cycle_vertices @ [List.hd cycle_vertices] in
+      let path_to_cycle_vertices = self#find_path_to_cycle start_vertex cycle_vertices in
+      (* cycle vertex is dropped *)
+      let path_to_cycle = self#add_edges path_to_cycle_vertices in
+      (* cycle is correct, but has to be rolled over so that it begins with last element of
+         path_to_cycle *)
+      let cycle = self#roll_cycle cycle @@ last path_to_cycle_vertices in
+      (* need to add proofs until no dependencies are missing *)
+      let res = self#add_missing_proofs @@ (path_to_cycle, cycle) in
+      Some res
+    | [] -> None
+
+  (* ----- printing ----- *)
 
   (** The graph in printable form. *)
   method to_string (nt_name : nt_id -> string) : string =

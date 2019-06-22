@@ -291,6 +291,11 @@ class cycle_proof (path_to_cycle : (proof * bool) list)
     "Proofs with identifiers (+ - positive duplication factor/multiple uses):\n\n" ^
     self#string_of_proofs hg
 
+  (** All data contained in cycle proof. For testing purposes. *)
+  method raw_data =
+    (path_to_cycle, cycle, escape, proofs)
+  
+  (** For testing purposes. *)
   method to_raw_edges : (nt_ty * bool) list =
     let cycle_border = fst @@ List.hd cycle in
     (List.map (fun (proof, edge_pos) -> (proof.derived, edge_pos)) @@

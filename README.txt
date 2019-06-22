@@ -18,8 +18,6 @@ make install-dependencies
 Run "make infsat" to make the final executable. Run "make run-test" to compile and run all
 tests.
 
-TODO update readme later
-
 Usage
 ------
 To use the program:
@@ -45,16 +43,27 @@ Terminals.
 <terminal rule k>
 End.
 
+Comments may be placed in ocaml style (* comment *). Terminals section is optional.
+
 Each rewriting rule should be in the form (for M >= 0):
 NonterminalName arg1 ... argM -> <term>.
 The first nonterminal on the list is the starting symbol.
 
 Each terminal rule should be in the form (for arity >= 0):
-terminalName -> arity.
-for not counted terminals or
-terminalName -> arity $.
-for counted terminals. All terminals declared in such way are branching, i.e., have exactly one
-argument of type different than T or are of arity 0.
+terminalName -> arity [+|*] [$].
++ or * are optional and mean that nondeterministically one or all paths are taken. When + and * are
+not present, + is the default. $ means that the terminal is counted. When $ is not present, the
+terminal is not counted.
+Note that there is a path of arbitrary length if and only if there is a tree of arbitrary size.
+Therefore, the only real difference between + and * is that * can be large in one branch, and
+counted in the other.
+
+There are four reserved terminals a, b, e, t with meanings:
+a -> 1 $.
+b -> 2 +.
+t -> 2 *.
+e -> 0.
+These terminals can be used without defining them and can't be redefined.
 
 Terms are in the form
 argX
@@ -62,14 +71,6 @@ terminalName
 NonterminalName
 (term)
 term1 term2
-br
-tr
-
-Reserved terminals br and tr are branch and tree terminals, respectively. Branch terminal has
-definition:
-br -> 2.
-Tree terminal is special terminal for binary tree node, i.e., the only terminal which does not
-branch.
 
 Examples can be found in directory "examples".
 
