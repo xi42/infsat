@@ -539,6 +539,53 @@ let dfg_test () : test =
           [0; 1; 2; 2; 3; 4; 5; 5; 6; 8; 9; 10; 11] @@
         List.sort Pervasives.compare @@ List.map (fun p -> fst @@ p.derived) proofs
       );
+
+    (* leaf proof should replace non-leaf initial proof *)
+    "dfg-14" >:: (fun _ ->
+        let dfg = new dfg in
+        assert_equal None @@ dfg#find_positive_cycle 0 ty_pr;
+        assert_equal false @@ dfg#add_vertex @@
+        mk_proof 2 ty_np empty_used_nts false;
+        assert_equal None @@ dfg#find_positive_cycle 0 ty_pr;
+        assert_equal true @@ dfg#add_vertex @@
+        mk_proof 1 ty_np (nt_ty_used_once 2 ty_np) false;
+        assert_equal None @@ dfg#find_positive_cycle 0 ty_pr;
+        assert_equal true @@ dfg#add_vertex @@
+        mk_proof 0 ty_pr (nt_ty_used_once 1 ty_np) true;
+        assert_equal None @@ dfg#find_positive_cycle 0 ty_pr;
+        assert_equal true @@ dfg#add_vertex @@
+        mk_proof 0 ty_pr (nt_ty_used_once 0 ty_pr) true;
+        let cycle1 = option_get @@ dfg#find_positive_cycle 0 ty_pr in
+        assert_equal false @@ dfg#add_vertex @@
+        mk_proof 1 ty_np empty_used_nts false;
+        let cycle2 = option_get @@ dfg#find_positive_cycle 0 ty_pr in
+        let path_to_cycle, cycle, escape, proofs = cycle1#raw_data in
+        assert_equal ~printer:(Utilities.string_of_list string_of_int)
+          [0] @@
+        List.sort Pervasives.compare @@ List.map (fun n -> let p = fst n in fst p.derived)
+          cycle;
+        assert_equal ~printer:(Utilities.string_of_list string_of_int)
+          [] @@
+        List.sort Pervasives.compare @@ List.map (fun n -> let p = fst n in fst p.derived)
+          path_to_cycle;
+        assert_equal ~printer:string_of_int 0 @@ fst @@ escape.derived;
+        assert_equal ~printer:(Utilities.string_of_list string_of_int)
+          [0; 0; 1; 2] @@
+        List.sort Pervasives.compare @@ List.map (fun p -> fst @@ p.derived) proofs;
+        let path_to_cycle, cycle, escape, proofs = cycle2#raw_data in
+        assert_equal ~printer:(Utilities.string_of_list string_of_int)
+          [0] @@
+        List.sort Pervasives.compare @@ List.map (fun n -> let p = fst n in fst p.derived)
+          cycle;
+        assert_equal ~printer:(Utilities.string_of_list string_of_int)
+          [] @@
+        List.sort Pervasives.compare @@ List.map (fun n -> let p = fst n in fst p.derived)
+          path_to_cycle;
+        assert_equal ~printer:string_of_int 0 @@ fst @@ escape.derived;
+        assert_equal ~printer:(Utilities.string_of_list string_of_int)
+          [0; 0; 1] @@
+        List.sort Pervasives.compare @@ List.map (fun p -> fst @@ p.derived) proofs
+      );
   ]
 
 let conversion_test () : test =

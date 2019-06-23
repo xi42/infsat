@@ -116,15 +116,10 @@ class dfg = object(self)
     (* there are no nonterminal dependencies, so adding a leaf proof if it does not exist yet
        or replacing the first proof with leaf proof *)
     | true, Some (out_edges, first) ->
-      if NTTyMap.is_empty first.used_nts then
-        begin
-          (* there already exists a vertex, but not a leaf proof *)
-          graph <- NTTyMap.add vertex (out_edges, { proof with initial = true }) graph;
-          false
-        end
-      else
-        (* there already exists a leaf proof *)
-        false
+      if not @@ NTTyMap.is_empty first.used_nts then
+        (* there already exists a vertex, but not a leaf proof *)
+        graph <- NTTyMap.add vertex (out_edges, { proof with initial = true }) graph;
+      false
     | true, None ->
       (* there is no vertex yet *)
       graph <- NTTyMap.add vertex (NTTyMap.empty, { proof with initial = true }) graph;
