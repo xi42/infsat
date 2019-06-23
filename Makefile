@@ -6,7 +6,7 @@ SOURCE = $(SOURCE_PRE) $(SOURCE_GEN) $(SOURCE_POST)
 all: infsat parencol
 
 install-dependencies:
-	opam install oUnit utop
+	opam install oUnit utop bisect_ppx
 
 infSatParser.mli infSatParser.ml: infSatParser.mly
 	ocamlyacc infSatParser.mly
@@ -34,10 +34,13 @@ infsat-debug: $(SOURCE) main_wrapper.ml
 	ocamlfind ocamlc -o $@ -g str.cma $^
 
 test: $(SOURCE) test.ml test_wrapper.ml
-	ocamlfind ocamlc -o $@ -package oUnit -linkpkg -g str.cma $^
+	ocamlfind ocamlc -o $@ -package bisect_ppx -package oUnit -linkpkg -g str.cma $^
 
 run-test: test
 	./$^ -runner sequential -no-cache-filename -no-output-file
+
+coverage: test
+	bisect-ppx-report -html coverage/ bisect*.out
 
 parencol: parencol.c
 	gcc -o $@ $^
@@ -55,4 +58,5 @@ doc: $(SOURCE)
 	all install-dependencies run-test clean
 
 clean:
-	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof-debug test oUnit-* parencol
+	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof-debug test oUnit-* parencol bisect*.out
+	rm -rf coverage/ doc/

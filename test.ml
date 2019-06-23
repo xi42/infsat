@@ -95,6 +95,19 @@ let l : int = 0
 let mk_fake_envm (used_nts : used_nts) : bool -> env -> envm =
   mk_envm used_nts empty_loc_types
 
+let assert_regexp_count (expected_count : int) (regexp : Str.regexp) (str : string) : unit =
+  let rec count_aux i count =
+    if i > String.length str then
+      count
+    else
+      try
+        let pos = Str.search_forward regexp str i in
+        count_aux (pos + 1) (count + 1)
+      with
+      | Not_found -> count
+  in
+  assert_equal ~printer:string_of_int expected_count @@ count_aux 0 0
+
 (* --- tests --- *)
 
 let utilities_test () : test =
@@ -1642,8 +1655,20 @@ let proof_test () : test =
   init_flags ();
   "proof" >::: [
     "proof-1" >:: (fun _ ->
-        (* load grammar from file, process, check that proofs contain decent path/cycle/etc., that are short, then grep for x2s in textual output *)
-        assert_equal 1 1
+        match Main.parse_and_report_finiteness @@ Some "examples/multiple_usages_inf.inf" with
+        | Infinite cycle_proof_str ->
+          assert_regexp_count 1 (Str.regexp_string "I (x2)") cycle_proof_str;
+          assert_regexp_count 3 (Str.regexp_string "(+)") cycle_proof_str;
+          assert_regexp_count 1 (Str.regexp_string "(x2)") cycle_proof_str;
+          assert_regexp_count 2 (Str.regexp_string "x#1") cycle_proof_str;
+          assert_regexp_count 2 (Str.regexp_string "x#2") cycle_proof_str;
+          assert_regexp_count 0 (Str.regexp_string "C#1") cycle_proof_str;
+          assert_regexp_count 0 (Str.regexp_string "S#1") cycle_proof_str;
+          assert_regexp_count 0 (Str.regexp_string "I#1") cycle_proof_str;
+          assert_regexp_count 1 (Str.regexp "C :.*\n.*C :") cycle_proof_str;
+          assert_regexp_count 1 (Str.regexp "A :.*/\\\\") cycle_proof_str
+        | Finite | Unknown ->
+          failwith "Expected infinite saturation result"
       );
   ]
 
@@ -1674,8 +1699,8 @@ let examples_test () : test =
   "Examples" >::: [
     "Infinite examples" >::: List.map (fun filename ->
         filename >:: (fun _ ->
-            assert_equal ~printer:Saturation.string_of_infsat_result Infinite @@
-            run filename))
+            assert_equal ~printer:id "infinite" @@
+            Saturation.string_of_infsat_result @@ run filename))
       inf_filenames;
     "Finite examples" >::: List.map (fun filename ->
         filename >:: (fun _ ->

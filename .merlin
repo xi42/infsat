@@ -2,3 +2,4 @@ S .
 B .
 PKG oUnit
 PKG utop
+PKG bisect_ppx

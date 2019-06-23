@@ -1,0 +1,6 @@
+Grammar.
+S -> b (a S) (A (C I a)).
+A x -> t (x (a e)) (x e).
+C x y z -> x (y z).
+I x -> x.
+End.

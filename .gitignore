@@ -26,3 +26,4 @@ TAGS
 *~
 *.o
 doc/
+coverage/

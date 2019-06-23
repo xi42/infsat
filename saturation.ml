@@ -11,10 +11,10 @@ open Type
 open TypingCommon
 open Utilities
 
-type infsat_result = Infinite | Finite | Unknown
+type infsat_result = Infinite of string | Finite | Unknown
 
 let string_of_infsat_result = function
-  | Infinite -> "infinite"
+  | Infinite _ -> "infinite"
   | Finite -> "finite"
   | Unknown -> "unknown"
 
@@ -348,16 +348,17 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         Unknown
       | _, _ -> Finite
     with
-    | Positive_cycle_found cycle_path ->
+    | Positive_cycle_found cycle_proof ->
       reset_indentation ();
+      let cycle_proof_str = cycle_proof#to_string hg in
       print_verbose (not !Flags.quiet) @@ lazy (
         "Duplication Factor Graph:\n" ^
         dfg#to_string hg#nt_name ^ "\n" ^
         "Computed result after " ^ string_of_int iteration ^ " iterations.\n" ^
         "The input HORS contains paths with arbitrarily many counted terminals.\n" ^
-        cycle_path#to_string hg
+        cycle_proof_str
       );
-      Infinite
+      Infinite cycle_proof_str
     | Max_iterations_reached ->
       print_verbose (not !Flags.quiet) @@ lazy (
         "Could not determine the result in " ^ string_of_int iteration ^ " iterations."
