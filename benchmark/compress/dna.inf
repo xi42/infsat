@@ -1,0 +1,90 @@
+Grammar.
+S -> X119 (X45 (X116 (X80 (X119 (X80 (X64 (X41 (X75 aa)) (aa (gg
+(X111 aa (cc (X75 gg (X79 (tt (X68 cc (X20 (X19 (cc (X112 (X44 (X99
+cc (X66 (gg (X89 (gg (X20 (X61 (tt (X79 (aa (X43 (X86 (X24 aa (X78
+(X105 tt (X42 (X95 tt (X37 (X78 (gg (X112 (aa (X85 (X18 (X105 aa
+(X65 (X117 (X114 (tt (X78 (X36 (X35 (X108 aa (X33 (tt (X30 (X64
+cc (X92 tt (gg (X60 (X15 (X102 aa (X20 (gg (tt (X54 (X19 (X88 (gg
+(X13 (X117 (X48 tt (X95 cc (X16 (X18 (X65 (X108 cc (X42 (tt (X77
+(X12 (X83 tt (gg (X43 (gg (X37 (X16 (gg (gg (X36 (cc (X43 (aa (X77
+(X6 (X87 (X60 (X44 (X111 cc (X83 cc (tt (tt (X86 (X36 (X15 (X87
+(tt (X99 aa (gg (X102 cc
+e))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))).
+X4 x1 x2 x3 -> x1 (x2 x3).
+X5 x y -> X4 tt x y.
+X6 x -> X5 aa x.
+X10 x7 x8 x9 -> x8 (x7 x9).
+X11 x y -> X10 tt x y.
+X12 x -> X11 cc x.
+X13 x -> X5 gg x.
+X14 x y -> X10 cc x y.
+X15 x -> X14 gg x.
+X16 x -> X14 aa x.
+X17 x y -> X4 aa x y.
+X18 x -> X17 tt x.
+X19 x -> X17 aa x.
+X20 x -> X5 cc x.
+X21 x y -> X4 cc x y.
+X24 x22 x23 -> gg (x22 (x22 x23)).
+X28 x25 x26 x27 -> x25 (x26 (x25 x27)).
+X29 x y -> X10 X13 x y.
+X30 x -> X28 tt cc x.
+X31 x y -> X28 cc x y.
+X32 x -> X31 cc x.
+X33 x -> X29 cc x.
+X34 x y -> X4 X16 x y.
+X35 x -> X34 cc x.
+X36 x -> X29 aa x.
+X37 x -> X31 aa x.
+X40 x38 x39 -> x38 (x38 (aa x39)).
+X41 x y -> X10 X16 x y.
+X42 x -> X34 tt x.
+X43 x -> X41 tt x.
+X44 x -> X40 tt x.
+X45 x -> X40 cc x.
+X48 x46 x47 -> cc (x46 (x46 (X6 x47))).
+X52 x49 x50 x51 -> x49 (x49 (aa (x50 x51))).
+X53 x y -> X52 aa x y.
+X54 x -> X53 tt x.
+X55 x y -> X10 X45 x y.
+X56 x -> X55 aa x.
+X59 x57 x58 -> x57 (cc (X20 x58)).
+X60 x -> X53 cc x.
+X61 x -> X52 cc tt x.
+X64 x62 x63 -> tt (x62 (X43 (x62 x63))).
+X65 x -> X55 gg x.
+X66 x -> X59 aa x.
+X68 x67 y -> X24 (X5 x67) y.
+X72 x69 x70 x71 -> x69 (x70 (X16 (x69 x71))).
+X75 x73 x74 -> cc (X12 (x73 (x73 (cc x74)))).
+X76 x y -> X72 cc x y.
+X77 x -> X68 aa x.
+X78 x -> X76 cc x.
+X79 x -> X76 aa x.
+X80 x -> X72 aa cc x.
+X83 x81 x82 -> gg (X18 (tt (x81 (x81 (X16 x82))))).
+X85 x84 -> X44 (X32 x84).
+X86 x -> X31 X66 x.
+X87 x -> X59 X61 x.
+X88 x -> X31 X80 x.
+X89 x -> X11 X85 x.
+X92 x90 x91 -> cc (X56 (x90 (aa (x90 (x90 x91))))).
+X95 x93 x94 -> X43 (x93 (X56 (cc (x93 x94)))).
+X99 x96 x98 -> X21 x96 (X33 (x96 (x96 (tt (X21 x96 x98))))).
+X102 x100 x101 -> X6 (x100 (cc (X54 (gg (x100 x101))))).
+X105 x103 x104 -> X18 (X45 (x103 (X32 (x103 (X12 x104))))).
+X108 x106 x107 -> tt (X66 (X35 (x106 (tt (x106 x107))))).
+X111 x109 x110 -> X48 cc (x109 (X30 (x109 (aa x110)))).
+X112 x -> X55 X89 x.
+X114 x113 -> X89 (X56 x113).
+X116 x115 -> cc (aa (X92 cc x115)).
+X117 x -> X21 X114 x.
+X119 x118 -> cc (X116 (X88 x118)).
+End.
+
+Terminals.
+aa -> 1.
+cc -> 1 $.
+tt -> 1.
+gg -> 1 $.
+End.

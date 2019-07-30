@@ -1,0 +1,14 @@
+Grammar.
+S -> Twice (Twice (Twice (Twice (Twice (Twice (Twice (Twice (Twice (Twice F))))))))) Fst bb aa.
+Fst x y -> x ee.
+F k x y -> k y (Concat y x).
+Twice f k x y -> f (f k) x y.
+Concat x y c -> x (y cc).
+End.
+
+Terminals.
+aa -> 1 $.
+bb -> 1.
+cc -> 0 $.
+ee -> 0.
+End.

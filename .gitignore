@@ -6,11 +6,11 @@
 *.exe
 *.log
 *.prof.ml
-infsat
-infsat-g
-infsat-debug
-infsat-prof-debug
-parencol
+/infsat
+/infsat-g
+/infsat-debug
+/infsat-prof-debug
+/parencol
 *.out
 *.callgrind
 *.cpuprofile

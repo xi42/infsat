@@ -1,0 +1,16 @@
+Grammar.
+(* S(999) (the following encoding uses the binary representation 1111100111 of 999) *)
+S -> One (One (One (Zero (Zero(One (One (One (One Step)))))))) f e.
+Step g z -> g (lpar (plus (H g (lpar (minus (H g z)))))).
+Zero h g z -> h (h g) z.
+One h g z -> h (h (Step g)) z.
+H g z -> g (rpar (g z)).
+End.
+
+Terminals.
+f -> 1 $.
+lpar -> 1.
+rpar -> 1.
+plus -> 1.
+minus -> 1.
+End.

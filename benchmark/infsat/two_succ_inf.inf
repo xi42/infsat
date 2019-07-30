@@ -1,0 +1,23 @@
+(*
+Natural numbers Nat are defined by 0 and succ, where numbers are kind of like Church numbers.
+Then, Swap function is created that swaps arguments of a 2-arg function.
+Swap is composed with itself n times for each natural number n. It is used on
+K and then e and (a e). So, every odd number has a branch that is counted.
+There are infinitely many odd numbers iff this language is infinite.
+*)
+
+Grammar.
+(* S : o *)
+S -> Nat Swap K e e.
+(* Nat : ((o -> o -> o) -> o -> o -> o) -> (o -> o -> o) -> o -> o -> o *)
+Nat f g x y -> b (Zero f g x y) (Succ Nat f g x (a y)).
+(* Succ : (((o -> o -> o) -> o -> o -> o) -> (o -> o -> o) -> o -> o -> o) ->
+          ((o -> o -> o) -> o -> o -> o) -> (o -> o -> o) -> o -> o -> o *)
+Succ p f g x y -> f (p f g) x y.
+(* Zero : ((o -> o -> o) -> o -> o -> o) -> (o -> o -> o) -> o -> o -> o *)
+Zero f g x y -> g x y.
+(* Swap : (o -> o -> o) -> o -> o -> o *)
+Swap g x y -> g y x.
+(* K : o -> o -> o *)
+K x y -> x.
+End.
