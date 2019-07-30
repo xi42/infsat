@@ -733,7 +733,7 @@ let conversion_test () : test =
         let f_nt : nt_id = f_gram#nt_count - 1 in
         let arity = fst @@ f_gram#rules.(f_nt) in
         assert_equal ["y"; "p"; "q"] @@
-        List.map (fun i -> f_gram#name_of_var (f_nt, i)) @@ range 0 arity
+        List.map (fun i -> f_gram#var_name (f_nt, i)) @@ range 0 arity
       );
 
     (* Checking that fun application was converted to _fun0 y x. *)

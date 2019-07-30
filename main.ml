@@ -39,10 +39,7 @@ let parse_file filename =
       open_in filename 
     with
       Sys_error _ ->
-      begin
-        print_string @@ "Cannot open file: " ^ filename ^ "\n";
-        exit (-1)
-      end
+      failwith @@ "Cannot open file: " ^ filename
   in
   print_string @@ "Analyzing " ^ filename ^ ".\n";
   flush stdout;
@@ -51,20 +48,17 @@ let parse_file filename =
     try
       InfSatParser.main InfSatLexer.token lexbuf
     with 
-    | Failure _ -> exit (-1) (* exception raised by the lexical analyer *)
+    | Failure _ ->
+      failwith "Lexical error."
     | Parsing.Parse_error ->
-      begin
-        print_string "Parse error\n";
-        exit (-1)
-      end
+      failwith "Parse error."
   in
   let _ = 
     try
       close_in in_strm
     with
     | Sys_error _ ->
-      print_string @@ "Cannot close file " ^ filename ^ "\n";
-      exit(-1)
+      failwith @@ "Cannot close file " ^ filename
   in
     result
 
@@ -78,11 +72,9 @@ let parse_stdin () =
       InfSatParser.main InfSatLexer.token lexbuf
     with 
     | Failure _ ->
-      (* exception raised by the lexical analyer *)
-      exit (-1)
+      failwith "Lexical error"
     | Parsing.Parse_error ->
-      print_string "Parse error:\n";
-      exit (-1)
+      failwith "Parse error"
   in
     result
 
@@ -128,7 +120,7 @@ let parse_and_report_finiteness (filename : string option) : Saturation.infsat_r
         | Some f -> parse_file f
         | None -> parse_stdin ()
       with
-      | InfSatLexer.LexError s -> failwith @@ "Lexer error: "^s
+      | InfSatLexer.LexError s -> failwith @@ "Lexer error: " ^ s
     )
   in
   print_verbose !Flags.verbose_preprocessing @@ lazy (
@@ -137,19 +129,24 @@ let parse_and_report_finiteness (filename : string option) : Saturation.infsat_r
   report_finiteness input
   
 let main () : unit =
-  program_info |> Arg.parse options (fun filenames ->
-      Flags.propagate_flags ();
-      let filename = match filenames with
-        | "" -> None
-        | f -> Some f
-      in
-      let start_t = Sys.time () in
-      let res = parse_and_report_finiteness filename in
-      let end_t = Sys.time () in
-      report_timings start_t end_t;
-      (* return value indicates finiteness only when return flag is on *)
-      if res = Finite || res <> Unknown && not !Flags.quiet then
-        exit 0
-      else
-        exit 1
-    )
+  try
+    program_info |> Arg.parse options (fun filenames ->
+        Flags.propagate_flags ();
+        let filename = match filenames with
+          | "" -> None
+          | f -> Some f
+        in
+        let start_t = Sys.time () in
+        let res = parse_and_report_finiteness filename in
+        let end_t = Sys.time () in
+        report_timings start_t end_t;
+        (* return value indicates finiteness only when return flag is on *)
+        if res = Finite || res <> Unknown && not !Flags.quiet then
+          exit 0
+        else
+          exit 1
+      )
+  with
+  | Failure msg ->
+    prerr_endline msg;
+    exit (-1)

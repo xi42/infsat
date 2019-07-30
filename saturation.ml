@@ -324,15 +324,18 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       message if the term is unsafe. When flag force_unsafe is false (default) and the output
       is finite language, it returns Unknown with appropriate message instead. *)
   method saturate (safety_error : string option) : infsat_result =
+    let start_t = Sys.time () in
     try
       while self#process_queues do
         if iteration = !Flags.maxiters then
           raise_notrace Max_iterations_reached;
         iteration <- iteration + 1
       done;
+      let t = Sys.time () -. start_t in
       print_verbose (not !Flags.quiet) @@ lazy (
         "Duplication Factor Graph:\n" ^ dfg#to_string hg#nt_name ^ "\n" ^
-        "Computed result after " ^ string_of_int iteration ^ " iterations.\n" ^
+        "Computed saturation result after " ^ string_of_int iteration ^ " iterations in " ^
+        string_of_float t ^ "s.\n" ^
         "The input HORS contains only paths with uniformly bounded number " ^
         "of counted terminals.";
       );
@@ -349,19 +352,23 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       | _, _ -> Finite
     with
     | Positive_cycle_found cycle_proof ->
+      let t = Sys.time () -. start_t in
       reset_indentation ();
       let cycle_proof_str = cycle_proof#to_string hg in
       print_verbose (not !Flags.quiet) @@ lazy (
         "Duplication Factor Graph:\n" ^
         dfg#to_string hg#nt_name ^ "\n" ^
-        "Computed result after " ^ string_of_int iteration ^ " iterations.\n" ^
+        "Computed saturation result after " ^ string_of_int iteration ^ " iterations in " ^
+        string_of_float t ^ "s.\n" ^
         "The input HORS contains paths with arbitrarily many counted terminals.\n" ^
         cycle_proof_str
       );
       Infinite cycle_proof_str
     | Max_iterations_reached ->
+      let t = Sys.time () -. start_t in
       print_verbose (not !Flags.quiet) @@ lazy (
-        "Could not determine the result in " ^ string_of_int iteration ^ " iterations."
+        "Could not determine saturation result in " ^ string_of_int iteration ^
+        " iterations in " ^ string_of_float t ^ "s.\n."
       );
       Unknown
 

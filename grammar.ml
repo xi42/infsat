@@ -58,7 +58,7 @@ class grammar (nt_names : string array) (var_names : string array array)
   method rule (nt : nt_id) : rule = rules.(nt)
   method replace_rule (nt : nt_id) (rule : rule) : unit = rules.(nt) <- rule
   method nt_count : int = Array.length rules
-  method arity_of_nt (nt : nt_id) : int = fst rules.(nt)
+  method nt_arity (nt : nt_id) : int = fst rules.(nt)
   method rules = rules
 
   method size = Array.fold_left (fun n r -> n + (size_of_rule r)) 0 rules
@@ -75,7 +75,7 @@ class grammar (nt_names : string array) (var_names : string array array)
 
   (* --- printing and name lookups --- *)
   
-  method name_of_nt (nt : nt_id) : string = nt_names.(nt)
+  method nt_name (nt : nt_id) : string = nt_names.(nt)
 
   method nt_with_name (nt_name : string) : nt_id =
     let res = ref (-1) in
@@ -88,7 +88,7 @@ class grammar (nt_names : string array) (var_names : string array array)
     else
       !res
   
-  method name_of_var (x : var_id) : string =
+  method var_name (x : var_id) : string =
     let nt, i = x in
     (* variable added by normalization *)
     if nt < 0 || nt >= Array.length var_names || i >= Array.length var_names.(nt) then
@@ -99,16 +99,16 @@ class grammar (nt_names : string array) (var_names : string array array)
   method string_of_term (term : term) : string =
     match term with
     | TE a -> string_of_terminal a
-    | NT f -> self#name_of_nt f
-    | Var x -> self#name_of_var x
+    | NT f -> self#nt_name f
+    | Var x -> self#var_name x
     | App (t1, t2) -> "(" ^ self#string_of_term t1 ^ " " ^ self#string_of_term t2 ^ ")"
 
   method to_string : string =
     String.concat "\n" @@ Array.to_list @@
     (rules |> Array.mapi (fun i (arity, body) ->
-         self#name_of_nt i ^ " " ^
+         self#nt_name i ^ " " ^
          String.concat "" (Utilities.range 0 arity |> List.map (fun j ->
-             self#name_of_var (i, j) ^ " "
+             self#var_name (i, j) ^ " "
            )) ^
          "-> " ^
          self#string_of_term body

@@ -99,9 +99,9 @@ class hgrammar (grammar : grammar) = object(self)
   
   method nt_count : int = Array.length nt_bodies
 
-  method nt_arity (nt : nt_id) : int = grammar#arity_of_nt nt
+  method nt_arity (nt : nt_id) : int = grammar#nt_arity nt
 
-  method nt_name (nt : nt_id) : string = grammar#name_of_nt nt
+  method nt_name (nt : nt_id) : string = grammar#nt_name nt
   
   method nt_body (nt : nt_id) : hterm = nt_bodies.(nt)
 
@@ -328,8 +328,8 @@ class hgrammar (grammar : grammar) = object(self)
   (* --- printing --- *)
 
   method string_of_head = function
-    | HNT nt -> grammar#name_of_nt nt
-    | HVar v -> grammar#name_of_var v
+    | HNT nt -> grammar#nt_name nt
+    | HVar v -> grammar#var_name v
     | HT a -> string_of_terminal a
   
   method string_of_hterm (sep_envs : bool) (loc2mark : string HlocMap.t) (loc : hloc)
@@ -363,7 +363,7 @@ class hgrammar (grammar : grammar) = object(self)
     Utilities.string_of_list (self#string_of_hterm false HlocMap.empty 0) @@ self#id2hterms id
 
   method var_name (v : var_id) : string =
-    grammar#name_of_var v
+    grammar#var_name v
 
   method var_names (nt : nt_id) : string list =
     Utilities.range 0 (self#nt_arity nt) |>

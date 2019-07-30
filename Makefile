@@ -58,5 +58,5 @@ doc: $(SOURCE)
 	all install-dependencies run-test clean
 
 clean:
-	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof-debug test oUnit-* parencol bisect*.out
+	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof-debug test oUnit-* parencol bisect*.out *.cpuprofile *.callgrind
 	rm -rf coverage/ doc/
