@@ -1,0 +1,15 @@
+(* Fib f g x y generates f^k g x (a^n y) for natural n and k being n-th Fibonacci's number.
+Swap swaps arguments of function on the first argument. K is standard.
+Fib Swap K e e generates e's and a^n e where n is even Fibonaci's number.
+It generates an infinite language iff there are infinite even Fibonacci's numbers.
+*)
+
+Grammar.
+S -> Fib Zero One Swap K e e.
+Fib p q f g x y -> b (q f g x y) (Fib q (Add p q) f g (a x) y).
+Add p q f g -> p f (q f g).
+Zero f g -> g.
+One f g -> f g.
+Swap g x y -> g y x.
+K x y -> x.
+End.
