@@ -1,0 +1,16 @@
+(* Fib f g x y generates f^k g (a^n x) y for natural n and k being n-th 0-2-Fibonacci's number.
+The difference is that is is a Fibonacci sequence generated from 0 and 2.
+Swap swaps arguments of function on the first argument. K is standard.
+Fib Swap K e e generates e's and a^n e where n is even 0-2-Fibonaci's number.
+It generates an infinite language iff there are infinite odd 0-2-Fibonacci's numbers.
+*)
+
+Grammar.
+S -> Fib Zero Two Swap K e e.
+Fib p q f g x y -> b (q f g x y) (Fib q (Add p q) f g x (a y)).
+Add p q f g -> p f (q f g).
+Zero f g -> g.
+Two f g -> f (f g).
+Swap g x y -> g y x.
+K x y -> x.
+End.
