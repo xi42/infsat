@@ -4,7 +4,7 @@ cd $(dirname "$0")
 
 OPTS="-q $@"
 
-TIMEOUT=1
+TIMEOUT=60
 
 function inf {
   time ./infsat $OPTS "$1" &
