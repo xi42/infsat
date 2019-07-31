@@ -51,12 +51,15 @@ TAGS: $(SOURCE)
 doc: $(SOURCE)
 	ocamldoc -html -d doc $(SOURCE)
 
+benchmark: benchmark.sh
+	bash $^ | tee benchmark.out
+
 .SUFFIXES:
 	.ml .cmo .mli .cmi
 
 .PHONY:
-	all install-dependencies run-test clean
+	all install-dependencies run-test clean benchmark
 
 clean:
-	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof-debug test oUnit-* parencol bisect*.out *.cpuprofile *.callgrind
+	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof-debug test oUnit-* parencol bisect*.out *.cpuprofile *.callgrind benchmark.out
 	rm -rf coverage/ doc/
