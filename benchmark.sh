@@ -2,9 +2,14 @@
 
 cd $(dirname "$0")
 
-OPTS="-q $@"
+if [[ "$1" == "-t" ]]; then
+  TIMEOUT=$2
+  shift 2
+else
+  TIMEOUT=60
+fi
 
-TIMEOUT=60
+OPTS="-q $@"
 
 function inf {
   time ./infsat $OPTS "$1" &
