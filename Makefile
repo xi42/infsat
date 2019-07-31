@@ -52,7 +52,7 @@ doc: $(SOURCE)
 	ocamldoc -html -d doc $(SOURCE)
 
 benchmark: benchmark.sh infsat
-	bash $< | tee benchmark.out
+	bash $< | tee benchmark.txt
 
 .SUFFIXES:
 	.ml .cmo .mli .cmi
