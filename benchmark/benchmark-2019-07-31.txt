@@ -1,26 +1,26 @@
-Benchmark of infsat -q  benchmark/* with timeout 60s
+Benchmark of infsat -q  benchmark/* with timeout 300s
 2019-07-31 Intel(R) Core(TM) i7-2630QM CPU
 --- input file ------------------------ time -----
 mochi/zip.inf                           TIMEOUT
 mochi/fold_fun_list.inf                 TIMEOUT
-mochi/fold_right.inf                    0m0.055s
-mochi/search-e-church.inf               TIMEOUT
+mochi/fold_right.inf                    0m0.054s
+mochi/search-e-church.inf               1m17.928s
 pmrs/filter-nonzero-1.inf               TIMEOUT
 pmrs/filepath.inf                       TIMEOUT
-pmrs/filter-nonzero.inf                 0m28.637s
+pmrs/filter-nonzero.inf                 0m28.706s
 pmrs/map-plusone-2.inf                  TIMEOUT
-infsat/two_succ_inf.inf                 0m0.024s
-infsat/two_add_inf.inf                  0m0.750s
-compress/fibstring.inf                  0m0.039s
-compress/dna.inf                        0m0.107s
-compress/g45-leaf-counted.inf           0m0.022s
-compress/l.inf                          0m0.025s
-compress/g45-leaf-not-counted.inf       0m53.770s
-hmtt/jwig-cal_main.inf                  0m0.676s
-hmtt/xhtmlf-div-2.inf                   0m8.378s
-hmtt/xhtmlf-m-church.inf                0m8.446s
+infsat/two_succ_inf.inf                 0m0.030s
+infsat/two_add_inf.inf                  0m0.726s
+compress/fibstring.inf                  0m0.041s
+compress/dna.inf                        0m0.104s
+compress/g45-leaf-counted.inf           0m0.021s
+compress/l.inf                          0m0.022s
+compress/g45-leaf-not-counted.inf       0m53.480s
+hmtt/jwig-cal_main.inf                  0m0.682s
+hmtt/xhtmlf-div-2.inf                   0m8.373s
+hmtt/xhtmlf-m-church.inf                0m8.338s
 hmtt/specialize_cps_coerce1-c.inf       TIMEOUT
-cfa/cfa-matrix-1.inf                    0m23.321s
-cfa/cfa-psdes.inf                       0m0.141s
-cfa/tak_inf.inf                         0m0.120s
+cfa/cfa-matrix-1.inf                    0m23.315s
+cfa/cfa-psdes.inf                       0m0.140s
+cfa/tak_inf.inf                         0m0.129s
 cfa/cfa-life2.inf                       TIMEOUT
