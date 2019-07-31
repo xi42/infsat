@@ -1,0 +1,134 @@
+Grammar.
+RSFDStart -> S Case0.
+S e_1 -> S_2 e_1 e_1.
+S_2 e_1 e_2 -> Specialize_2 e_1 e_1 Empty_1 Empty_2 K0_1 K0_2.
+Specialize_2 e_1 e_2 env env_2 k k_2 ->  e_1 (CASE5 env env_2 k k_2) (br fail_z fail_s) (br fail_true fail_false) (CASE6 env env_2 k k_2).
+Empty_1 y -> terr.
+Empty_2 y y_2 -> T_terr.
+K0_1 ret -> ret.
+K0_2 ret ret_2 -> ret_2.
+Lookup_1 x env -> env x.
+Lookup_2 x x_2 env env_2 -> env_2 x x.
+KK_1 x e2 env k ret -> Specialize_1 e2 (Extend_1 x ret env) k.
+KK_2 x x_2 e2 e2_2 env env_2 k k_2 ret ret_2 -> Specialize_2 e2 e2 (Extend_1 x ret env) (Extend_2 x x ret ret_2 env env_2) k k_2.
+T_vclosure x1 x1_2 x2 x2_2 -> br x1_2 x2_2.
+K1_1 e2 env k ret -> F1_1 e2 env k Case3.
+K1_2 e2 e2_2 env env_2 k k_2 ret ret_2 -> br ret (br ret_2 (F1_2 e2 e2 env env_2 k k_2 Case3 Case3)).
+Extend_1 x v env y -> Eq_1 x y v (env y).
+Extend_2 x x_2 v v_2 env env_2 y y_2 -> Eq_2 x x y y v v_2 (env y) (env_2 y y).
+T_fix x1 x1_2 x2 x2_2 -> br x1_2 x2_2.
+T_vtrue -> success__.
+T_vfalse -> success__.
+K3_1 e2 e3 env k ret -> F2_1 e2 e3 env k Case3.
+K3_2 e2 e2_2 e3 e3_2 env env_2 k k_2 ret ret_2 -> br (F2_2 e2 e2 e3 e3 env env_2 k k_2 Case3 Case3) ret_2.
+KKK_1 x e2 env k ret -> let (Copy_1 x) ret (Specialize_1 e2 env k).
+KKK_2 x x_2 e2 e2_2 env env_2 k k_2 ret ret_2 -> T_let (Copy_1 x) (Copy_2 x x) ret ret_2 (Specialize_1 e2 env k) (Specialize_2 e2 e2 env env_2 k k_2).
+T_abs x1 x1_2 x2 x2_2 -> br x1_2 x2_2.
+Specialize_1 e_1 env k ->  e_1 (CASE7 env k) (br fail_z fail_s) (br fail_true fail_false) (CASE8 env k).
+K5_1 e2 env k ret -> Specialize_1 e2 env (K6_1 k ret).
+K5_2 e2 e2_2 env env_2 k k_2 ret ret_2 -> Specialize_2 e2 e2 env env_2 (K6_1 k ret) (K6_2 k k_2 ret ret_2).
+K7_1 x k ret -> k (fix (Copy_1 x) ret).
+K7_2 x x_2 k k_2 ret ret_2 -> k_2 (fix (Copy_1 x) ret) (T_fix (Copy_1 x) (Copy_2 x x) ret ret_2).
+T_const x1 x1_2 -> x1_2.
+Copy_1 x ->  x CASE9 (br z (s (Copy_1 Case1))) (br true false) CASE10.
+Copy_2 x x_2 ->  x CASE11 (br T_z (T_s (Copy_1 Case1) (Copy_2 Case1 Case1))) (br T_true T_false) CASE12.
+K8_1 e2 e3 env k ret -> k (if ret (Specialize_1 e2 env K0_1) (Specialize_1 e3 env K0_1)).
+K8_2 e2 e2_2 e3 e3_2 env env_2 k k_2 ret ret_2 -> k_2 (if ret (Specialize_1 e2 env K0_1) (Specialize_1 e3 env K0_1)) (T_if ret ret_2 (Specialize_1 e2 env K0_1) (Specialize_2 e2 e2 env env_2 K0_1 K0_2) (Specialize_1 e3 env K0_1) (Specialize_2 e3 e3 env env_2 K0_1 K0_2)).
+K11_1 k ret -> k (F3_1 Case3).
+K11_2 k k_2 ret ret_2 -> br (k_2 (F3_1 Case3) (F3_2 Case3 Case3)) ret_2.
+T_terr -> success__.
+F1_1 e_1 env k w ->  w (br (br (br (k terr) (br (k terr) (k terr))) (br (br (k terr) (k terr)) (br (k terr) (k terr)))) (br (br (k terr) (br (k terr) (k terr))) (br (br (k terr) (k terr)) (br (k terr) (k terr))))) (br fail_z fail_s) (br fail_true fail_false) (br (br (br (br (k terr) (Specialize_1 e_1 env (K2_1 Case1 Case0 env k))) (br (k terr) (k terr))) (br (br (k terr) (k terr)) (br (k terr) (br (k terr) (k terr))))) (br (br (br (k terr) (k terr)) (br (k terr) (k terr))) (br (br (k terr) (k terr)) (br (k terr) (br (k terr) (k terr)))))).
+F1_2 e_1 e_2 env env_2 k k_2 w w_2 ->  w (br (br (br (k_2 terr T_terr) (br (k_2 terr T_terr) (k_2 terr T_terr))) (br (br (k_2 terr T_terr) (k_2 terr T_terr)) (br (k_2 terr T_terr) (k_2 terr T_terr)))) (br (br (k_2 terr T_terr) (br (k_2 terr T_terr) (k_2 terr T_terr))) (br (br (k_2 terr T_terr) (k_2 terr T_terr)) (br (k_2 terr T_terr) (k_2 terr T_terr))))) (br fail_z fail_s) (br fail_true fail_false) (CASE13 e_1 env env_2 k k_2).
+Eq_1 x y t_1 f ->  x (br (br (br fail_var (br fail_let fail_abs)) (br (br fail_app fail_fix) (br fail_const fail_if))) (br (br fail_ulet (br fail_uabs fail_uapp)) (br (br fail_ufix fail_uconst) (br fail_uif fail_lift)))) (br (Eq1_1 y t_1 f) (Eq2_1 y t_1 f Case1)) (br fail_true fail_false) (br (br (br (br fail_terr fail_vclosure) (br fail_vtrue fail_vfalse)) (br (br fail_var fail_let) (br fail_abs (br fail_app fail_fix)))) (br (br (br fail_const fail_if) (br fail_ulet fail_uabs)) (br (br fail_uapp fail_ufix) (br fail_uconst (br fail_uif fail_lift))))).
+Eq_2 x x_2 y y_2 t_1 t_2 f f_2 ->  x (br (br (br fail_var (br fail_let fail_abs)) (br (br fail_app fail_fix) (br fail_const fail_if))) (br (br fail_ulet (br fail_uabs fail_uapp)) (br (br fail_ufix fail_uconst) (br fail_uif fail_lift)))) (br (Eq1_2 y y t_1 t_2 f f_2) (Eq2_2 y y t_1 t_2 f f_2 Case1 Case1)) (br fail_true fail_false) (br (br (br (br fail_terr fail_vclosure) (br fail_vtrue fail_vfalse)) (br (br fail_var fail_let) (br fail_abs (br fail_app fail_fix)))) (br (br (br fail_const fail_if) (br fail_ulet fail_uabs)) (br (br fail_uapp fail_ufix) (br fail_uconst (br fail_uif fail_lift))))).
+F2_1 et ef env k w ->  w (br (br (br (k terr) (br (k terr) (k terr))) (br (br (k terr) (k terr)) (br (k terr) (k terr)))) (br (br (k terr) (br (k terr) (k terr))) (br (br (k terr) (k terr)) (br (k terr) (k terr))))) (br fail_z fail_s) (br fail_true fail_false) (br (br (br (br (k terr) (k terr)) (br (Specialize_1 et env k) (Specialize_1 ef env k))) (br (br (k terr) (k terr)) (br (k terr) (br (k terr) (k terr))))) (br (br (br (k terr) (k terr)) (br (k terr) (k terr))) (br (br (k terr) (k terr)) (br (k terr) (br (k terr) (k terr)))))).
+F2_2 et et_2 ef ef_2 env env_2 k k_2 w w_2 ->  w (br (br (br (k_2 terr T_terr) (br (k_2 terr T_terr) (k_2 terr T_terr))) (br (br (k_2 terr T_terr) (k_2 terr T_terr)) (br (k_2 terr T_terr) (k_2 terr T_terr)))) (br (br (k_2 terr T_terr) (br (k_2 terr T_terr) (k_2 terr T_terr))) (br (br (k_2 terr T_terr) (k_2 terr T_terr)) (br (k_2 terr T_terr) (k_2 terr T_terr))))) (br fail_z fail_s) (br fail_true fail_false) (CASE14 et ef env env_2 k k_2).
+K6_1 k ret1 ret2 -> k (app ret1 ret2).
+K6_2 k k_2 ret1 ret1_2 ret2 ret2_2 -> k_2 (app ret1 ret2) (T_app ret1 ret1_2 ret2 ret2_2).
+T_z -> success__.
+T_s x1 x1_2 -> x1_2.
+T_true -> success__.
+T_false -> success__.
+T_var x1 x1_2 -> x1_2.
+T_let x1 x1_2 x2 x2_2 x3 x3_2 -> br x1_2 (br x2_2 x3_2).
+T_app x1 x1_2 x2 x2_2 -> br x1_2 x2_2.
+T_ulet x1 x1_2 x2 x2_2 x3 x3_2 -> br x1_2 (br x2_2 x3_2).
+T_uabs x1 x1_2 x2 x2_2 -> br x1_2 x2_2.
+T_uapp x1 x1_2 x2 x2_2 -> br x1_2 x2_2.
+T_ufix x1 x1_2 x2 x2_2 -> br x1_2 x2_2.
+T_uconst x1 x1_2 -> x1_2.
+T_uif x1 x1_2 x2 x2_2 x3 x3_2 -> br x1_2 (br x2_2 x3_2).
+T_lift x1 x1_2 -> x1_2.
+T_if x1 x1_2 x2 x2_2 x3 x3_2 -> br x1_2 (br x2_2 x3_2).
+F3_1 e_1 ->  e_1 (br (br (br terr (br terr terr)) (br (br terr terr) (br terr terr))) (br (br terr (br terr terr)) (br (br terr terr) (br terr terr)))) (br fail_z fail_s) (br fail_true fail_false) (br (br (br (br terr terr) (br (const true) (const false))) (br (br terr terr) (br terr (br terr terr)))) (br (br (br terr terr) (br terr terr)) (br (br terr terr) (br terr (br terr terr))))).
+F3_2 e_1 e_2 ->  e_1 (br (br (br T_terr (br T_terr T_terr)) (br (br T_terr T_terr) (br T_terr T_terr))) (br (br T_terr (br T_terr T_terr)) (br (br T_terr T_terr) (br T_terr T_terr)))) (br fail_z fail_s) (br fail_true fail_false) (br (br (br (br T_terr T_terr) (br (T_const true T_true) (T_const false T_false))) (br (br T_terr T_terr) (br T_terr (br T_terr T_terr)))) (br (br (br T_terr T_terr) (br T_terr T_terr)) (br (br T_terr T_terr) (br T_terr (br T_terr T_terr))))).
+K2_1 x e1 env k ret -> Specialize_1 e1 (Extend_1 x ret env) k.
+K2_2 x x_2 e1 e1_2 env env_2 k k_2 ret ret_2 -> Specialize_2 e1 e1 (Extend_1 x ret env) (Extend_2 x x ret ret_2 env env_2) k k_2.
+Eq1_1 y t_1 f ->  y (br (br (br fail_var (br fail_let fail_abs)) (br (br fail_app fail_fix) (br fail_const fail_if))) (br (br fail_ulet (br fail_uabs fail_uapp)) (br (br fail_ufix fail_uconst) (br fail_uif fail_lift)))) (br t_1 f) (br fail_true fail_false) (br (br (br (br fail_terr fail_vclosure) (br fail_vtrue fail_vfalse)) (br (br fail_var fail_let) (br fail_abs (br fail_app fail_fix)))) (br (br (br fail_const fail_if) (br fail_ulet fail_uabs)) (br (br fail_uapp fail_ufix) (br fail_uconst (br fail_uif fail_lift))))).
+Eq2_1 y t_1 f x1 ->  y (br (br (br fail_var (br fail_let fail_abs)) (br (br fail_app fail_fix) (br fail_const fail_if))) (br (br fail_ulet (br fail_uabs fail_uapp)) (br (br fail_ufix fail_uconst) (br fail_uif fail_lift)))) (br f (Eq_1 x1 Case1 t_1 f)) (br fail_true fail_false) (br (br (br (br fail_terr fail_vclosure) (br fail_vtrue fail_vfalse)) (br (br fail_var fail_let) (br fail_abs (br fail_app fail_fix)))) (br (br (br fail_const fail_if) (br fail_ulet fail_uabs)) (br (br fail_uapp fail_ufix) (br fail_uconst (br fail_uif fail_lift))))).
+Eq1_2 y y_2 t_1 t_2 f f_2 ->  y (br (br (br fail_var (br fail_let fail_abs)) (br (br fail_app fail_fix) (br fail_const fail_if))) (br (br fail_ulet (br fail_uabs fail_uapp)) (br (br fail_ufix fail_uconst) (br fail_uif fail_lift)))) (br t_2 f_2) (br fail_true fail_false) (br (br (br (br fail_terr fail_vclosure) (br fail_vtrue fail_vfalse)) (br (br fail_var fail_let) (br fail_abs (br fail_app fail_fix)))) (br (br (br fail_const fail_if) (br fail_ulet fail_uabs)) (br (br fail_uapp fail_ufix) (br fail_uconst (br fail_uif fail_lift))))).
+Eq2_2 y y_2 t_1 t_2 f f_2 x1 x1_2 ->  y (br (br (br fail_var (br fail_let fail_abs)) (br (br fail_app fail_fix) (br fail_const fail_if))) (br (br fail_ulet (br fail_uabs fail_uapp)) (br (br fail_ufix fail_uconst) (br fail_uif fail_lift)))) (br f_2 (Eq_2 x1 x1 Case1 Case1 t_1 t_2 f f_2)) (br fail_true fail_false) (br (br (br (br fail_terr fail_vclosure) (br fail_vtrue fail_vfalse)) (br (br fail_var fail_let) (br fail_abs (br fail_app fail_fix)))) (br (br (br fail_const fail_if) (br fail_ulet fail_uabs)) (br (br fail_uapp fail_ufix) (br fail_uconst (br fail_uif fail_lift))))).
+CASE5 env env_2 k k_2 -> br (br (br (k_2 (Lookup_1 Case1 env) (Lookup_2 Case1 Case1 env env_2)) (br (Specialize_2 Case0 Case0 env env_2 (KK_1 Case1 Case0 env k) (KK_2 Case1 Case1 Case0 Case0 env env_2 k k_2)) (k_2 (vclosure (Copy_1 Case1) (Copy_1 Case0)) (T_vclosure (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case0) (Copy_2 Case0 Case0))))) (br (br (Specialize_2 Case0 Case0 env env_2 (K1_1 Case0 env k) (K1_2 Case0 Case0 env env_2 k k_2)) (Specialize_2 Case0 Case0 (Extend_1 Case1 (fix (Copy_1 Case1) (Copy_1 Case0)) env) (Extend_2 Case1 Case1 (fix (Copy_1 Case1) (Copy_1 Case0)) (T_fix (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case0) (Copy_2 Case0 Case0)) env env_2) k k_2)) (br (br (k_2 vtrue T_vtrue) (k_2 vfalse T_vfalse)) (Specialize_2 Case0 Case0 env env_2 (K3_1 Case0 Case0 env k) (K3_2 Case0 Case0 Case0 Case0 env env_2 k k_2))))) (br (br (Specialize_2 Case0 Case0 env env_2 (KKK_1 Case1 Case0 env k) (KKK_2 Case1 Case1 Case0 Case0 env env_2 k k_2)) (br (k_2 (abs (Copy_1 Case1) (Specialize_1 Case0 env K0_1)) (T_abs (Copy_1 Case1) (Copy_2 Case1 Case1) (Specialize_1 Case0 env K0_1) (Specialize_2 Case0 Case0 env env_2 K0_1 K0_2))) (Specialize_2 Case0 Case0 env env_2 (K5_1 Case0 env k) (K5_2 Case0 Case0 env env_2 k k_2)))) (br (br (Specialize_2 Case0 Case0 env env_2 (K7_1 Case1 k) (K7_2 Case1 Case1 k k_2)) (k_2 (const (Copy_1 Case2)) (T_const (Copy_1 Case2) (Copy_2 Case2 Case2)))) (br (Specialize_2 Case0 Case0 env env_2 (K8_1 Case0 Case0 env k) (K8_2 Case0 Case0 Case0 Case0 env env_2 k k_2)) (Specialize_2 Case0 Case0 env env_2 (K11_1 k) (K11_2 k k_2))))).
+CASE6 env env_2 k k_2 -> br (br (br (br (k_2 terr T_terr) fail_vclosure) (br fail_vtrue fail_vfalse)) (br (br (k_2 (Lookup_1 Case1 env) (Lookup_2 Case1 Case1 env env_2)) (Specialize_2 Case3 Case3 env env_2 (KK_1 Case1 Case3 env k) (KK_2 Case1 Case1 Case3 Case3 env env_2 k k_2))) (br (k_2 (vclosure (Copy_1 Case1) (Copy_1 Case3)) (T_vclosure (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case3) (Copy_2 Case3 Case3))) (br (Specialize_2 Case3 Case3 env env_2 (K1_1 Case3 env k) (K1_2 Case3 Case3 env env_2 k k_2)) (Specialize_2 Case3 Case3 (Extend_1 Case1 (fix (Copy_1 Case1) (Copy_1 Case3)) env) (Extend_2 Case1 Case1 (fix (Copy_1 Case1) (Copy_1 Case3)) (T_fix (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case3) (Copy_2 Case3 Case3)) env env_2) k k_2))))) (br (br (br (br (k_2 vtrue T_vtrue) (k_2 vfalse T_vfalse)) (Specialize_2 Case3 Case3 env env_2 (K3_1 Case3 Case3 env k) (K3_2 Case3 Case3 Case3 Case3 env env_2 k k_2))) (br (Specialize_2 Case3 Case3 env env_2 (KKK_1 Case1 Case3 env k) (KKK_2 Case1 Case1 Case3 Case3 env env_2 k k_2)) (k_2 (abs (Copy_1 Case1) (Specialize_1 Case3 env K0_1)) (T_abs (Copy_1 Case1) (Copy_2 Case1 Case1) (Specialize_1 Case3 env K0_1) (Specialize_2 Case3 Case3 env env_2 K0_1 K0_2))))) (br (br (Specialize_2 Case3 Case3 env env_2 (K5_1 Case3 env k) (K5_2 Case3 Case3 env env_2 k k_2)) (Specialize_2 Case3 Case3 env env_2 (K7_1 Case1 k) (K7_2 Case1 Case1 k k_2))) (br (k_2 (const (Copy_1 Case2)) (T_const (Copy_1 Case2) (Copy_2 Case2 Case2))) (br (Specialize_2 Case3 Case3 env env_2 (K8_1 Case3 Case3 env k) (K8_2 Case3 Case3 Case3 Case3 env env_2 k k_2)) (Specialize_2 Case3 Case3 env env_2 (K11_1 k) (K11_2 k k_2)))))).
+CASE7 env k -> br (br (br (k (Lookup_1 Case1 env)) (br (Specialize_1 Case0 env (KK_1 Case1 Case0 env k)) (k (vclosure (Copy_1 Case1) (Copy_1 Case0))))) (br (br (Specialize_1 Case0 env (K1_1 Case0 env k)) (Specialize_1 Case0 (Extend_1 Case1 (fix (Copy_1 Case1) (Copy_1 Case0)) env) k)) (br (br (k vtrue) (k vfalse)) (Specialize_1 Case0 env (K3_1 Case0 Case0 env k))))) (br (br (Specialize_1 Case0 env (KKK_1 Case1 Case0 env k)) (br (k (abs (Copy_1 Case1) (Specialize_1 Case0 env K0_1))) (Specialize_1 Case0 env (K5_1 Case0 env k)))) (br (br (Specialize_1 Case0 env (K7_1 Case1 k)) (k (const (Copy_1 Case2)))) (br (Specialize_1 Case0 env (K8_1 Case0 Case0 env k)) (Specialize_1 Case0 env (K11_1 k))))).
+CASE8 env k -> br (br (br (br (k terr) fail_vclosure) (br fail_vtrue fail_vfalse)) (br (br (k (Lookup_1 Case1 env)) (Specialize_1 Case3 env (KK_1 Case1 Case3 env k))) (br (k (vclosure (Copy_1 Case1) (Copy_1 Case3))) (br (Specialize_1 Case3 env (K1_1 Case3 env k)) (Specialize_1 Case3 (Extend_1 Case1 (fix (Copy_1 Case1) (Copy_1 Case3)) env) k))))) (br (br (br (br (k vtrue) (k vfalse)) (Specialize_1 Case3 env (K3_1 Case3 Case3 env k))) (br (Specialize_1 Case3 env (KKK_1 Case1 Case3 env k)) (k (abs (Copy_1 Case1) (Specialize_1 Case3 env K0_1))))) (br (br (Specialize_1 Case3 env (K5_1 Case3 env k)) (Specialize_1 Case3 env (K7_1 Case1 k))) (br (k (const (Copy_1 Case2))) (br (Specialize_1 Case3 env (K8_1 Case3 Case3 env k)) (Specialize_1 Case3 env (K11_1 k)))))).
+CASE9 -> br (br (br (var (Copy_1 Case1)) (br (let (Copy_1 Case1) (Copy_1 Case0) (Copy_1 Case0)) (abs (Copy_1 Case1) (Copy_1 Case0)))) (br (br (app (Copy_1 Case0) (Copy_1 Case0)) (fix (Copy_1 Case1) (Copy_1 Case0))) (br (const (Copy_1 Case2)) (if (Copy_1 Case0) (Copy_1 Case0) (Copy_1 Case0))))) (br (br (ulet (Copy_1 Case1) (Copy_1 Case0) (Copy_1 Case0)) (br (uabs (Copy_1 Case1) (Copy_1 Case0)) (uapp (Copy_1 Case0) (Copy_1 Case0)))) (br (br (ufix (Copy_1 Case1) (Copy_1 Case0)) (uconst (Copy_1 Case2))) (br (uif (Copy_1 Case0) (Copy_1 Case0) (Copy_1 Case0)) (lift (Copy_1 Case0))))).
+CASE10 -> br (br (br (br terr (vclosure (Copy_1 Case1) (Copy_1 Case0))) (br vtrue vfalse)) (br (br (var (Copy_1 Case1)) (let (Copy_1 Case1) (Copy_1 Case3) (Copy_1 Case3))) (br (abs (Copy_1 Case1) (Copy_1 Case3)) (br (app (Copy_1 Case3) (Copy_1 Case3)) (fix (Copy_1 Case1) (Copy_1 Case3)))))) (br (br (br (const (Copy_1 Case2)) (if (Copy_1 Case3) (Copy_1 Case3) (Copy_1 Case3))) (br (ulet (Copy_1 Case1) (Copy_1 Case3) (Copy_1 Case3)) (uabs (Copy_1 Case1) (Copy_1 Case3)))) (br (br (uapp (Copy_1 Case3) (Copy_1 Case3)) (ufix (Copy_1 Case1) (Copy_1 Case3))) (br (uconst (Copy_1 Case2)) (br (uif (Copy_1 Case3) (Copy_1 Case3) (Copy_1 Case3)) (lift (Copy_1 Case3)))))).
+CASE11 -> br (br (br (T_var (Copy_1 Case1) (Copy_2 Case1 Case1)) (br (T_let (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case0) (Copy_2 Case0 Case0) (Copy_1 Case0) (Copy_2 Case0 Case0)) (T_abs (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case0) (Copy_2 Case0 Case0)))) (br (br (T_app (Copy_1 Case0) (Copy_2 Case0 Case0) (Copy_1 Case0) (Copy_2 Case0 Case0)) (T_fix (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case0) (Copy_2 Case0 Case0))) (br (T_const (Copy_1 Case2) (Copy_2 Case2 Case2)) (T_if (Copy_1 Case0) (Copy_2 Case0 Case0) (Copy_1 Case0) (Copy_2 Case0 Case0) (Copy_1 Case0) (Copy_2 Case0 Case0))))) (br (br (T_ulet (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case0) (Copy_2 Case0 Case0) (Copy_1 Case0) (Copy_2 Case0 Case0)) (br (T_uabs (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case0) (Copy_2 Case0 Case0)) (T_uapp (Copy_1 Case0) (Copy_2 Case0 Case0) (Copy_1 Case0) (Copy_2 Case0 Case0)))) (br (br (T_ufix (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case0) (Copy_2 Case0 Case0)) (T_uconst (Copy_1 Case2) (Copy_2 Case2 Case2))) (br (T_uif (Copy_1 Case0) (Copy_2 Case0 Case0) (Copy_1 Case0) (Copy_2 Case0 Case0) (Copy_1 Case0) (Copy_2 Case0 Case0)) (T_lift (Copy_1 Case0) (Copy_2 Case0 Case0))))).
+CASE12 -> br (br (br (br T_terr (T_vclosure (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case0) (Copy_2 Case0 Case0))) (br T_vtrue T_vfalse)) (br (br (T_var (Copy_1 Case1) (Copy_2 Case1 Case1)) (T_let (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case3) (Copy_2 Case3 Case3) (Copy_1 Case3) (Copy_2 Case3 Case3))) (br (T_abs (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case3) (Copy_2 Case3 Case3)) (br (T_app (Copy_1 Case3) (Copy_2 Case3 Case3) (Copy_1 Case3) (Copy_2 Case3 Case3)) (T_fix (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case3) (Copy_2 Case3 Case3)))))) (br (br (br (T_const (Copy_1 Case2) (Copy_2 Case2 Case2)) (T_if (Copy_1 Case3) (Copy_2 Case3 Case3) (Copy_1 Case3) (Copy_2 Case3 Case3) (Copy_1 Case3) (Copy_2 Case3 Case3))) (br (T_ulet (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case3) (Copy_2 Case3 Case3) (Copy_1 Case3) (Copy_2 Case3 Case3)) (T_uabs (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case3) (Copy_2 Case3 Case3)))) (br (br (T_uapp (Copy_1 Case3) (Copy_2 Case3 Case3) (Copy_1 Case3) (Copy_2 Case3 Case3)) (T_ufix (Copy_1 Case1) (Copy_2 Case1 Case1) (Copy_1 Case3) (Copy_2 Case3 Case3))) (br (T_uconst (Copy_1 Case2) (Copy_2 Case2 Case2)) (br (T_uif (Copy_1 Case3) (Copy_2 Case3 Case3) (Copy_1 Case3) (Copy_2 Case3 Case3) (Copy_1 Case3) (Copy_2 Case3 Case3)) (T_lift (Copy_1 Case3) (Copy_2 Case3 Case3)))))).
+CASE13 e_1 env env_2 k k_2 -> br (br (br (br (k_2 terr T_terr) (Specialize_2 e_1 e_1 env env_2 (K2_1 Case1 Case0 env k) (K2_2 Case1 Case1 Case0 Case0 env env_2 k k_2))) (br (k_2 terr T_terr) (k_2 terr T_terr))) (br (br (k_2 terr T_terr) (k_2 terr T_terr)) (br (k_2 terr T_terr) (br (k_2 terr T_terr) (k_2 terr T_terr))))) (br (br (br (k_2 terr T_terr) (k_2 terr T_terr)) (br (k_2 terr T_terr) (k_2 terr T_terr))) (br (br (k_2 terr T_terr) (k_2 terr T_terr)) (br (k_2 terr T_terr) (br (k_2 terr T_terr) (k_2 terr T_terr))))).
+CASE14 et ef env env_2 k k_2 -> br (br (br (br (k_2 terr T_terr) (k_2 terr T_terr)) (br (Specialize_2 et et env env_2 k k_2) (Specialize_2 ef ef env env_2 k k_2))) (br (br (k_2 terr T_terr) (k_2 terr T_terr)) (br (k_2 terr T_terr) (br (k_2 terr T_terr) (k_2 terr T_terr))))) (br (br (br (k_2 terr T_terr) (k_2 terr T_terr)) (br (k_2 terr T_terr) (k_2 terr T_terr))) (br (br (k_2 terr T_terr) (k_2 terr T_terr)) (br (k_2 terr T_terr) (br (k_2 terr T_terr) (k_2 terr T_terr))))).
+Case0 x y z_1 w -> x.
+Case1 x y z_1 w -> y.
+Case2 x y z_1 w -> z_1.
+Case3 x y z_1 w -> w.
+End.
+
+Terminals.
+abs -> 2 + $.
+app -> 2 + $.
+br -> 2 + $.
+const -> 1 $.
+false -> 0 $.
+fix -> 2 + $.
+if -> 3 + $.
+let -> 3 + $.
+lift -> 1 $.
+s -> 1 $.
+success__ -> 0 $.
+terr -> 0 $.
+true -> 0 $.
+uabs -> 2 + $.
+uapp -> 2 + $.
+uconst -> 1 $.
+ufix -> 2 + $.
+uif -> 3 + $.
+ulet -> 3 + $.
+var -> 1 $.
+vclosure -> 2 + $.
+vfalse -> 0 $.
+vtrue -> 0 $.
+z -> 0 $.
+fail_z -> 0 $.
+fail_s -> 0 $.
+fail_true -> 0 $.
+fail_false -> 0 $.
+fail_var -> 0 $.
+fail_let -> 0 $.
+fail_abs -> 0 $.
+fail_app -> 0 $.
+fail_fix -> 0 $.
+fail_const -> 0 $.
+fail_if -> 0 $.
+fail_ulet -> 0 $.
+fail_uabs -> 0 $.
+fail_uapp -> 0 $.
+fail_ufix -> 0 $.
+fail_uconst -> 0 $.
+fail_uif -> 0 $.
+fail_lift -> 0 $.
+fail_terr -> 0 $.
+fail_vclosure -> 0 $.
+fail_vtrue -> 0 $.
+fail_vfalse -> 0 $.
+End.

@@ -81,57 +81,57 @@ I5 var1231 var1232 -> (i_lab5 (var1232 (unit ) ) ).
 End.
 
 Terminals.
-br -> 2 +.
+br -> 2 + $.
 unit -> 0 $.
-a_lab3 -> 1.
-a_lab4 -> 1.
-a_lab11 -> 1.
-a_lab9 -> 1.
-a_lab7 -> 1.
-a_lab6 -> 1.
-a_lab5 -> 1.
-a_lab29 -> 1.
-a_lab28 -> 1.
-a_lab27 -> 1.
-a_lab26 -> 1.
-a_lab25 -> 1.
-a_lab24 -> 1.
-a_lab22 -> 1.
-a_lab21 -> 1.
-a_lab20 -> 1.
-a_lab18 -> 1.
-a_lab17 -> 1.
-a_lab16 -> 1.
-a_lab8_1st -> 1.
-a_lab8_2nd -> 1.
-a_lab13_test -> 1.
-a_lab12_1st -> 1.
-a_lab12_2nd -> 1.
-a_lab23_1st -> 1.
-a_lab23_2nd -> 1.
-a_lab19_1st -> 1.
-a_lab19_2nd -> 1.
-a_lab15_1st -> 1.
-a_lab15_2nd -> 1.
-a_lab31_test -> 1.
-a_lab30_1st -> 1.
-a_lab30_2nd -> 1.
-f_lab2_1 -> 1.
-f_lab14_1 -> 1.
-f_lab10_1 -> 1.
-f_lab1_1 -> 1.
-f_lab1_2 -> 1.
-f_lab1_3 -> 1.
-p_lab8 -> 1.
-p_lab12 -> 1.
-p_lab23 -> 1.
-p_lab19 -> 1.
-p_lab15 -> 1.
-p_lab30 -> 1.
-i_lab5 -> 1.
-i_lab1 -> 1.
-i_lab33 -> 1.
-i_lab22 -> 1.
-i_lab11 -> 1.
-i_lab0 -> 1.
+a_lab3 -> 1 $.
+a_lab4 -> 1 $.
+a_lab11 -> 1 $.
+a_lab9 -> 1 $.
+a_lab7 -> 1 $.
+a_lab6 -> 1 $.
+a_lab5 -> 1 $.
+a_lab29 -> 1 $.
+a_lab28 -> 1 $.
+a_lab27 -> 1 $.
+a_lab26 -> 1 $.
+a_lab25 -> 1 $.
+a_lab24 -> 1 $.
+a_lab22 -> 1 $.
+a_lab21 -> 1 $.
+a_lab20 -> 1 $.
+a_lab18 -> 1 $.
+a_lab17 -> 1 $.
+a_lab16 -> 1 $.
+a_lab8_1st -> 1 $.
+a_lab8_2nd -> 1 $.
+a_lab13_test -> 1 $.
+a_lab12_1st -> 1 $.
+a_lab12_2nd -> 1 $.
+a_lab23_1st -> 1 $.
+a_lab23_2nd -> 1 $.
+a_lab19_1st -> 1 $.
+a_lab19_2nd -> 1 $.
+a_lab15_1st -> 1 $.
+a_lab15_2nd -> 1 $.
+a_lab31_test -> 1 $.
+a_lab30_1st -> 1 $.
+a_lab30_2nd -> 1 $.
+f_lab2_1 -> 1 $.
+f_lab14_1 -> 1 $.
+f_lab10_1 -> 1 $.
+f_lab1_1 -> 1 $.
+f_lab1_2 -> 1 $.
+f_lab1_3 -> 1 $.
+p_lab8 -> 1 $.
+p_lab12 -> 1 $.
+p_lab23 -> 1 $.
+p_lab19 -> 1 $.
+p_lab15 -> 1 $.
+p_lab30 -> 1 $.
+i_lab5 -> 1 $.
+i_lab1 -> 1 $.
+i_lab33 -> 1 $.
+i_lab22 -> 1 $.
+i_lab11 -> 1 $.
+i_lab0 -> 1 $.
 End.

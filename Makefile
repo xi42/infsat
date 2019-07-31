@@ -61,5 +61,5 @@ benchmark: benchmark.sh infsat
 	all install-dependencies run-test clean benchmark
 
 clean:
-	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof-debug test oUnit-* parencol bisect*.out *.cpuprofile *.callgrind benchmark.out
+	rm -f *.cmi *.cmx *.o *.cmo *.cmt *.cmti *.exe infSatParser.ml infSatParser.mli infSatLexer.ml TAGS infsat top infsat-g infsat-debug infsat-prof-debug test oUnit-* parencol bisect*.out *.cpuprofile *.callgrind benchmark.txt
 	rm -rf coverage/ doc/

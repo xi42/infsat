@@ -1,26 +1,46 @@
-Benchmark of infsat -q  benchmark/* with timeout 300s
+Benchmark of infsat -q  benchmark/* with timeout 180s
 2019-07-31 Intel(R) Core(TM) i7-2630QM CPU
---- input file ------------------------ time -----
-mochi/zip.inf                           TIMEOUT
-mochi/fold_fun_list.inf                 TIMEOUT
-mochi/fold_right.inf                    0m0.054s
-mochi/search-e-church.inf               1m17.928s
-pmrs/filter-nonzero-1.inf               TIMEOUT
-pmrs/filepath.inf                       TIMEOUT
-pmrs/filter-nonzero.inf                 0m28.706s
-pmrs/map-plusone-2.inf                  TIMEOUT
-infsat/two_succ_inf.inf                 0m0.030s
-infsat/two_add_inf.inf                  0m0.726s
-compress/fibstring.inf                  0m0.041s
-compress/dna.inf                        0m0.104s
-compress/g45-leaf-counted.inf           0m0.021s
-compress/l.inf                          0m0.022s
-compress/g45-leaf-not-counted.inf       0m53.480s
-hmtt/jwig-cal_main.inf                  0m0.682s
-hmtt/xhtmlf-div-2.inf                   0m8.373s
-hmtt/xhtmlf-m-church.inf                0m8.338s
-hmtt/specialize_cps_coerce1-c.inf       TIMEOUT
-cfa/cfa-matrix-1.inf                    0m23.315s
-cfa/cfa-psdes.inf                       0m0.140s
-cfa/tak_inf.inf                         0m0.129s
-cfa/cfa-life2.inf                       TIMEOUT
+--- input file ------------------------- time ---------- output code ---
+pr/mochi/zip.inf                         2m48.434s       0
+pr/mochi/fold_fun_list.inf               0m2.011s        0
+pr/mochi/fold_right.inf                  0m0.065s        0
+pr/mochi/search-e-church.inf             0m12.596s       0
+pr/pmrs/filter-nonzero-1.inf             1m22.677s       0
+pr/pmrs/filepath.inf                     0m0.275s        0
+pr/pmrs/filter-nonzero.inf               0m3.827s        0
+pr/pmrs/map-plusone-2.inf                1m57.748s       0
+pr/compress/fibstring.inf                0m0.038s        1
+pr/compress/dna.inf                      0m0.080s        1
+pr/compress/g45.inf                      0m0.016s        1
+pr/compress/l.inf                        0m0.020s        1
+pr/hmtt/jwig-cal_main.inf                0m0.681s        0
+pr/hmtt/xhtmlf-div-2.inf                 0m3.703s        0
+pr/hmtt/xhtmlf-m-church.inf              0m3.768s        0
+pr/hmtt/specialize_cps_coerce1-c.inf     0m1.656s        0
+pr/cfa/cfa-matrix-1.inf                  0m5.563s        0
+pr/cfa/cfa-psdes.inf                     0m0.157s        0
+pr/cfa/tak_inf.inf                       0m0.123s        0
+pr/cfa/cfa-life2.inf                     0m11.273s       0
+mochi/zip.inf                            TIMEOUT         143
+mochi/fold_fun_list.inf                  TIMEOUT         143
+mochi/fold_right.inf                     0m0.052s        0
+mochi/search-e-church.inf                1m18.264s       0
+pmrs/filter-nonzero-1.inf                TIMEOUT         143
+pmrs/filepath.inf                        TIMEOUT         143
+pmrs/filter-nonzero.inf                  0m28.612s       0
+pmrs/map-plusone-2.inf                   TIMEOUT         143
+infsat/two_succ_inf.inf                  0m0.025s        0
+infsat/two_add_inf.inf                   0m0.731s        0
+compress/fibstring.inf                   0m0.039s        1
+compress/dna.inf                         0m0.104s        1
+compress/g45-leaf-counted.inf            0m0.021s        1
+compress/l.inf                           0m0.023s        1
+compress/g45-leaf-not-counted.inf        0m53.757s       1
+hmtt/jwig-cal_main.inf                   0m0.686s        1
+hmtt/xhtmlf-div-2.inf                    0m8.381s        1
+hmtt/xhtmlf-m-church.inf                 0m8.468s        1
+hmtt/specialize_cps_coerce1-c.inf        TIMEOUT         143
+cfa/cfa-matrix-1.inf                     0m23.462s       2
+cfa/cfa-psdes.inf                        0m0.130s        0
+cfa/tak_inf.inf                          0m3.082s        2
+cfa/cfa-life2.inf                        TIMEOUT         143
