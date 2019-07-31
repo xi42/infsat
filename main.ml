@@ -1,3 +1,4 @@
+
 open Timing
 open Utilities
 
@@ -11,7 +12,9 @@ let program_info = "InfSat 0.1: Saturation-based finiteness checker for higher-o
                    "recursion schemes"
 
 let options = [
-  ("-q", Arg.Set Flags.quiet, "Enables quiet mode");
+  ("-q", Arg.Set Flags.quiet, "Enables quiet mode and exits with code 0 for infinite " ^
+                              "language, 1 for finite, 2 for maybe finite (with unsafe terms) " ^
+                              "and something else on error");
   ("-f", Arg.Set Flags.force_unsafe, "Skip term safety check");
   ("-v", Arg.Set Flags.verbose_main, "Enables basic verbosity");
   ("-vv", Arg.Set Flags.verbose_all, "Enables full verbosity");
@@ -39,9 +42,11 @@ let parse_file filename =
       open_in filename 
     with
       Sys_error _ ->
-      failwith @@ "Cannot open file: " ^ filename
+      failwith @@ "Cannot open file: " ^ filename ^ "."
   in
-  print_string @@ "Analyzing " ^ filename ^ ".\n";
+  print_verbose (not !Flags.quiet) @@ lazy (
+    "Analyzing " ^ filename ^ "."
+  );
   flush stdout;
   let lexbuf = Lexing.from_channel in_strm in
   let result =
@@ -141,10 +146,15 @@ let main () : unit =
         let end_t = Sys.time () in
         report_timings start_t end_t;
         (* return value indicates finiteness only when return flag is on *)
-        if res = Finite || res <> Unknown && not !Flags.quiet then
-          exit 0
-        else
-          exit 1
+        match res with
+        | Infinite _ -> exit 0
+        | Finite ->
+          if !Flags.quiet then
+            exit 1
+          else
+            exit 0
+        | Unknown ->
+          exit 2
       )
   with
   | Failure msg ->
