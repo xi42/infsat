@@ -1,5 +1,5 @@
 Grammar.
-S_S88  -> S88 c_cons_x41_xs4376 c_nil74 c_succ__3772 c_z70 c_true68 c_false66.
+S_S88  -> S88 c_cons_x41_xs4376_t c_nil74_t c_succ__3772_t c_z70_t c_true68_t c_false66_t.
 KK_c_cons_x41_xs4376 c_cons_x41_xs4376 c_nil74 c_succ__3772 c_z70 c_true68 c_false66  -> c_cons_x41_xs4376.
 KK_c_nil74 c_cons_x41_xs4376 c_nil74 c_succ__3772 c_z70 c_true68 c_false66  -> c_nil74.
 KK_c_succ__3772 c_cons_x41_xs4376 c_nil74 c_succ__3772 c_z70 c_true68 c_false66  -> c_succ__3772.
@@ -55,4 +55,14 @@ succ -> 1 $.
 nil -> 0.
 cons -> 2 *.
 br -> 2 +.
+z -> 0.
+bot -> 0.
+false -> 6 +.
+true -> 6 +.
+c_cons_x41_xs4376_t -> 0.
+c_nil74_t -> 0.
+c_succ__3772_t -> 0.
+c_z70_t -> 0.
+c_true68_t -> 0.
+c_false66_t -> 0.
 End.

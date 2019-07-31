@@ -67,12 +67,12 @@ br -> 2 +.
 true -> 0.
 false -> 0.
 bot -> 0.
-c_cons_succ_n37_nil97_t -> 1.
-c_cons_succ_n29_cons_x31_xs3395_t -> 1.
+c_cons_succ_n37_nil97_t -> 0.
+c_cons_succ_n29_cons_x31_xs3395_t -> 0.
 c_cons_z_cons_x41_xs4393_t -> 0.
 c_cons_z_nil91_t -> 0.
 c_nil89_t -> 0.
-c_succ_n2987_t -> 1.
+c_succ_n2987_t -> 0.
 c_z85_t -> 0.
-c_x8183_t -> 1.
+c_x8183_t -> 0.
 End.

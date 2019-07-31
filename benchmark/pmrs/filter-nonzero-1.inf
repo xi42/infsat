@@ -68,14 +68,14 @@ z -> 0.
 succ -> 1 $.
 br -> 2 +.
 bot -> 0.
-false -> 0.
-true -> 0.
-c_cons_succ_n58_nil117_t -> 1.
-c_cons_succ_n44_cons_x46_xs48115_t -> 1.
-c_cons_z_cons_x52_xs54113_t -> 2 *.
+false -> 9 +.
+true -> 9 +.
+c_cons_succ_n58_nil117_t -> 0.
+c_cons_succ_n44_cons_x46_xs48115_t -> 0.
+c_cons_z_cons_x52_xs54113_t -> 0.
 c_cons_z_nil111_t -> 0.
 c_nil109_t -> 0.
-c_succ_n44107_t -> 1.
+c_succ_n44107_t -> 0.
 c_z105_t -> 0.
 c_true103_t -> 0.
 c_false101_t -> 0.
