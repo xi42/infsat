@@ -4,10 +4,10 @@ cd $(dirname "$0")
 
 OPTS="-q $@"
 
-TIMEOUT=60
+TIMEOUT=1
 
 function inf {
-  time ./infsat -q $OPTS "$1" &
+  time ./infsat $OPTS "$1" &
   PID=$!
   sleep $TIMEOUT && pkill -P $PID 2> /dev/null &
   WATCHER=$!
@@ -27,4 +27,6 @@ function bench {
 }
 
 echo "Benchmark of infsat $OPTS benchmark/* with timeout ${TIMEOUT}s"
+echo "$(date +%Y-%m-%d) $(lscpu | sed -nr '/Model name/ s/.*:\s*(.*) @ .*/\1/p')"
+echo --- input file ------------------------ time -----
 find benchmark/ -type f | bench

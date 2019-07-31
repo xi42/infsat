@@ -51,8 +51,8 @@ TAGS: $(SOURCE)
 doc: $(SOURCE)
 	ocamldoc -html -d doc $(SOURCE)
 
-benchmark: benchmark.sh
-	bash $^ | tee benchmark.out
+benchmark: benchmark.sh infsat
+	bash $< | tee benchmark.out
 
 .SUFFIXES:
 	.ml .cmo .mli .cmi
