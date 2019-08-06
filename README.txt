@@ -76,7 +76,6 @@ Examples can be found in directory "examples".
 
 TODO
 ----
-* Arg.parse does not work as intended with no arguments
 * add "." at the end of all failwith for consistency
 * check TODOs in code and resolve them or move here
 * benchmark on horsat tests

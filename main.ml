@@ -47,7 +47,6 @@ let parse_file filename =
   print_verbose (not !Flags.quiet) @@ lazy (
     "Analyzing " ^ filename ^ "."
   );
-  flush stdout;
   let lexbuf = Lexing.from_channel in_strm in
   let result =
     try
@@ -69,7 +68,7 @@ let parse_file filename =
 
 (** Parses stdin to HORS prerules and automata transitions. *)
 let parse_stdin () =
-  print_string "reading standard input ...\n";
+  print_verbose (not !Flags.quiet) @@ lazy "Reading standard input until EOF...";
   let in_strm = stdin in
   let lexbuf = Lexing.from_channel in_strm in
   let result =
@@ -135,27 +134,30 @@ let parse_and_report_finiteness (filename : string option) : Saturation.infsat_r
   
 let main () : unit =
   try
-    program_info |> Arg.parse options (fun filenames ->
-        Flags.propagate_flags ();
-        let filename = match filenames with
-          | "" -> None
-          | f -> Some f
-        in
-        let start_t = Sys.time () in
-        let res = parse_and_report_finiteness filename in
-        let end_t = Sys.time () in
-        report_timings start_t end_t;
-        (* return value indicates finiteness only when return flag is on *)
-        match res with
-        | Infinite _ -> exit 0
-        | Finite ->
-          if !Flags.quiet then
-            exit 1
-          else
-            exit 0
-        | Unknown ->
-          exit 2
-      )
+    let filenames = ref [] in
+    program_info |> Arg.parse options (fun filename ->
+        filenames := filename :: !filenames
+      );
+    let filename = match !filenames with
+      | [] -> None
+      | [f] -> Some f
+      | _ -> failwith "Expected at most one filename."
+    in
+    Flags.propagate_flags ();
+    let start_t = Sys.time () in
+    let res = parse_and_report_finiteness filename in
+    let end_t = Sys.time () in
+    report_timings start_t end_t;
+    (* return value indicates finiteness only when return flag is on *)
+    match res with
+    | Infinite _ -> exit 0
+    | Finite ->
+      if !Flags.quiet then
+        exit 1
+      else
+        exit 0
+    | Unknown ->
+      exit 2
   with
   | Failure msg ->
     prerr_endline msg;

@@ -358,10 +358,10 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       print_verbose (not !Flags.quiet) @@ lazy (
         "Duplication Factor Graph:\n" ^
         dfg#to_string hg#nt_name ^ "\n" ^
+        cycle_proof_str ^ "\n\n" ^
         "Computed saturation result after " ^ string_of_int iteration ^ " iterations in " ^
         string_of_float t ^ "s.\n" ^
-        "The input HORS contains paths with arbitrarily many counted terminals.\n" ^
-        cycle_proof_str
+        "The input HORS contains paths with arbitrarily many counted terminals."
       );
       Infinite cycle_proof_str
     | Max_iterations_reached ->
