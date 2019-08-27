@@ -40,8 +40,8 @@ class env (var_itys : ity array) = object(self)
     compare_aux 0
 
   method hash : int =
-    Array.fold_left (fun acc xxxxx ->
-        acc
+    Array.fold_left (fun acc x ->
+        Hashtbl.hash (acc, Hashtbl.hash @@ List.map Ty.id_of_ty @@ TyList.to_list x)
       ) 0 var_itys
 
   method has_pr_vars : bool =
