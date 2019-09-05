@@ -25,7 +25,7 @@ struct
   (** Each single type has its own identifier. This returns it. *)
   let id_of_ty (Fun (id, _, _)) = id
   
-  let compare ty1 ty2 = Pervasives.compare (id_of_ty ty1) (id_of_ty ty2)
+  let compare ty1 ty2 = compare (id_of_ty ty1) (id_of_ty ty2)
 
   let equal ty1 ty2 = id_of_ty ty1 = id_of_ty ty2
 end
@@ -157,7 +157,7 @@ let rec ty_of_string (ty_str : string) : ty =
       match split_outside_parens s "->" with
       | Some (arg_str, res_str) ->
         ty_of_string_aux res_str (ity_of_string arg_str :: args)
-      | None -> failwith "Failed to parse type string"
+      | None -> failwith "Failed to parse type string."
   in
   ty_of_string_aux ty_str []
 
@@ -184,7 +184,12 @@ type hty = ity list
 let rec hty_compare : hty -> hty -> int =
   compare_lists TyList.compare
 
-let rec hty_eq (hty1 : hty) (hty2 : hty) : bool = hty_compare hty1 hty2 = 0
+let rec hty_eq (hty1 : hty) (hty2 : hty) : bool =
+  match hty1, hty2 with
+  | [], [] -> true
+  | ity1 :: hty1', ity2 :: hty2' ->
+    TyList.equal ity1 ity2 && hty_eq hty1' hty2'
+  | _, _ -> false
 
 let string_of_hty (hty : hty) : string =
   string_of_list string_of_ity hty

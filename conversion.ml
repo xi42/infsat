@@ -21,14 +21,14 @@ let new_fun_name fun_counter =
 
 let register_nt nt_counter nt_names_lookup_arr nt_name =
   if Hashtbl.mem nt_names_lookup_arr nt_name then
-    failwith @@ "Duplicated nonterminal " ^ nt_name
+    failwith @@ "Duplicated nonterminal " ^ nt_name ^ "."
   else 
     let nt = new_nt_id nt_counter in 
     Hashtbl.add nt_names_lookup_arr nt_name nt
 
 let lookup_nt_id nt_names nt_name =
   try Hashtbl.find nt_names nt_name
-  with Not_found -> failwith @@ "Undefined nonterminal " ^ nt_name
+  with Not_found -> failwith @@ "Undefined nonterminal " ^ nt_name ^ "."
 
 let register_new_rule f arity body aux_rules =
    aux_rules := (f, arity, body) :: !aux_rules
@@ -48,10 +48,10 @@ let rec midterm2term aux_rules nt_counter nt_names vmap pterm =
           try
             Var (List.assoc s vmap)
           with
-          | Not_found -> failwith @@ "Undefined variable " ^ s ^ " used"
+          | Not_found -> failwith @@ "Undefined variable " ^ s ^ " used."
         end
       | MNT s -> NT (lookup_nt_id nt_names s)
-      | MFun _ -> failwith "Expected no functions at this point"
+      | MFun _ -> failwith "Expected no functions at this point."
       | MT a -> TE a
     in
     let terms = List.map (midterm2term aux_rules nt_counter nt_names vmap) pterms in
@@ -231,15 +231,15 @@ let prerules2midrules (prerules : Syntax.prerules)
       match t with
       | Syntax.Terminal (name, arity, counted, universal) ->
         if Hashtbl.mem preterminals_map name then
-          failwith @@ "Terminal " ^ name ^ " defined twice"
+          failwith @@ "Terminal " ^ name ^ " defined twice."
         else if name = "a" then
-          failwith "Terminal a is reserved for counted node"
+          failwith "Terminal a is reserved for counted node."
         else if name = "b" then
-          failwith "Terminal b is reserved for nondeterministic choice node"
+          failwith "Terminal b is reserved for nondeterministic choice node."
         else if name = "e" then
-          failwith "Terminal e is reserved for leaf node"
+          failwith "Terminal e is reserved for leaf node."
         else if name = "t" then
-          failwith "Terminal t is reserved for binary tree node"
+          failwith "Terminal t is reserved for binary tree node."
         else
           Hashtbl.add preterminals_map name (arity, counted, universal)) preterminals;
   let prerule2midrule (nt, args_list, preterm) : midrule =
@@ -270,7 +270,7 @@ let prerules2midrules (prerules : Syntax.prerules)
               try
                 let arity, counted, universal = Hashtbl.find preterminals_map name in
                 if List.length a > arity then
-                  failwith @@ "Terminal " ^ name ^ " applied to more arguments than its arity"
+                  failwith @@ "Terminal " ^ name ^ " applied to more arguments than its arity."
                 else
                   let mid_terminal =
                     if universal then
@@ -281,18 +281,19 @@ let prerules2midrules (prerules : Syntax.prerules)
                   bin_tree mid_terminal arity counted arg_preterms
               with
               | Not_found ->
-                failwith @@ "Unbounded name " ^ name ^ " in the body of nonterminal " ^ nt
+                failwith @@ "Unbounded name " ^ name ^ " in the body of nonterminal " ^ nt ^ "."
             end
         (* leaving nonterminals as they were *)
         | Syntax.NT name -> MApp (MNT name, arg_preterms)
         | Syntax.Fun (fvars, preterm) ->
           let fun_args = List.fold_left (fun acc arg ->
               if SS.mem arg acc then
-                failwith @@ "Variable " ^ arg ^ " defined twice in function in nonterminal " ^ nt
+                failwith @@ "Variable " ^ arg ^ " defined twice in function in nonterminal " ^
+                            nt ^ "."
               else if Hashtbl.mem preterminals_map arg || arg = "a" || arg = "b" ||
                       arg = "e" || arg = "t" then
                 failwith @@ "Variable " ^ arg ^ " in function in nonterminal " ^ nt ^
-                            " conflicts with a terminal with the same name"
+                            " conflicts with a terminal with the same name."
               else
                 SS.add arg acc
             ) SS.empty fvars
@@ -303,11 +304,11 @@ let prerules2midrules (prerules : Syntax.prerules)
     (* set for fast access, also checking for conflicts *)
     let args = List.fold_left (fun acc arg ->
         if SS.mem arg acc then
-          failwith @@ "Variable " ^ arg ^ " defined twice in nonterminal " ^ nt
+          failwith @@ "Variable " ^ arg ^ " defined twice in nonterminal " ^ nt ^ "."
         else if Hashtbl.mem preterminals_map arg || arg = "a" || arg = "b" ||
                 arg = "e" || arg = "t" then
           failwith @@ "Variable " ^ arg ^ " in nonterminal " ^ nt ^
-                      " conflicts with a terminal with the same name"
+                      " conflicts with a terminal with the same name."
         else
           SS.add arg acc
       ) SS.empty args_list

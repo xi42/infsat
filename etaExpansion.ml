@@ -235,7 +235,7 @@ let rec inst_var (sort : tsort) : tsort =
 let rec clean_sort : tsort -> sort = function
   | TSAtom -> SAtom
   | TSFun (s1, s2) -> SFun (clean_sort s1, clean_sort s2)
-  | TSVar _ -> failwith "Expected no variables when cleaning sorts"
+  | TSVar _ -> failwith "Expected no variables when cleaning sorts."
 
 (** Eta-expand each rule in the grammar so that its body is of sort o. Compute sorts of
     nonterminals through unification and save them in the grammar. The sorts in the input are

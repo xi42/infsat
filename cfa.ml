@@ -10,14 +10,14 @@ open Utilities
 
 module SortedHTermsIds = SortedList.Make(struct
     type t = hterms_id
-    let compare = Pervasives.compare
+    let compare = compare
   end)
 
 type hterms_ids = SortedHTermsIds.t
 
 module HTermSet = Set.Make (struct
     type t = hterm
-    let compare = Pervasives.compare
+    let compare = compare
   end)
 
 class cfa (hg : hgrammar) = object(self)
@@ -252,7 +252,7 @@ class cfa (hg : hgrammar) = object(self)
   (** Marking in visited_nodes a hterm that started being processed. *)
   method register_hterm (hterm : hterm) = 
     if HTermSet.mem hterm visited_nodes then
-      failwith "Registering twice the same hterm";
+      failwith "Registering twice the same hterm.";
     visited_nodes <- HTermSet.add hterm visited_nodes
 
   (** Enqueueing all argument hterms. The terminal does not matter. *)

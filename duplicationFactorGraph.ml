@@ -214,7 +214,7 @@ class dfg = object(self)
         let edge = (fst @@ NTTyMap.find vertex graph) |> NTTyMap.find next_vertex in
         add_edges (edge :: acc) vertices
       | [last_vertex] -> List.rev acc
-      | [] -> failwith "Unexpected empty path"
+      | [] -> failwith "Unexpected empty path."
     in
     add_edges [] vertices
 
@@ -262,7 +262,7 @@ class dfg = object(self)
           es1 @ List.rev es2
         else
           roll_cycle es @@ e :: es2
-      | [] -> failwith "Expected a non-empty cycle that contains first"
+      | [] -> failwith "Expected a non-empty cycle that contains first."
     in
     roll_cycle cycle []
 

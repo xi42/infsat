@@ -62,7 +62,7 @@ let parse_file filename =
       close_in in_strm
     with
     | Sys_error _ ->
-      failwith @@ "Cannot close file " ^ filename
+      failwith @@ "Cannot close file " ^ filename ^ "."
   in
     result
 
@@ -76,9 +76,9 @@ let parse_stdin () =
       InfSatParser.main InfSatLexer.token lexbuf
     with 
     | Failure _ ->
-      failwith "Lexical error"
+      failwith "Lexical error."
     | Parsing.Parse_error ->
-      failwith "Parse error"
+      failwith "Parse error."
   in
     result
 
@@ -124,7 +124,7 @@ let parse_and_report_finiteness (filename : string option) : Saturation.infsat_r
         | Some f -> parse_file f
         | None -> parse_stdin ()
       with
-      | InfSatLexer.LexError s -> failwith @@ "Lexer error: " ^ s
+      | InfSatLexer.LexError s -> failwith @@ "Lexer error: " ^ s ^ "."
     )
   in
   print_verbose !Flags.verbose_preprocessing @@ lazy (

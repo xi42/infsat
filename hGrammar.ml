@@ -20,23 +20,20 @@ type hloc = int
 
 module HeadMap = Map.Make (struct
     type t = head
-    let compare = Pervasives.compare
+    let compare = compare
   end)
 
 module HeadSet = Set.Make (struct
     type t = head
-    let compare = Pervasives.compare
+    let compare = compare
   end)
 
-module HlocSet = Set.Make (struct
-    type t = hloc
-    let compare = Pervasives.compare
-  end)
+module HlocSet = IntSet
 
 module HlocMap = struct
   include Map.Make (struct
       type t = hloc
-      let compare = Pervasives.compare
+      let compare = compare
     end)
 
   let string_of_int_binding (loc, count : hloc * int) : string =
@@ -54,7 +51,7 @@ module HlocMap = struct
   (** Comparison between two integer hloc maps where two maps are the same iff their sums are both
       zero, both one, or both at least two. *)
   let multi_compare (m1 : int t) (m2 : int t) : int =
-    Pervasives.compare (min (sum m1) 2) (min (sum m2) 2)
+    Stdlib.compare (min (sum m1) 2) (min (sum m2) 2)
 
   let sum_union : int t -> int t -> int t =
     union (fun _ count1 count2 -> Some (count1 + count2))
@@ -62,6 +59,8 @@ module HlocMap = struct
   let keys_set (m : 'a t) : HlocSet.t =
     HlocSet.of_seq @@ Seq.map fst @@ to_seq m
 end
+
+type 't hloc_map = 't HlocMap.t
 
 class hgrammar (grammar : grammar) = object(self)
   (** Mapping from int ids to lists of terms. when tab_id_terms[i] = (hterms, terms, vars), then
@@ -133,11 +132,11 @@ class hgrammar (grammar : grammar) = object(self)
     for j = 0 to i - 1 do
       fun_sort := match !fun_sort with
         | SFun (_, codomain) -> codomain
-        | SAtom -> failwith "Expected a function sort"
+        | SAtom -> failwith "Expected a function sort."
     done;
     match !fun_sort with
     | SFun (var_sort, _) -> var_sort
-    | SAtom -> failwith "Expected a function sort"
+    | SAtom -> failwith "Expected a function sort."
 
   (* --- operations --- *)
   
@@ -397,7 +396,7 @@ class hgrammar (grammar : grammar) = object(self)
       list of hterms_ids". The length of the list must be odd. *)
   method locate_hterms_id_in_hterm (h, ids : hterm) (pos : int list) : hterms_id =
     match pos with
-    | [] -> failwith "Length of pos must be odd"
+    | [] -> failwith "Length of pos must be odd."
     | [i] -> List.nth ids i
     | i :: j :: pos' ->
       let hterms = self#id2hterms (List.nth ids i) in

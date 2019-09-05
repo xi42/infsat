@@ -84,7 +84,7 @@ class grammar (nt_names : string array) (var_names : string array array)
           res := nt
       ) nt_names;
     if !res = (-1) then
-      failwith ("Nonterminal with name " ^ nt_name ^ " not found")
+      failwith @@ "Nonterminal with name " ^ nt_name ^ " not found."
     else
       !res
   

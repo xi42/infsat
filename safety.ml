@@ -49,7 +49,7 @@ let rec check_hterm_safety (hg : hgrammar) (h, ids : hterm) : (string, order) ei
       | SFun (_, codomain) ->
         term_sort := codomain
       | SAtom ->
-        failwith "Expected a function sort"
+        failwith "Expected a function sort."
     done;
     let term_order : order = order !term_sort in
     if min_var_order < term_order then

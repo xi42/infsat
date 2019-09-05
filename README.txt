@@ -10,8 +10,8 @@ licensed under the GPL version 3.0.
 How to install
 --------------
 First install and configure opam (docs on https://opam.ocaml.org/doc/Install.html), then
-install OCaml 4.07.1 (docs on http://www.ocaml.org/docs/install.html#OPAM), e.g., using
-opam switch create 4.07.1
+install OCaml 4.08.1 (docs on http://www.ocaml.org/docs/install.html#OPAM), e.g., using
+opam switch create 4.08.1
 and finally install opam package dependencies using
 make install-dependencies
 
@@ -76,7 +76,14 @@ Examples can be found in directory "examples".
 
 TODO
 ----
-* add "." at the end of all failwith for consistency
 * check TODOs in code and resolve them or move here
-* benchmark on horsat tests
 * update documentation
+* Possible optimizations:
+  - pre-computing short-circuit-friendly order of computing argument types for type_check_app
+  - computing terms without variables first and short circuit after for all terms
+  - computing terms with non-duplicating variables last with short-circuiting when duplication
+    is expected
+  - some kind of cache for type_check even for failed typings, possibly even with versioning
+    due to constant changes in typings of nonterminals and hterms flowing into variables
+  - early removing contexts that do not satisfy requirements when it is known a branch with
+    needed loc won't be taken

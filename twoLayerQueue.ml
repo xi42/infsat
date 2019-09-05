@@ -16,7 +16,7 @@ let dequeue (firsts, seconds : 'a t) : int * 'a =
   | [] -> raise_notrace Empty
   | first :: firsts' ->
     match seconds.(first) with
-    | [] -> failwith "Empty seconds"
+    | [] -> failwith "Empty seconds."
     | second :: sec ->
       seconds.(first) <- sec;
       if sec = [] then

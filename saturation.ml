@@ -1,12 +1,12 @@
 open Binding
 open Cfa
+open Environment
 open Grammar
 open GrammarCommon
 open HGrammar
 open Profiling
 open Proof
-open Sort
-open TargetEnvms
+open TargetEnvs
 open Type
 open TypingCommon
 open Utilities
@@ -23,8 +23,8 @@ exception Max_iterations_reached
 exception Positive_cycle_found of cycle_proof
 
 class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
-  (* Design note: typing with specific environments occurs in Typing, but this module is used to
-     prepare precise specification of these environments based on 0CFA output, Typing does not
+  (* Design note: typing with specific environments occurs in Typing. This module is used to
+     prepare precise specification of these environments based on 0CFA output. Typing does not
      use 0CFA depdendency information. *)
 
   (** Current iteration number kept for debugging purposes only. *)
@@ -92,7 +92,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
 
   (* --- processing results of typing --- *)
 
-  method register_nt_ty (nt : nt_id) (ty : ty) (envm : envm) =
+  method register_nt_ty (nt : nt_id) (ty : ty) (env : env) =
     if typing#add_nt_ty nt ty then
       begin
         print_verbose !Flags.verbose_typing @@ lazy (
@@ -103,9 +103,9 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       end;
     let proof = {
       derived = (nt, ty);
-      used_nts = envm.used_nts;
-      loc_types = envm.loc_types;
-      positive = envm.positive;
+      used_nts = env.used_nts;
+      loc_types = env.loc_types;
+      positive = env.positive;
       initial = false
     } in
     (* Adding the new typing to the graph and checking for positive cycle. This should
@@ -143,6 +143,9 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
 
   (* --- typing --- *)
 
+  (** Infers types of given nonterminal. Has an option to force types of some hterms.
+      Works by generating a list of all possible environments based on bindings and then iterating
+      over it while typing the nonterminal. *)
   method infer_nt_ity (nt : nt_id) (fixed_hterms_hty : (hterms_id * hty) option)
       (binding : hterms_id binding) =
     print_verbose !Flags.verbose_queues @@ lazy (
@@ -159,17 +162,17 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     );
     indent (+1);
     let body = hg#nt_body nt in
-    let var_count = hg#nt_arity nt in
-    let envms = typing#binding2envms var_count None fixed_hterms_hty binding in
-    envms |> Envms.iter (fun envm ->
-        let tel = typing#type_check body None (Left envm.env) false false 0 in
-        tel |> TargetEnvms.iter_fun_ty (fun ty envm ->
-            self#register_nt_ty nt ty envm
-          )
+    let ctx = typing#binding2ctx body None fixed_hterms_hty None binding in
+    let te = typing#type_check body None ctx false false in
+    te |> TargetEnvs.iter_fun_ty (fun ty env ->
+        self#register_nt_ty nt ty env
       );
     indent (-1)
   
-  (** Infers type of given hterm under given bindings. If the type is new, it is registered. *)
+  (** Infers type of given hterm under given bindings. If the type is new, it is registered.
+      Has an option to force types of some hterms.
+      Works by generating a list of all possible environments based on bindings and then iterating
+      over it while typing the nonterminal. *)
   method infer_hterms_hty (id : hterms_id) (fixed_hterms_hty : (hterms_id * hty) option)
       (binding : hterms_id binding) =
     print_verbose !Flags.verbose_queues @@ lazy (
@@ -186,20 +189,14 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     );
     indent (+1);
     let mask = hg#id2vars id in
-    let var_count = match hg#id2nt id with
-      | Some nt -> hg#nt_arity nt
-      | None -> 0
-    in
     let hterms = hg#id2hterms id in
-    let envms = typing#binding2envms var_count (Some mask) None binding in
-    envms |> Envms.iter (fun envm ->
-        let tels = hterms |> List.map (fun hterm ->
-            typing#type_check hterm None (Left envm.env) false false 0
-          )
-        in
-        let hty = tels |> List.map TargetEnvms.targets_as_args in
-        self#register_hterms_hty id hty
-      );
+    let tels = hterms |> List.map (fun hterm ->
+        let ctx = typing#binding2ctx hterm (Some mask) fixed_hterms_hty None binding in
+        typing#type_check hterm None ctx false false
+      )
+    in
+    let hty = tels |> List.map TargetEnvs.targets_as_args in
+    self#register_hterms_hty id hty;
     indent (-1)
 
   (* --- processing queues --- *)

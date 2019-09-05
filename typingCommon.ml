@@ -5,7 +5,7 @@ open Type
 type nt_ty = nt_id * ty
 
 let nt_ty_compare : nt_ty -> nt_ty -> int =
-  Utilities.compare_pair Pervasives.compare Ty.compare
+  Utilities.compare_pair compare Ty.compare
 
 let nt_ty_eq (nt1, ty1 : nt_ty) (nt2, ty2 : nt_ty) : bool =
   nt1 = nt2 && Ty.equal ty1 ty2
@@ -32,8 +32,12 @@ module NTTySet = struct
     of_seq @@ Seq.map fst @@ NTTyMap.to_seq m
 end
 
-module TyMap =
-  Map.Make (struct
+module TyMap = Map.Make (struct
     type t = ty
     let compare = Ty.compare
+  end)
+
+module HtySet = Set.Make (struct
+    type t = hty
+    let compare = hty_compare
   end)

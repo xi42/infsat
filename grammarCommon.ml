@@ -9,14 +9,14 @@ type terminal = A | B | E | T
 
 module SortedVars = SortedList.Make(struct
     type t = var_id
-    let compare = Pervasives.compare
+    let compare = compare
   end)
 
 type vars = SortedVars.t
 
 module SortedNTs = SortedList.Make(struct
     type t = nt_id
-    let compare = Pervasives.compare
+    let compare = compare
   end)
 
 type nts = SortedNTs.t

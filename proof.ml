@@ -1,24 +1,19 @@
 open Environment
 open GrammarCommon
 open HGrammar
-open TargetEnvms
+open TargetEnvs
 open Type
 open TypingCommon
 open Utilities
 
-module VarMap = Set.Make (struct
-    type t = var_id
-    let compare = Pervasives.compare
-  end)
-
 module NTTyInitMap = Map.Make (struct
     type t = nt_ty * bool
-    let compare = Pervasives.compare
+    let compare = compare
   end)
 
 module HeadTyMap = Map.Make (struct
     type t = head * ty
-    let compare = Utilities.compare_pair Pervasives.compare Ty.compare
+    let compare = Utilities.compare_pair compare Ty.compare
   end)
 
 (* note that var_assumptions is redundant, since it is included in derived *)
@@ -30,8 +25,8 @@ type proof = { derived : nt_ty;
 
 let proof_compare (ignore_initial : bool) (proof1 : proof) (proof2 : proof) : int =
   compare_pair
-    (compare_pair nt_ty_compare @@ NTTyMap.compare Pervasives.compare)
-    Pervasives.compare
+    (compare_pair nt_ty_compare @@ NTTyMap.compare compare)
+    compare
     ((proof1.derived, proof1.used_nts), (proof1.positive, proof1.initial || ignore_initial))
     ((proof2.derived, proof2.used_nts), (proof2.positive, proof2.initial || ignore_initial))
     

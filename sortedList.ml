@@ -32,6 +32,7 @@ module type SL = sig
   val fold_left : ('a -> elt -> 'a) -> 'a -> t -> 'a
   val fold_left_short_circuit : 'a -> t -> 'a -> ('a -> elt -> 'a) -> 'a
   val fold_right : (elt -> 'a -> 'a) -> t -> 'a -> 'a
+  val filter_map : (elt -> 'a option) -> t -> 'a list
   val map : (elt -> 'a) -> t -> 'a list
   val map_monotonic : (elt -> elt) -> t -> t
   val rev_map : (elt -> 'a) -> t -> 'a list
@@ -203,6 +204,8 @@ struct
   let fold_left_short_circuit acc (L l) bottom f = Utilities.fold_left_short_circuit acc l bottom f
 
   let fold_right f (L l) acc = List.fold_right f l acc
+
+  let filter_map f (L l) = List.filter_map f l
   
   let map f (L l) = List.map f l
 

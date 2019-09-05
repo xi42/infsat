@@ -36,4 +36,4 @@ class hty_store (hgrammar : hgrammar) = object(self)
 end
 
 let remove_hty_duplicates (htys : hty list) : hty list =
-  Utilities.delete_consecutive_duplicates Pervasives.compare @@ List.sort hty_compare htys
+  Utilities.delete_consecutive_duplicates compare @@ List.sort hty_compare htys

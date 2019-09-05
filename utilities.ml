@@ -6,10 +6,10 @@ type ('a, 'b) either = Left of 'a | Right of 'b
 
 let get_left : ('a, 'b) either -> 'a = function
   | Left x -> x
-  | Right _ -> failwith "Expected left"
+  | Right _ -> failwith "Expected left."
 
 let get_right : ('a, 'b) either -> 'b = function
-  | Left _ -> failwith "Expected right"
+  | Left _ -> failwith "Expected right."
   | Right x -> x
 
 let either_map (f : 'a -> 'c) (g : 'b -> 'c) (e : ('a, 'b) either) : 'c =
@@ -24,18 +24,36 @@ let either_bimap (f : 'a -> 'c) (g : 'b -> 'd) (e : ('a, 'b) either) : ('c, 'd) 
 
 (* --- option --- *)
 
+let option_maps (f : 'a -> 'b) : 'a option -> 'b option = function
+  | Some x -> Some (f x)
+  | None -> None
+
 let option_map (default : 'b) (f : 'a -> 'b) : 'a option -> 'b = function
   | Some x -> f x
   | None -> default
 
 let option_get : 'a option -> 'a = function
   | Some x -> x
-  | None -> failwith "Expected Some"
+  | None -> failwith "Expected Some."
 
 let option_default (default : 'a) (o : 'a option) : 'a =
   match o with
   | Some x -> x
   | None -> default
+
+let option_compare (cmp : 'a -> 'a -> int) (x1 : 'a option) (x2 : 'a option) : int =
+  match x1, x2 with
+  | None, None -> 0
+  | None, Some _ -> -1
+  | Some _, None -> 1
+  | Some s1, Some s2 -> cmp s1 s2
+
+let option_equal (eq : 'a -> 'a -> bool) (x1 : 'a option) (x2 : 'a option) : bool =
+  match x1, x2 with
+  | None, None -> true
+  | None, Some _ -> false
+  | Some _, None -> false
+  | Some s1, Some s2 -> eq s1 s2
 
 (* --- printing --- *)
 
@@ -74,6 +92,11 @@ let compare_pair (cmp1 : 'a -> 'a -> int) (cmp2 : 'b -> 'b -> int)
     c1
 
 (* --- lists --- *)
+
+let list_is_empty (l : 'a list) : bool =
+  match l with
+  | [] -> true
+  | _ -> false
 
 (** Version of fold_left that takes additional argument bottom. When acc is bottom after an
     application, bottom is returned and no further calls to f are made. Careful: it uses
@@ -131,7 +154,7 @@ let product_with_one_fixed (ls : 'a list list) (fixed : 'a list) : 'a list list 
     | l :: postfix', f :: fixed' ->
       product_with_one_fixed_aux ((f :: l) :: prefix) postfix' fixed' @@
       List.rev_append (product @@ List.rev prefix @ ([f] :: postfix')) acc
-    | _ -> failwith "ls and fixed should have the same length"
+    | _ -> failwith "ls and fixed should have the same length."
   in
   product_with_one_fixed_aux [] ls fixed []
 
@@ -189,7 +212,7 @@ let replace_nth (l : 'a list) (i : int) (r : 'a) : 'a list =
     match l, i with
     | _ :: l', 0 -> List.rev_append (r :: acc) l'
     | x :: l', _ -> replace_nth_aux l' (i - 1) (x :: acc)
-    | [], _ -> failwith "List too short"
+    | [], _ -> failwith "List too short."
   in
   replace_nth_aux l i []
 
@@ -207,7 +230,7 @@ let split_list (prefix_size : int) (l : 'a list) : 'a list * 'a list =
       (List.rev rprefix, postfix)
     else
       match postfix with
-      | [] -> failwith "List too short in split_list"
+      | [] -> failwith "List too short in split_list."
       | x :: postfix' ->
         split_list_aux (x :: rprefix) postfix' (n - 1)
   in
@@ -217,7 +240,7 @@ let split_list (prefix_size : int) (l : 'a list) : 'a list * 'a list =
 let rec last : 'a list -> 'a = function
   | [x] -> x
   | _ :: (x :: _ as l) -> last l
-  | [] -> failwith "Unexpected empty list in last"
+  | [] -> failwith "Unexpected empty list in last."
 
 (* --- parsing --- *)
 
@@ -273,8 +296,8 @@ let delete_consecutive_duplicates compare l =
 
 (** Sort the list and delete all but one equal elements in the list using Pervasives.compare. *)
 let sort_and_delete_duplicates c =
-  let c' = List.sort Pervasives.compare c in
-  delete_consecutive_duplicates Pervasives.compare c'
+  let c' = List.sort compare c in
+  delete_consecutive_duplicates compare c'
 
 let list_max c l =
   let rec f c l max =
@@ -328,6 +351,18 @@ let print_verbose (flag : bool) (str : string Lazy.t) : unit =
       Str.global_replace (Str.regexp "\n") ("\n" ^ indentation_str ()) @@
       Lazy.force str
     end
+
+(* --- generic collections --- *)
+
+module IntMap = Map.Make (struct
+    type t = int
+    let compare = compare
+  end)
+
+module IntSet = Set.Make (struct
+    type t = int
+    let compare = compare
+  end)
 
 (* --- other --- *)
 
