@@ -46,14 +46,12 @@ let assert_equal_envs envms1 envms2 =
     (ContextEnvs.with_empty_temp_flags_and_locs envms1)
     (ContextEnvs.with_empty_temp_flags_and_locs envms2)
 
-(* TODO
 (** Asserts that two TEs are equal. Note that it uses default comparison, so it does not take
     into consideration that there are 3+ of a nonterminal or what terminals are used. *)
 let assert_equal_tes te1 te2 =
   assert_equal ~printer:TargetEnvs.to_string ~cmp:TargetEnvs.equal
     (TargetEnvs.with_empty_temp_flags_and_locs te1)
     (TargetEnvs.with_empty_temp_flags_and_locs te2)
-*)
 
 let mk_grammar rules =
   let nt_names = Array.mapi (fun i _ -> "N" ^ string_of_int i) rules in
@@ -77,13 +75,12 @@ let mk_typing g =
   let hg = mk_hgrammar g in
   (hg, new Typing.typing hg)
 
-(*
 let type_check_nt_wo_env (typing : typing) (hg : hgrammar) (nt : nt_id) (target : ty) =
-  typing#type_check (hg#nt_body nt) (Some target) (Right (hg#nt_arity nt))
+  typing#type_check (hg#nt_body nt) (Some target) empty_ctx
 
 let type_check_nt_wo_env_wo_target (typing : typing) (hg : hgrammar) (nt : nt_id) =
-  typing#type_check (hg#nt_body nt) None (Right (hg#nt_arity nt))
-
+  typing#type_check (hg#nt_body nt) None empty_ctx
+(*
 let senv hg nt i ity_str =
   singleton_env (hg#nt_arity nt) (nt, i) @@ ity_of_string ity_str
 *)
@@ -285,41 +282,41 @@ let utilities_test () : test =
 let penv_test () : test =
   "context" >::: [
     "req-sat-0" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [(0, [[ity_top]]); (1, [[ity_top]])] in
+        let bix_htys = IntMap.of_list [(0, [[ity_top]]); (1, [[ity_top]])] in
         let ctx = mk_ctx IntMap.empty bix_htys None [||] None in
         assert_equal true @@ ctx_requirements_satisfied ctx
       );
 
     (* some herms can have empty types as long as they are unused *)
     "req-sat-1" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [(0, []); (1, [[ity_top]])] in
+        let bix_htys = IntMap.of_list [(0, []); (1, [[ity_top]])] in
         let ctx = mk_ctx IntMap.empty bix_htys None [||] None in
         assert_equal true @@ ctx_requirements_satisfied ctx
       );
 
     (* nt requirement not satisfied and impossible to satisfy *)
     "req-sat-2" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [(0, [[ity_top]]); (1, [[ity_top]])] in
+        let bix_htys = IntMap.of_list [(0, [[ity_top]]); (1, [[ity_top]])] in
         let ctx = mk_ctx IntMap.empty bix_htys None [||] (Some ([], ty_pr)) in
         assert_equal false @@ ctx_requirements_satisfied ctx
       );
 
     (* nt requirement not satisfied *)
     "req-sat-3" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [(0, [[ity_top]]); (1, [[ity_top]])] in
+        let bix_htys = IntMap.of_list [(0, [[ity_top]]); (1, [[ity_top]])] in
         let ctx = mk_ctx IntMap.empty bix_htys None [||] (Some ([1], ty_pr)) in
         assert_equal false @@ ctx_requirements_satisfied ctx
       );
 
     (* hterms requirement not satisfied *)
     "req-sat-4" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [(0, [[ity_top]]); (1, [[ity_top]])] in
+        let bix_htys = IntMap.of_list [(0, [[ity_top]]); (1, [[ity_top]])] in
         let ctx = mk_ctx IntMap.empty bix_htys (Some ([0; 1], [ity_top])) [||] None in
         assert_equal false @@ ctx_requirements_satisfied ctx
       );
 
     "combinations-0" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let bix_htys = IntMap.of_list [
             (0, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
@@ -329,7 +326,7 @@ let penv_test () : test =
       );
 
     "combinations-1" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let bix_htys = IntMap.of_list [
             (0, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
@@ -339,7 +336,7 @@ let penv_test () : test =
       );
 
     "combinations-2" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let bix_htys = IntMap.of_list [
             (0, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
@@ -349,7 +346,7 @@ let penv_test () : test =
       );
 
     "combinations-3" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let bix_htys = IntMap.of_list [
             (0, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
@@ -359,7 +356,7 @@ let penv_test () : test =
       );
 
     "combinations-4" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let bix_htys = IntMap.of_list [
             (0, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [])
@@ -369,7 +366,7 @@ let penv_test () : test =
       );
 
     "combinations-5" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let bix_htys = IntMap.of_list [
             (0, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
@@ -380,7 +377,7 @@ let penv_test () : test =
       );
 
     "combinations-6" >:: (fun _ ->
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let bix_htys = IntMap.of_list [
             (0, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
@@ -390,7 +387,7 @@ let penv_test () : test =
 
     "split-var-0" >:: (fun _ ->
         let var_bix = IntMap.singleton 0 (0, 0) in
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let bix_htys = IntMap.of_list [
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
         let ctx = mk_ctx var_bix bix_htys None [||] None in
@@ -401,8 +398,8 @@ let penv_test () : test =
       );
 
     "split-var-1" >:: (fun _ ->
-        let var_bix = IntMap.of_seq @@ List.to_seq [(0, (0, 0)); (1, (1, 0))] in
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let var_bix = IntMap.of_list [(0, (0, 0)); (1, (1, 0))] in
+        let bix_htys = IntMap.of_list [
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
@@ -415,7 +412,7 @@ let penv_test () : test =
 
     "enforce-var-0" >:: (fun _ ->
         let var_bix = IntMap.singleton 0 (0, 0) in
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let bix_htys = IntMap.of_list [
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
         let ctx = mk_ctx var_bix bix_htys None [||] None in
@@ -425,8 +422,8 @@ let penv_test () : test =
       );
 
     "enforce-var-1" >:: (fun _ ->
-        let var_bix = IntMap.of_seq @@ List.to_seq [(0, (0, 0)); (1, (1, 0))] in
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let var_bix = IntMap.of_list [(0, (0, 0)); (1, (1, 0))] in
+        let bix_htys = IntMap.of_list [
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
@@ -437,8 +434,8 @@ let penv_test () : test =
       );
 
     "enforce-var-2" >:: (fun _ ->
-        let var_bix = IntMap.of_seq @@ List.to_seq [(0, (0, 0)); (1, (1, 0))] in
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let var_bix = IntMap.of_list [(0, (0, 0)); (1, (1, 0))] in
+        let bix_htys = IntMap.of_list [
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
@@ -449,8 +446,8 @@ let penv_test () : test =
       );
 
     "enforce-var-3" >:: (fun _ ->
-        let var_bix = IntMap.of_seq @@ List.to_seq [(0, (0, 0)); (1, (1, 0))] in
-        let bix_htys = IntMap.of_seq @@ List.to_seq [
+        let var_bix = IntMap.of_list [(0, (0, 0)); (1, (1, 0))] in
+        let bix_htys = IntMap.of_list [
             (0, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
@@ -475,11 +472,11 @@ let penv_test () : test =
         let res = ctx_split_nt ctx 0 0 in
         assert_equal ~printer:string_of_ity (ity_of_string "np /\\ pr") @@
         TyList.of_list @@ List.map fst res;
-        let forced_locs = List.map (fun (_, ctx) -> option_maps fst ctx.forced_nt_ty) res in
+        let forced_locs = List.map (fun (_, ctx) -> option_map fst ctx.forced_nt_ty) res in
         assert_equal ~printer:(string_of_list @@ string_of_list string_of_int)
           [[1; 2]; [42]] @@
         List.sort compare @@
-        List.map (option_map [42] HlocSet.elements) forced_locs
+        List.map (option_map_or_default [42] HlocSet.elements) forced_locs
       );
 
     "split-nt-2" >:: (fun _ ->
@@ -488,7 +485,7 @@ let penv_test () : test =
         let res = ctx_split_nt ctx 0 0 in
         assert_equal ~printer:string_of_ity (ity_of_string "np") @@
         TyList.of_list @@ List.map fst res;
-        let forced_locs = List.map (fun (_, ctx) -> option_maps fst ctx.forced_nt_ty) res in
+        let forced_locs = List.map (fun (_, ctx) -> option_map fst ctx.forced_nt_ty) res in
         assert_equal [None] forced_locs
       );
 
@@ -546,16 +543,16 @@ let penv_test () : test =
       );
 
     "intersect-3" >:: (fun _ ->
-        let var_bix = IntMap.of_seq @@ List.to_seq [(0, (0, 0)); (1, (1, 0))] in
-        let bix_htys1 = IntMap.of_seq @@ List.to_seq [
+        let var_bix = IntMap.of_list [(0, (0, 0)); (1, (1, 0))] in
+        let bix_htys1 = IntMap.of_list [
             (0, [[ity_top]; [ity_of_string "T -> pr"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
-        let bix_htys2 = IntMap.of_seq @@ List.to_seq [
+        let bix_htys2 = IntMap.of_list [
             (0, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
-        let expected_bix_htys = IntMap.of_seq @@ List.to_seq [
+        let expected_bix_htys = IntMap.of_list [
             (0, [[ity_of_string "T -> pr"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
@@ -569,12 +566,12 @@ let penv_test () : test =
     (* When one of hterms' types product elements intersection is empty, but one of intersected
        ones is not empty, there were conflicting assumptions. *)
     "intersect-4" >:: (fun _ ->
-        let var_bix = IntMap.of_seq @@ List.to_seq [(0, (0, 0)); (1, (1, 0))] in
-        let bix_htys1 = IntMap.of_seq @@ List.to_seq [
+        let var_bix = IntMap.of_list [(0, (0, 0)); (1, (1, 0))] in
+        let bix_htys1 = IntMap.of_list [
             (0, [[ity_top]; [ity_of_string "T -> np"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
-        let bix_htys2 = IntMap.of_seq @@ List.to_seq [
+        let bix_htys2 = IntMap.of_list [
             (0, [[ity_of_string "pr -> pr"]; [ity_of_string "T -> pr"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
@@ -587,16 +584,16 @@ let penv_test () : test =
     (* When due to intersection a single element remains and it is forced, the condition
        is satisfied. *)
     "intersect-5" >:: (fun _ ->
-        let var_bix = IntMap.of_seq @@ List.to_seq [(0, (0, 0)); (1, (1, 0))] in
-        let bix_htys1 = IntMap.of_seq @@ List.to_seq [
+        let var_bix = IntMap.of_list [(0, (0, 0)); (1, (1, 0))] in
+        let bix_htys1 = IntMap.of_list [
             (0, [[ity_top]; [ity_of_string "T -> np"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
-        let bix_htys2 = IntMap.of_seq @@ List.to_seq [
+        let bix_htys2 = IntMap.of_list [
             (0, [[ity_of_string "T -> np"]; [ity_of_string "T -> pr"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
-        let expected_bix_htys = IntMap.of_seq @@ List.to_seq [
+        let expected_bix_htys = IntMap.of_list [
             (0, [[ity_of_string "T -> np"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
@@ -611,12 +608,12 @@ let penv_test () : test =
       );
 
     "intersect-6" >:: (fun _ ->
-        let var_bix = IntMap.of_seq @@ List.to_seq [(0, (0, 0)); (1, (1, 0))] in
-        let bix_htys1 = IntMap.of_seq @@ List.to_seq [
+        let var_bix = IntMap.of_list [(0, (0, 0)); (1, (1, 0))] in
+        let bix_htys1 = IntMap.of_list [
             (0, [[ity_top]; [ity_of_string "T -> np"]]);
             (1, [[ity_of_string "T -> pr"]])
           ] in
-        let bix_htys2 = IntMap.of_seq @@ List.to_seq [
+        let bix_htys2 = IntMap.of_list [
             (0, [[ity_of_string "T -> pr"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
@@ -626,6 +623,27 @@ let penv_test () : test =
             (Some ([0; 1], [ity_of_string "T -> np"])) [||] None in
         let ctx = intersect_ctxs ctx1 ctx2 in
         assert_equal None ctx
+      );
+
+    "intersect-7" >:: (fun _ ->
+        let ctx1 =
+          mk_ctx (IntMap.of_list [(0, (0, 0)); (1, (1, 0))])
+            (BixMap.of_list [(0, [[sty ty_pr]]); (1, [[sty ty_np]; [sty ty_pr]])])
+            None [||] None
+        in
+        let ctx2 =
+          mk_ctx (IntMap.of_list [(0, (0, 0)); (1, (1, 0))])
+            (BixMap.of_list [(0, [[sty ty_np]; [sty ty_pr]]); (1, [[sty ty_np]])])
+            None [||] None
+        in
+        let ctx12 =
+          mk_ctx (IntMap.of_list [(0, (0, 0)); (1, (1, 0))])
+            (BixMap.of_list [(0, [[sty ty_pr]]); (1, [[sty ty_np]])])
+            None [||] None
+        in
+        assert_equal ~cmp:(option_equal ctx_equal) (Some ctx12) @@ intersect_ctxs ctx1 ctx2;
+        assert_equal ~cmp:(option_equal ctx_equal) (Some ctx2) @@ intersect_ctxs ctx2 ctx2;
+        assert_equal ~cmp:(option_equal ctx_equal) (Some ctx1) @@ intersect_ctxs ctx1 ctx1
       );
   ]
 
@@ -841,36 +859,36 @@ let dfg_test () : test =
         ignore @@ dfg#add_vertex @@ mk_proof 10 ty_np empty_used_nts false;
         ignore @@ dfg#add_vertex @@ mk_proof 11 ty_np empty_used_nts false;
         ignore @@ dfg#add_vertex @@ mk_proof 9 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((10, ty_np), false); ((11, ty_np), false)]) true;
+          (NTTyMap.of_list [((10, ty_np), false); ((11, ty_np), false)]) true;
         ignore @@ dfg#add_vertex @@ mk_proof 2 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((9, ty_pr), false)]) false;
+          (NTTyMap.of_list [((9, ty_pr), false)]) false;
         (* 8, 2 <- 5 *)
         ignore @@ dfg#add_vertex @@ mk_proof 8 ty_np empty_used_nts false;
         ignore @@ dfg#add_vertex @@ mk_proof 5 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((2, ty_pr), false); ((8, ty_np), false)]) false;
+          (NTTyMap.of_list [((2, ty_pr), false); ((8, ty_np), false)]) false;
         (* 5 <- 7 *)
         ignore @@ dfg#add_vertex @@ mk_proof 7 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((5, ty_pr), false)]) false;
+          (NTTyMap.of_list [((5, ty_pr), false)]) false;
         (* 8 <- 6 *)
         ignore @@ dfg#add_vertex @@ mk_proof 6 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((8, ty_np), true)]) true;
+          (NTTyMap.of_list [((8, ty_np), true)]) true;
         (* cycle: 5 : pr, 6 : pr <- 4 : pr; 4 : pr, 6 : pr <- 5 : pr *)
         ignore @@ dfg#add_vertex @@ mk_proof 4 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((5, ty_pr), false); ((6, ty_pr), false)]) false;
+          (NTTyMap.of_list [((5, ty_pr), false); ((6, ty_pr), false)]) false;
         ignore @@ dfg#add_vertex @@ mk_proof 5 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((4, ty_pr), false); ((6, ty_pr), false)]) false;
+          (NTTyMap.of_list [((4, ty_pr), false); ((6, ty_pr), false)]) false;
         (* 7 <- 4 - this should be ignored *)
         ignore @@ dfg#add_vertex @@ mk_proof 4 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((7, ty_pr), false)]) false;
+          (NTTyMap.of_list [((7, ty_pr), false)]) false;
         (* 4 <- 3 <- 2 <- 1 <- 0 *)
         ignore @@ dfg#add_vertex @@ mk_proof 3 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((4, ty_pr), false)]) false;
+          (NTTyMap.of_list [((4, ty_pr), false)]) false;
         ignore @@ dfg#add_vertex @@ mk_proof 2 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((3, ty_pr), false)]) false;
+          (NTTyMap.of_list [((3, ty_pr), false)]) false;
         ignore @@ dfg#add_vertex @@ mk_proof 1 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((2, ty_pr), false)]) false;
+          (NTTyMap.of_list [((2, ty_pr), false)]) false;
         ignore @@ dfg#add_vertex @@ mk_proof 0 ty_pr
-          (NTTyMap.of_seq @@ List.to_seq [((1, ty_pr), false)]) false;
+          (NTTyMap.of_list [((1, ty_pr), false)]) false;
         (* 0 -> 1 -> 2 -> 3 -> [4 -> 5 -> ...] -> 5 -> 8, 2 -> 9 -> 10, 11
            Note that 4 -> 7 -> 5 branch should be ignored, as it should not be found as start of
            escape path, since it goes back to the cycle.
@@ -1248,116 +1266,219 @@ let type_test () : test =
 
 let te_test () : test =
   "targetEnvms" >::: [
+    (* basic case *)
     "intersect-1" >:: (fun _ ->
         assert_equal_tes
-          (TargetEnvs.singleton_empty_meta ty_np @@ empty_env 0) @@
+          (TargetEnvs.singleton_empty_meta ty_np [] empty_ctx) @@
         TargetEnvs.intersect
-          (TargetEnvs.singleton_empty_meta ty_np @@ empty_env 0)
-          (TargetEnvs.singleton_empty_meta ty_np @@ empty_env 0)
+          (TargetEnvs.singleton_empty_meta ty_np [] empty_ctx)
+          (TargetEnvs.singleton_empty_meta ty_np [] empty_ctx)
       );
 
+    (* pr variable duplication creates duplication flag *)
     "intersect-2" >:: (fun _ ->
         assert_equal_tes
-          (TargetEnvs.of_list [
-              (ty_np, [with_positive true @@ with_dup true @@
-                    mk_envm_empty_meta @@ singleton_env 1 (0, 0) @@ sty ty_pr])
-            ]) @@
+          (TargetEnvs.singleton_of_env ty_np
+             (with_dup true @@
+              singleton_env empty_used_nts empty_loc_types true (0, 0) @@ sty ty_pr)
+             empty_ctx) @@
         TargetEnvs.intersect
-          (TargetEnvs.of_list_empty_flags_empty_meta [
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_pr])
-            ])
-          (TargetEnvs.of_list_empty_flags_empty_meta [
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_pr])
-            ])
+          (TargetEnvs.singleton_empty_meta ty_np [(0, sty ty_pr)] empty_ctx)
+          (TargetEnvs.singleton_empty_meta ty_np [(0, sty ty_pr)] empty_ctx)
       );
 
+    (* np variable duplication does not create duplication flag *)
     "intersect-3" >:: (fun _ ->
         assert_equal_tes
-          (TargetEnvs.of_list_empty_flags_empty_meta [
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np])
-            ]) @@
+          (TargetEnvs.singleton_of_env ty_np
+             (singleton_env empty_used_nts empty_loc_types false (0, 0) @@ sty ty_np)
+             empty_ctx) @@
         TargetEnvs.intersect
-          (TargetEnvs.of_list_empty_flags_empty_meta [
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np])
-            ])
-          (TargetEnvs.of_list_empty_flags_empty_meta [
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np])
-            ])
+          (TargetEnvs.singleton_empty_meta ty_np [(0, sty ty_np)] empty_ctx)
+          (TargetEnvs.singleton_empty_meta ty_np [(0, sty ty_np)] empty_ctx)
       );
 
+    (* Idempotent merging with respect to positivity, merging of nonterminals, dropping ty_pr
+       target that did not appear in both parts of intersection. *)
     "intersect-4" >:: (fun _ ->
         assert_equal_tes
-          (TargetEnvs.of_list [
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm
-                         (NTTyMap.of_list [
-                             ((0, ty_pr), false);
-                             ((0, ty_np), false)
-                           ])
-                         empty_loc_types true])
-            ]) @@
+          (let used_nts =
+             NTTyMap.of_list [
+               ((0, ty_pr), false);
+               ((0, ty_np), false)
+             ] in
+           TargetEnvs.singleton_of_env ty_np
+             (singleton_env used_nts empty_loc_types true (0, 0) @@ sty ty_np) empty_ctx) @@
         TargetEnvs.intersect
+          (TargetEnvs.singleton_of_env ty_np
+             (singleton_env (nt_ty_used_once 0 ty_pr) empty_loc_types true
+                (0, 0) @@ sty ty_np) empty_ctx)
           (TargetEnvs.of_list [
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm
-                         (nt_ty_used_once 0 ty_pr) empty_loc_types true])
-            ])
-          (TargetEnvs.of_list [
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm
-                         (nt_ty_used_once 0 ty_np) empty_loc_types true;
-                       singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm
-                         (nt_ty_used_once 0 ty_np) empty_loc_types false]);
-              (ty_pr, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_envm
-                         empty_used_nts empty_loc_types false])
+              (ty_np, [
+                  (singleton_env (nt_ty_used_once 0 ty_np) empty_loc_types true
+                     (0, 0) @@ sty ty_np, empty_ctx);
+                  (singleton_env (nt_ty_used_once 0 ty_np) empty_loc_types false
+                     (0, 0) @@ sty ty_np, empty_ctx)]);
+              (ty_pr, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 0) @@ sty ty_np, empty_ctx)])
             ])
       );
 
+    (* Merging two same nonterminal typings, merging false positivity with both ones,
+       discarding different target. *)
     "intersect-5" >:: (fun _ ->
         assert_equal_tes
           (TargetEnvs.of_list [
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_fake_envm
-                      (NTTyMap.of_list [((0, ty_np), true)]) false;
-                    singleton_env 1 (0, 0) @@ sty ty_np |> mk_fake_envm
-                      (NTTyMap.of_list [((0, ty_np), true)]) true]);
-            ]) @@
+              (ty_np, [
+                  (singleton_env (NTTyMap.singleton (0, ty_np) true) empty_loc_types false
+                     (0, 0) @@ sty ty_np, empty_ctx);
+                  (singleton_env (NTTyMap.singleton (0, ty_np) true) empty_loc_types true
+                     (0, 0) @@ sty ty_np, empty_ctx)])]) @@
         TargetEnvs.intersect
+          (TargetEnvs.singleton_of_env ty_np
+             (singleton_env (nt_ty_used_once 0 ty_np) empty_loc_types false
+                (0, 0) @@ sty ty_np) empty_ctx)
           (TargetEnvs.of_list [
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_fake_envm
-                         (nt_ty_used_once 0 ty_np) false])
-            ])
-          (TargetEnvs.of_list [
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_fake_envm
-                         (nt_ty_used_once 0 ty_np) true]);
-              (ty_np, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_fake_envm
-                         (nt_ty_used_once 0 ty_np) false]);
-              (ty_pr, [singleton_env 1 (0, 0) @@ sty ty_np |> mk_fake_envm
-                         empty_used_nts false])
+              (ty_np, [
+                  (singleton_env (nt_ty_used_once 0 ty_np) empty_loc_types true
+                     (0, 0) @@ sty ty_np, empty_ctx);
+                  (singleton_env (nt_ty_used_once 0 ty_np) empty_loc_types false
+                     (0, 0) @@ sty ty_np, empty_ctx)]);
+              (ty_pr, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 0) @@ sty ty_np, empty_ctx)])
             ])
       );
 
+    (* Merging different variables with same context. *)
     "intersect-6" >:: (fun _ ->
         assert_equal_tes
-          (TargetEnvs.of_list_empty_flags_empty_meta [
-              (ty_np, [singleton_env 2 (0, 0) @@ ity_of_string "pr /\\ np";
-                    singleton_env 2 (0, 1) @@ ity_of_string "pr /\\ np";
-                    new env [|sty ty_np; sty ty_pr|];
-                    new env [|sty ty_pr; sty ty_np|]
-                   ]);
+          (TargetEnvs.of_list [
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 0) @@ ity_of_string "pr /\\ np", empty_ctx);
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 1) @@ ity_of_string "pr /\\ np", empty_ctx);
+                  (mk_env empty_used_nts empty_loc_types false @@ IntMap.of_list
+                     [(0, sty ty_np); (1, sty ty_pr)], empty_ctx);
+                  (mk_env empty_used_nts empty_loc_types false @@ IntMap.of_list
+                     [(0, sty ty_pr); (1, sty ty_np)], empty_ctx)
+                ])
             ]) @@
         TargetEnvs.intersect
-          (TargetEnvs.of_list_empty_flags_empty_meta [
-              (ty_np, [singleton_env 2 (0, 0) @@ sty ty_np]);
-              (ty_np, [singleton_env 2 (0, 1) @@ sty ty_np])
+          (TargetEnvs.of_list [
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 0) @@ sty ty_np, empty_ctx)]);
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 1) @@ sty ty_np, empty_ctx)])
             ])
-          (TargetEnvs.of_list_empty_flags_empty_meta [
-              (ty_np, [singleton_env 2 (0, 0) @@ sty ty_pr]);
-              (ty_np, [singleton_env 2 (0, 1) @@ sty ty_pr])
+          (TargetEnvs.of_list [
+              (ty_np, [
+                   (singleton_env empty_used_nts empty_loc_types false
+                     (0, 0) @@ sty ty_pr, empty_ctx)]);
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 1) @@ sty ty_pr, empty_ctx)])
+            ])
+      );
+    
+    (* Merging different variables with different contexts. *)
+    "intersect-7" >:: (fun _ ->
+        let ctx1 =
+          mk_ctx (IntMap.of_list [(0, (0, 0)); (1, (1, 0))])
+            (BixMap.of_list [(0, [[sty ty_pr]]); (1, [[sty ty_np]; [sty ty_pr]])])
+            None [||] None
+        in
+        let ctx2 =
+          mk_ctx (IntMap.of_list [(0, (0, 0)); (1, (1, 0))])
+            (BixMap.of_list [(0, [[sty ty_np]; [sty ty_pr]]); (1, [[sty ty_np]])])
+            None [||] None
+        in
+        let ctx12 =
+          mk_ctx (IntMap.of_list [(0, (0, 0)); (1, (1, 0))])
+            (BixMap.of_list [(0, [[sty ty_pr]]); (1, [[sty ty_np]])])
+            None [||] None
+        in
+        assert_equal_tes
+          (TargetEnvs.of_list [
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 0) @@ ity_of_string "pr /\\ np", ctx1);
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 1) @@ ity_of_string "pr /\\ np", ctx12);
+                  (mk_env empty_used_nts empty_loc_types false @@ IntMap.of_list
+                     [(0, sty ty_np); (1, sty ty_pr)], ctx12);
+                  (mk_env empty_used_nts empty_loc_types false @@ IntMap.of_list
+                     [(0, sty ty_pr); (1, sty ty_np)], ctx1)
+                ])
+            ]) @@
+        TargetEnvs.intersect
+          (TargetEnvs.of_list [
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 0) @@ sty ty_np, ctx1)]);
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 1) @@ sty ty_np, ctx1)])
+            ])
+          (TargetEnvs.of_list [
+              (ty_np, [
+                   (singleton_env empty_used_nts empty_loc_types false
+                     (0, 0) @@ sty ty_pr, ctx1)]);
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 1) @@ sty ty_pr, ctx2)])
+            ])
+      );
+
+    (* Merging different variables and context of out which some are incompatible. *)
+    "intersect-8" >:: (fun _ ->
+        let ity_np_pr = TyList.of_list [ty_np; ty_pr] in
+        let ctx1 =
+          mk_ctx (IntMap.of_list [(0, (0, 0)); (1, (0, 1))])
+            (BixMap.singleton 0 [[ity_np_pr; sty ty_np]])
+            None [||] None
+        in
+        let ctx2 =
+          mk_ctx (IntMap.of_list [(0, (0, 0)); (1, (0, 1))])
+            (BixMap.singleton 0 [[ity_np_pr; sty ty_pr]])
+            None [||] None
+        in
+        assert_equal_tes
+          (TargetEnvs.of_list [
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 0) @@ ity_of_string "pr /\\ np", ctx1);
+                  (mk_env empty_used_nts empty_loc_types false @@ IntMap.of_list
+                     [(0, sty ty_pr); (1, sty ty_np)], ctx1)
+                ])
+            ]) @@
+        TargetEnvs.intersect
+          (TargetEnvs.of_list [
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 0) @@ sty ty_np, ctx1)]);
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 1) @@ sty ty_np, ctx1)])
+            ])
+          (TargetEnvs.of_list [
+              (ty_np, [
+                   (singleton_env empty_used_nts empty_loc_types false
+                     (0, 0) @@ sty ty_pr, ctx1)]);
+              (ty_np, [
+                  (singleton_env empty_used_nts empty_loc_types false
+                     (0, 1) @@ sty ty_pr, ctx2)])
             ])
       );
 
     "size-1" >:: (fun _ ->
         assert_equal ~printer:string_of_int 1 @@
         TargetEnvs.size @@
-        TargetEnvs.singleton_empty_meta ty_np @@
-        singleton_env 3 (0, 2) @@ sty ty_np
+        TargetEnvs.singleton_empty_meta ty_np [] empty_ctx
       );
   ]
 
@@ -1368,32 +1489,32 @@ let grammar_e () = mk_grammar
     [|
       (0, TE E) (* N0 -> e *)
     |]
-(*
+
 let typing_e_test () =
   let hg, typing = mk_typing @@ grammar_e () in
   [
     (* check if e : np type checks *)
     "type_check-1" >:: (fun _ ->
         assert_equal_tes
-          (TargetEnvs.singleton_empty_meta ty_np @@ empty_env @@ hg#nt_arity 0)
-          (type_check_nt_wo_env typing hg 0 ty_np false false l)
+          (TargetEnvs.singleton_empty_meta ty_np [] empty_ctx)
+          (type_check_nt_wo_env typing hg 0 ty_np false false)
       );
 
     (* checking basic functionality of forcing pr vars *)
     "type_check-2" >:: (fun _ ->
         assert_equal_tes
           TargetEnvs.empty
-          (type_check_nt_wo_env typing hg 0 ty_np false true l)
+          (type_check_nt_wo_env typing hg 0 ty_np false true)
       );
 
     (* checking that forcing no pr vars does not break anything when there are only terminals *)
     "type_check-3" >:: (fun _ ->
         assert_equal_tes
-          (TargetEnvs.singleton_empty_meta ty_np @@ empty_env @@ hg#nt_arity 0)
-          (type_check_nt_wo_env typing hg 0 ty_np true false l)
+          (TargetEnvs.singleton_empty_meta ty_np [] empty_ctx)
+          (type_check_nt_wo_env typing hg 0 ty_np true false)
       );
   ]
-*)
+
 
 
 (** Grammar that tests usage of a variable. *)
@@ -1472,7 +1593,7 @@ let typing_xyyz_test () =
     "type_check-6" >:: (fun _ ->
         assert_equal_tes
           (TargetEnvs.singleton_of_envm ty_pr @@
-           mk_fake_envm (NTTyMap.of_seq @@ List.to_seq [
+           mk_fake_envm (NTTyMap.of_list [
                ((2, ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr"), false);
                ((3, ty_of_string "(np -> np) -> np -> np"), false)
              ]) false @@
@@ -1959,9 +2080,9 @@ let typing_misc_test () =
 
 let typing_test () : test =
   init_flags ();
-  "typing" >::: []
+  "typing" >:::
+  typing_e_test ()
   (* TODO
-  typing_e_test () @
   typing_ax_test () @
   typing_xyyz_test () @
   typing_dup_test () @

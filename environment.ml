@@ -45,10 +45,10 @@ type env = {
 
 (* --- construction --- *)
 
-(** Make empty environment with given metadata, but with no duplications. *)
-let mk_env (used_nts : used_nts) (loc_types : loc_types) (positive : bool) : env =
+let mk_env (used_nts : used_nts) (loc_types : loc_types) (positive : bool)
+    (vars : ity IntMap.t) : env =
   {
-    vars = IntMap.empty;
+    vars = vars;
     dup = false;
     pr_arg = false;
     used_nts = used_nts;
@@ -56,38 +56,18 @@ let mk_env (used_nts : used_nts) (loc_types : loc_types) (positive : bool) : env
     positive = positive
   }
 
+(** Make empty environment with given metadata, but with no duplications. *)
+let mk_empty_env (used_nts : used_nts) (loc_types : loc_types) (positive : bool) : env =
+  mk_env used_nts loc_types positive IntMap.empty
+    
 (** Creates an environment with empty metadata. Careful with making sure that location types are
     eventually added. *)
-let mk_env_empty_meta vars =
-  {
-    vars = vars;
-    dup = false;
-    pr_arg = false;
-    used_nts = NTTyMap.empty;
-    loc_types = HlocMap.empty;
-    positive = false
-  }
-
-(*
-let empty_env (var_count : int) : env =
-  new env @@ Array.make var_count TyList.empty
-*)
+let mk_env_empty_meta (vars : ity IntMap.t) =
+  mk_env empty_used_nts empty_loc_types false vars
 
 let singleton_env (used_nts : used_nts) (loc_types : loc_types) (positive : bool)
     (_, i : var_id) (ity : ity) : env =
-  let env = mk_env used_nts loc_types positive in
-  { env with vars = IntMap.singleton i ity }
-
-(*
-let hty_binding2env (var_count : int) (binding : hty binding) : env =
-  let itys = Array.make var_count TyList.empty in
-  List.iter (fun (i, _, hty) ->
-      List.iteri (fun ix ity ->
-          itys.(i + ix) <- ity
-        ) hty
-    ) binding;
-  new env itys
-*)
+  mk_env used_nts loc_types positive @@ IntMap.singleton i ity
 
 (* --- access --- *)
 

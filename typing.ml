@@ -187,7 +187,7 @@ class typing (hg : hgrammar) = object(self)
       (fixed_nt_ty : (nt_id * ty) option)
       (binding : hterms_id binding) : ctx =
     let var_bix = var_bix binding in
-    let bix_data = IntMap.of_seq @@ List.to_seq @@ index_list binding in
+    let bix_data = IntMap.of_list @@ index_list binding in
     let apply_mask =
       match mask with
       | None -> fun _ hty -> hty
@@ -329,7 +329,7 @@ class typing (hg : hgrammar) = object(self)
           in
           TargetEnvs.of_list @@
           TyList.map (fun ty -> (ty, [
-              (mk_env empty_used_nts (loc_with_single_type loc ty) (is_productive ty),
+              (mk_empty_env empty_used_nts (loc_with_single_type loc ty) (is_productive ty),
                ctx)
             ])) @@
           filtered
@@ -346,7 +346,7 @@ class typing (hg : hgrammar) = object(self)
           in
           TargetEnvs.of_list @@
           List.map (fun (ty, ctx) -> (ty, [
-              (mk_env (nt_ty_used_once nt ty) (loc_with_single_type loc ty) false,
+              (mk_empty_env (nt_ty_used_once nt ty) (loc_with_single_type loc ty) false,
                ctx)
             ])) @@
           compatible_ctx
@@ -432,7 +432,7 @@ class typing (hg : hgrammar) = object(self)
        target type. *)
     let h_data =
       target |>
-      option_map all_h_te @@
+      option_map_or_default all_h_te @@
       self#filter_compatible_heads all_h_te h_arity
     in
     print_verbose !Flags.verbose_proofs @@ lazy (
@@ -466,12 +466,12 @@ class typing (hg : hgrammar) = object(self)
          in
          (* Construction of a TE with starting variables for each target. *)
          let pr_start_te =
-           pr_target |> option_map TargetEnvs.empty (fun target ->
+           pr_target |> option_map_or_default TargetEnvs.empty (fun target ->
                TargetEnvs.of_list [(target, [(env, ctx)])]
              )
          in
          let np_start_te =
-           np_target |> option_map TargetEnvs.empty (fun target ->
+           np_target |> option_map_or_default TargetEnvs.empty (fun target ->
                TargetEnvs.of_list [(target, [(env, ctx)])]
              )
          in

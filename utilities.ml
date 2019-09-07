@@ -24,11 +24,11 @@ let either_bimap (f : 'a -> 'c) (g : 'b -> 'd) (e : ('a, 'b) either) : ('c, 'd) 
 
 (* --- option --- *)
 
-let option_maps (f : 'a -> 'b) : 'a option -> 'b option = function
+let option_map (f : 'a -> 'b) : 'a option -> 'b option = function
   | Some x -> Some (f x)
   | None -> None
 
-let option_map (default : 'b) (f : 'a -> 'b) : 'a option -> 'b = function
+let option_map_or_default (default : 'b) (f : 'a -> 'b) : 'a option -> 'b = function
   | Some x -> f x
   | None -> default
 
@@ -354,10 +354,15 @@ let print_verbose (flag : bool) (str : string Lazy.t) : unit =
 
 (* --- generic collections --- *)
 
-module IntMap = Map.Make (struct
-    type t = int
-    let compare = compare
-  end)
+module IntMap = struct
+  include Map.Make (struct
+      type t = int
+      let compare = compare
+    end)
+
+  let of_list (l : (int * 'a) list) : 'a t =
+    of_seq @@ List.to_seq l
+end
 
 module IntSet = Set.Make (struct
     type t = int

@@ -56,11 +56,11 @@ let mk_ctx (var_bix : (bix * int) IntMap.t) (bix_htys : hty list BixMap.t)
   let ctx = {
     var_bix = var_bix;
     bix_htys = BixMap.map HtySet.of_list bix_htys;
-    forced_hterms_hty = option_maps (fun (bixs, hty) ->
+    forced_hterms_hty = option_map (fun (bixs, hty) ->
         (BixSet.of_list bixs, hty)
       ) forced_hterms_hty;
     nt_ity = nt_ity;
-    forced_nt_ty = option_maps (fun (hlocs, ty) ->
+    forced_nt_ty = option_map (fun (hlocs, ty) ->
         (HlocSet.of_list hlocs, ty)
       ) forced_nt_ty
   } in
@@ -253,8 +253,11 @@ let ctx_compare (ctx1 : ctx) (ctx2 : ctx) : int =
   compare_pair
     (BixMap.compare HtySet.compare)
     (option_compare HlocSet.compare)
-    (ctx1.bix_htys, option_maps fst ctx1.forced_nt_ty)
-    (ctx2.bix_htys, option_maps fst ctx2.forced_nt_ty)
+    (ctx1.bix_htys, option_map fst ctx1.forced_nt_ty)
+    (ctx2.bix_htys, option_map fst ctx2.forced_nt_ty)
 
-let ctx_equal  (ctx1 : ctx) (ctx2 : ctx) : bool =
+let ctx_equal (ctx1 : ctx) (ctx2 : ctx) : bool =
   ctx_compare ctx1 ctx2 = 0
+
+(** Empty context for testing purposes. *)
+let empty_ctx : ctx = mk_ctx IntMap.empty BixMap.empty None [||] None

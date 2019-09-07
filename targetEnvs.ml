@@ -25,11 +25,11 @@ module ContextEnvs = struct
 
   (** Returns the same envs with flags set to default values. *)
   let with_empty_temp_flags_and_locs (envs : t) : t =
-    map (fun (env, context) ->
+    map (fun (env, ctx) ->
         let e = {
           env with dup = false; pr_arg = false; loc_types = empty_loc_types
         } in
-      (e, context)) envs
+      (e, ctx)) envs
 
   let to_string (envs : t) : string =
     concat_map " \\/ " string_of_env @@ List.map fst @@ elements envs
@@ -44,15 +44,13 @@ module TargetEnvs = struct
   (** Empty TE. *)
   let empty : t = TyMap.empty
 
-  (*
   (** Singleton TE with mapping from target to env. *)
-  let singleton_of_env (target : ty) (env : env) =
-    M.singleton target @@ Envs.singleton env
+  let singleton_of_env (target : ty) (env : env) (ctx : ctx) : t =
+    TyMap.singleton target @@ ContextEnvs.singleton (env, ctx)
 
   (** Singleton TE with mapping from target to env with no duplication. For testing purposes. *)
-  let singleton_empty_meta (target : ty) (env : env) =
-    singleton_of_env target @@ mk_env_empty_meta env
-  *)
+  let singleton_empty_meta (target : ty) (vars : (int * ity) list) (ctx : ctx) : t =
+    singleton_of_env target (mk_env_empty_meta @@ IntMap.of_list vars) ctx
 
   let union : t -> t -> t =
     TyMap.union (fun target envs1 envs2 ->
@@ -71,14 +69,14 @@ module TargetEnvs = struct
         (target, ContextEnvs.of_list envs)) @@
     l
 
-  (*
   (** Conversion of list of pairs target-envs to respective TE assuming default flags and
-      no location info. *)
-  let of_list_empty_flags_empty_meta (l : (ty * env list) list) : t =
-    of_list @@ (l |> List.map (fun (target, envs) ->
-        (target, List.map mk_env_empty_meta envs)))
-  *)
-
+      no location info. For testing purposes. *)
+  let of_list_empty_flags_empty_meta (l : (ty * ((int * ity) list * ctx) list) list) : t =
+    of_list @@ (l |> List.map (fun (target, cvars) ->
+        (target, cvars |> List.map (fun (vars, ctx) ->
+             (mk_env_empty_meta @@ IntMap.of_list vars, ctx)
+           ))))
+      
   let to_list (te : t) : (ty * (env * ctx) list) list =
     List.map (fun (target, envs) -> (target, ContextEnvs.elements envs)) @@ TyMap.bindings te
 
@@ -104,11 +102,9 @@ module TargetEnvs = struct
   let remove_empty_targets : t -> t =
     TyMap.filter (fun target envs -> not @@ ContextEnvs.is_empty envs)
 
-  (*
   (** Returns TE with flags of environments set to default values and removes duplicates. *)
   let with_empty_temp_flags_and_locs : t -> t =
-    M.map Envs.with_empty_temp_flags_and_locs
-  *)
+    TyMap.map ContextEnvs.with_empty_temp_flags_and_locs
 
   (** Changes target of the sole element of TE. Requires TE to have exactly one target.
       Also removes duplication flag and sets productive actual argument flag to whether previous
@@ -167,7 +163,8 @@ module TargetEnvs = struct
       Environments are essentially OR-separated sets of AND-separated sets of typings of
       variables with contexts. Flattening means moving outer intersection (AND) inside.
       AND of two environments is just summing all restrictions, i.e., summing intersection
-      types. *)
+      types. Intersection of contexts is intersection of product with additional border cases
+      with hterms/nonterminal typing restrictions. *)
   let intersect (te1 : t) (te2 : t) : t =
     (* separately for each target *)
     remove_empty_targets @@

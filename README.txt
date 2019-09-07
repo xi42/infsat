@@ -87,3 +87,4 @@ TODO
     due to constant changes in typings of nonterminals and hterms flowing into variables
   - early removing contexts that do not satisfy requirements when it is known a branch with
     needed loc won't be taken
+  - reusing output context from previous argument instead of intersecting it in typing app
