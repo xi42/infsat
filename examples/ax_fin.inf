@@ -1,0 +1,4 @@
+Grammar.
+S -> A e.
+A x -> a x.
+End.

@@ -124,7 +124,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       end
     else
       print_verbose !Flags.verbose_proofs @@ lazy (
-        "The duplicaton factor graph was not modified. Discarded proof " ^
+        "The duplicaton factor graph was not modified. The proof was " ^
         "(+ - positive duplication factor/multiple uses):\n" ^
         string_of_proof hg None proof
       )

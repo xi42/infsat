@@ -26,6 +26,9 @@ class typing (hg : hgrammar) = object(self)
 
   method nt_ity (nt : nt_id) : ity = nt_ity.(nt)
 
+  (** For testing purposes *)
+  method get_nt_ity : ity array = nt_ity
+
   (* --- saving new typings --- *)
 
   method add_nt_ity (nt : nt_id) (ity : ity) : bool =
@@ -531,7 +534,7 @@ class typing (hg : hgrammar) = object(self)
         let arg_itys, codomain = split_ty ty len in
         List.fold_left (fun acc (env, ctx) ->
             (List.combine terms @@ List.combine arg_itys arg_locs, codomain, env, ctx) :: acc
-          ) [] envs
+          ) acc envs
       ) []
 
   (** Computation of TE of an application where target type and types of each argument are

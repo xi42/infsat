@@ -18,7 +18,7 @@ open Utilities
 (* --- helper functions --- *)
 
 let init_flags () =
-  Flags.verbose_all := false;
+  Flags.verbose_all := true;
   Flags.type_format := "short";
   Flags.force_unsafe := false;
   Flags.propagate_flags ()
@@ -75,15 +75,23 @@ let mk_typing g =
   let hg = mk_hgrammar g in
   (hg, new Typing.typing hg)
 
-let type_check_nt_wo_env (typing : typing) (hg : hgrammar) (nt : nt_id) (target : ty) =
-  typing#type_check (hg#nt_body nt) (Some target) empty_ctx
+let type_check_nt (typing : typing) (hg : hgrammar) (nt : nt_id) (target: ty) =
+  typing#type_check (hg#nt_body nt) (Some target)
+
+let type_check_nt_wo_ctx (typing : typing) (hg : hgrammar) (nt : nt_id) (target : ty) =
+  type_check_nt typing hg nt target empty_ctx
 
 let type_check_nt_wo_env_wo_target (typing : typing) (hg : hgrammar) (nt : nt_id) =
   typing#type_check (hg#nt_body nt) None empty_ctx
-(*
-let senv hg nt i ity_str =
-  singleton_env (hg#nt_arity nt) (nt, i) @@ ity_of_string ity_str
-*)
+
+let senv positive nt i ity_str =
+  singleton_env empty_used_nts empty_loc_types positive (nt, i) @@ ity_of_string ity_str
+
+let sctx typing ity_strs =
+  let hty = List.map ity_of_string ity_strs in
+  let var_bix = IntMap.of_list @@ List.map (fun (ix, _) -> (ix, (0, ix))) @@ index_list hty in
+  let bix_htys = IntMap.singleton 0 [hty] in
+  mk_ctx var_bix bix_htys None typing#get_nt_ity None
 
 let list_sort_eq (l1 : 'a list list) (l2 : 'a list list) : bool =
   (List.sort (compare_lists compare) l1) =
@@ -1496,22 +1504,22 @@ let typing_e_test () =
     (* check if e : np type checks *)
     "type_check-1" >:: (fun _ ->
         assert_equal_tes
-          (TargetEnvs.singleton_empty_meta ty_np [] empty_ctx)
-          (type_check_nt_wo_env typing hg 0 ty_np false false)
+          (TargetEnvs.singleton_empty_meta ty_np [] empty_ctx) @@
+        type_check_nt_wo_ctx typing hg 0 ty_np false false
       );
 
     (* checking basic functionality of forcing pr vars *)
     "type_check-2" >:: (fun _ ->
         assert_equal_tes
-          TargetEnvs.empty
-          (type_check_nt_wo_env typing hg 0 ty_np false true)
+          TargetEnvs.empty @@
+        type_check_nt_wo_ctx typing hg 0 ty_np false true
       );
 
     (* checking that forcing no pr vars does not break anything when there are only terminals *)
     "type_check-3" >:: (fun _ ->
         assert_equal_tes
-          (TargetEnvs.singleton_empty_meta ty_np [] empty_ctx)
-          (type_check_nt_wo_env typing hg 0 ty_np true false)
+          (TargetEnvs.singleton_empty_meta ty_np [] empty_ctx) @@
+        type_check_nt_wo_ctx typing hg 0 ty_np true false
       );
   ]
 
@@ -1523,31 +1531,31 @@ let grammar_ax () = mk_grammar
       (0, App (NT 1, TE E)); (* N0 -> N1 e *)
       (1, App (TE A, Var (1, 0))) (* N1 x -> a x *)
     |]
-(*
+
 let typing_ax_test () =
   let hg, typing = mk_typing @@ grammar_ax () in
+  let ctx = sctx typing ["pr /\\ np"] in
   [
     (* check that a x : pr accepts both productivities of x *)
     "type_check-4" >:: (fun _ ->
         assert_equal_tes
-          (TargetEnvs.of_list
-           [
-             (ty_pr, [
-                 mk_fake_envm empty_used_nts true @@ senv hg 1 0 "pr";
-                 mk_fake_envm empty_used_nts true @@ senv hg 1 0 "np"
-              ])
-           ])
-          (type_check_nt_wo_env typing hg 1 ty_pr false false l)
+          (TargetEnvs.of_list [
+              (ty_pr, [
+                  (senv true 0 0 "pr", sctx typing ["np /\\ pr"]);
+                  (senv true 0 0 "np", sctx typing ["np /\\ pr"])
+                ])
+            ]) @@
+        type_check_nt typing hg 1 ty_pr ctx false false
       );
 
     (* check that a x : np does not type check *)
     "type_check-5" >:: (fun _ ->
         assert_equal_tes
-          TargetEnvs.empty
-          (type_check_nt_wo_env typing hg 1 ty_np false false l)
+          TargetEnvs.empty @@
+        type_check_nt typing hg 1 ty_np ctx false false
       );
   ]
-*)
+
 
 
 (** Grammar that tests intersection - x and y are inferred from one argument in N1 rule, and y and
@@ -2081,9 +2089,10 @@ let typing_misc_test () =
 let typing_test () : test =
   init_flags ();
   "typing" >:::
-  typing_e_test ()
+  typing_e_test () @
+  typing_ax_test ()
   (* TODO
-  typing_ax_test () @
+     @
   typing_xyyz_test () @
   typing_dup_test () @
   typing_double_test () @

@@ -261,3 +261,40 @@ let ctx_equal (ctx1 : ctx) (ctx2 : ctx) : bool =
 
 (** Empty context for testing purposes. *)
 let empty_ctx : ctx = mk_ctx IntMap.empty BixMap.empty None [||] None
+
+let string_of_ctx (ctx : ctx) : string =
+  let bix_vars : IntSet.t BixMap.t =
+    IntMap.fold (fun v (bix, ix) acc ->
+        match BixMap.find_opt bix acc with
+        | Some vars ->
+          BixMap.add bix (IntSet.add v vars) acc
+        | None ->
+          BixMap.add bix (IntSet.singleton v) acc
+      ) ctx.var_bix BixMap.empty
+  in
+  let bix_htys_strs =
+    BixMap.fold (fun bix htys acc ->
+        let vars =
+          concat_map ", " string_of_int @@ IntSet.elements @@ BixMap.find bix bix_vars
+        in
+        let htys =
+          concat_map "\\/" string_of_hty @@ HtySet.elements htys
+        in
+        ("(" ^ vars ^ " : " ^ htys ^ ")") :: acc
+      ) ctx.bix_htys []
+  in
+  let forced_hterms_hty_str =
+    match ctx.forced_hterms_hty with
+    | Some (fbixs, fhty) ->
+      " FHTY (" ^ concat_map ", " string_of_int (BixSet.elements fbixs) ^ " : " ^
+      string_of_hty fhty ^ ")"
+    | None -> ""
+  in
+  let forced_nt_ty_str =
+    match ctx.forced_nt_ty with
+    | Some (flocs, fty) ->
+      " FNT (" ^ concat_map ", " string_of_int (HlocSet.elements flocs) ^ " : " ^
+      string_of_ty fty ^ ")"
+    | None -> ""
+  in
+  String.concat ", " bix_htys_strs ^ forced_hterms_hty_str ^ forced_nt_ty_str

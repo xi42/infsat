@@ -32,7 +32,10 @@ module ContextEnvs = struct
       (e, ctx)) envs
 
   let to_string (envs : t) : string =
-    concat_map " \\/ " string_of_env @@ List.map fst @@ elements envs
+    "(" ^ (
+      concat_map " \\/ " (fun (env, ctx) -> string_of_env env ^ " CTX " ^ string_of_ctx ctx) @@
+      elements envs) ^
+    ")"
 end
 
 type cenvs = ContextEnvs.t
