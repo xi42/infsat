@@ -88,10 +88,6 @@ class typing (hg : hgrammar) = object(self)
             ) @@
           BixMap.to_seq bix_data
         in
-        print_string "!!!! fbix_htys";
-        print_string @@ concat_map ", " (fun (a, b) -> string_of_int a ^ " " ^ string_of_hty b) (BixMap.bindings fbix_htys);
-        print_string "!!!! bix_htys";
-        print_string @@ concat_map ", " (fun (a, b) -> string_of_int a ^ " " ^ concat_map "|" string_of_hty (HtySet.elements b)) (BixMap.bindings bix_htys);
         assert (BixMap.for_all (fun bix hty ->
             HtySet.mem hty @@ BixMap.find bix bix_htys
           ) fbix_htys);
@@ -112,7 +108,7 @@ class typing (hg : hgrammar) = object(self)
         Some (locs, ty)
       | None -> None
     in
-    mk_ctx var_bix bix_htys forced_hterms_hty nt_ity forced_nt_ty
+    mk_ctx var_bix bix_htys forced_hterms_hty forced_nt_ty
 
   (* --- typing --- *)
   
@@ -216,7 +212,7 @@ class typing (hg : hgrammar) = object(self)
             | Some target ->
               ctx_enforce_nt ctx loc target
             | None ->
-              ctx_split_nt ctx nt loc
+              ctx_split_nt ctx nt_ity nt loc
           in
           TargetEnvs.of_list @@
           List.map (fun (ty, ctx) -> (ty, [

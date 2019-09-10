@@ -89,11 +89,11 @@ let sctx typing ity_strs =
   let hty = List.map ity_of_string ity_strs in
   let var_bix = IntMap.of_list @@ List.map (fun (ix, _) -> (ix, (0, ix))) @@ index_list hty in
   let bix_htys = IntMap.singleton 0 [hty] in
-  mk_ctx var_bix (IntMap.map HtySet.of_list bix_htys) None typing#get_nt_ity None
+  mk_ctx var_bix (IntMap.map HtySet.of_list bix_htys) None None
 
-let lctx var_bix bix_htys forced_hterms_hty nt_ity forced_nt_ty : ctx =
+let lctx var_bix bix_htys forced_hterms_hty forced_nt_ty : ctx =
   mk_ctx (IntMap.of_list var_bix) (IntMap.map HtySet.of_list @@ IntMap.of_list bix_htys)
-    (option_map BixMap.of_list forced_hterms_hty) nt_ity forced_nt_ty
+    (option_map BixMap.of_list forced_hterms_hty) forced_nt_ty
 
 let list_sort_eq (l1 : 'a list list) (l2 : 'a list list) : bool =
   (List.sort (compare_lists compare) l1) =
@@ -293,35 +293,35 @@ let penv_test () : test =
   "context" >::: [
     "req-sat-0" >:: (fun _ ->
         let bix_htys = [(0, [[ity_top]]); (1, [[ity_top]])] in
-        let ctx = lctx [] bix_htys None [||] None in
+        let ctx = lctx [] bix_htys None None in
         assert_equal true @@ ctx_requirements_satisfied ctx
       );
 
     (* some herms can have empty types as long as they are unused *)
     "req-sat-1" >:: (fun _ ->
         let bix_htys = [(0, []); (1, [[ity_top]])] in
-        let ctx = lctx [] bix_htys None [||] None in
+        let ctx = lctx [] bix_htys None None in
         assert_equal true @@ ctx_requirements_satisfied ctx
       );
 
     (* nt requirement not satisfied and impossible to satisfy *)
     "req-sat-2" >:: (fun _ ->
         let bix_htys = [(0, [[ity_top]]); (1, [[ity_top]])] in
-        let ctx = lctx [] bix_htys None [||] (Some ([], ty_pr)) in
+        let ctx = lctx [] bix_htys None (Some ([], ty_pr)) in
         assert_equal false @@ ctx_requirements_satisfied ctx
       );
 
     (* nt requirement not satisfied *)
     "req-sat-3" >:: (fun _ ->
         let bix_htys = [(0, [[ity_top]]); (1, [[ity_top]])] in
-        let ctx = lctx [] bix_htys None [||] (Some ([1], ty_pr)) in
+        let ctx = lctx [] bix_htys None (Some ([1], ty_pr)) in
         assert_equal false @@ ctx_requirements_satisfied ctx
       );
 
     (* hterms requirement not satisfied *)
     "req-sat-4" >:: (fun _ ->
         let bix_htys = [(0, [[ity_top]]); (1, [[ity_top]])] in
-        let ctx = lctx [] bix_htys (Some [(0, [ity_top]); (1, [ity_top])]) [||] None in
+        let ctx = lctx [] bix_htys (Some [(0, [ity_top]); (1, [ity_top])]) None in
         assert_equal false @@ ctx_requirements_satisfied ctx
       );
 
@@ -331,7 +331,7 @@ let penv_test () : test =
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx [] bix_htys None [||] None in
+        let ctx = lctx [] bix_htys None None in
         assert_equal ~printer:string_of_int 18 @@ ctx_var_combinations ctx
       );
 
@@ -341,7 +341,7 @@ let penv_test () : test =
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx [] bix_htys (Some [(0, [ity_top])]) [||] None in
+        let ctx = lctx [] bix_htys (Some [(0, [ity_top])]) None in
         assert_equal ~printer:string_of_int 6 @@ ctx_var_combinations ctx
       );
 
@@ -351,7 +351,7 @@ let penv_test () : test =
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx [] bix_htys (Some [(0, [ity_top]); (2, [ity_top])]) [||] None in
+        let ctx = lctx [] bix_htys (Some [(0, [ity_top]); (2, [ity_top])]) None in
         assert_equal ~printer:string_of_int 10 @@ ctx_var_combinations ctx
       );
 
@@ -361,7 +361,7 @@ let penv_test () : test =
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx [] bix_htys (Some []) [||] None in
+        let ctx = lctx [] bix_htys (Some []) None in
         assert_equal ~printer:string_of_int 0 @@ ctx_var_combinations ctx
       );
 
@@ -371,7 +371,7 @@ let penv_test () : test =
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [])
           ] in
-        let ctx = lctx [] bix_htys None [||] None in
+        let ctx = lctx [] bix_htys None None in
         assert_equal ~printer:string_of_int 0 @@ ctx_var_combinations ctx
       );
 
@@ -386,7 +386,7 @@ let penv_test () : test =
                 (0, [ity_of_string "pr"]);
                 (1, [ity_of_string "pr"]);
                 (2, [ity_of_string "pr"])
-              ]) [||] None in
+              ]) None in
         assert_equal ~printer:string_of_int 14 @@ ctx_var_combinations ctx
       );
 
@@ -395,7 +395,7 @@ let penv_test () : test =
             (0, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx [] bix_htys (Some [(0, [ity_top]); (1, [ity_top])]) [||] None in
+        let ctx = lctx [] bix_htys (Some [(0, [ity_top]); (1, [ity_top])]) None in
         assert_equal ~printer:string_of_int 5 @@ ctx_var_combinations ctx
       );
 
@@ -404,7 +404,7 @@ let penv_test () : test =
         let bix_htys = [
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx var_bix bix_htys None [||] None in
+        let ctx = lctx var_bix bix_htys None None in
         assert_equal ~printer:(string_of_list string_of_int) [1; 1] @@
         List.sort compare @@
         List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
@@ -420,7 +420,7 @@ let penv_test () : test =
         let ctx = lctx var_bix bix_htys (Some [
             (0, [ity_of_string "pr"]);
             (1, [ity_of_string "pr"])
-          ]) [||] None in
+          ]) None in
         assert_equal ~printer:(string_of_list string_of_int) [1; 2] @@
         List.sort compare @@
         List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
@@ -432,7 +432,7 @@ let penv_test () : test =
         let bix_htys = [
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx var_bix bix_htys None [||] None in
+        let ctx = lctx var_bix bix_htys None None in
         assert_equal ~printer:(string_of_list string_of_int) [1] @@
         List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
         ctx_enforce_var ctx (0, 0) ty_pr
@@ -447,7 +447,7 @@ let penv_test () : test =
         let ctx = lctx var_bix bix_htys (Some [
             (0, [ity_of_string "pr"]);
             (1, [ity_of_string "pr"])
-          ]) [||] None in
+          ]) None in
         assert_equal ~printer:(string_of_list string_of_int) [1] @@
         List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
         ctx_enforce_var ctx (0, 0) ty_np
@@ -459,7 +459,7 @@ let penv_test () : test =
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx var_bix bix_htys (Some [(0, [ity_of_string "np"])]) [||] None in
+        let ctx = lctx var_bix bix_htys (Some [(0, [ity_of_string "np"])]) None in
         assert_equal ~printer:(string_of_list string_of_int) [2] @@
         List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
         ctx_enforce_var ctx (0, 0) ty_np
@@ -474,7 +474,7 @@ let penv_test () : test =
         let ctx = lctx var_bix bix_htys (Some [
             (0, [ity_of_string "T -> pr"]);
             (1, [ity_of_string "T -> pr"])
-          ]) [||] None in
+          ]) None in
         assert_equal ~printer:(string_of_list string_of_int) [] @@
         List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
         ctx_enforce_var ctx (0, 0) @@ ty_of_string "pr -> pr"
@@ -482,8 +482,8 @@ let penv_test () : test =
 
     "split-nt-0" >:: (fun _ ->
         let nt_ity = [|ity_of_string "np /\\ pr"|] in
-        let ctx = lctx [] [] None nt_ity None in
-        let res = ctx_split_nt ctx 0 0 in
+        let ctx = lctx [] [] None None in
+        let res = ctx_split_nt ctx nt_ity 0 0 in
         assert_equal ~printer:string_of_ity (ity_of_string "np /\\ pr") @@
         TyList.of_list @@ List.map fst res;
         assert_equal 0 @@ ctx_compare (snd @@ List.nth res 0) (snd @@ List.nth res 0)
@@ -491,8 +491,8 @@ let penv_test () : test =
 
     "split-nt-1" >:: (fun _ ->
         let nt_ity = [|ity_of_string "np /\\ pr"|] in
-        let ctx = lctx [] [] None nt_ity @@ Some ([0; 1; 2], ty_np) in
-        let res = ctx_split_nt ctx 0 0 in
+        let ctx = lctx [] [] None @@ Some ([0; 1; 2], ty_np) in
+        let res = ctx_split_nt ctx nt_ity 0 0 in
         assert_equal ~printer:string_of_ity (ity_of_string "np /\\ pr") @@
         TyList.of_list @@ List.map fst res;
         let forced_locs = List.map (fun (_, ctx) -> option_map fst ctx.forced_nt_ty) res in
@@ -504,8 +504,8 @@ let penv_test () : test =
 
     "split-nt-2" >:: (fun _ ->
         let nt_ity = [|ity_of_string "np /\\ pr"|] in
-        let ctx = lctx [] [] None nt_ity @@ Some ([0], ty_np) in
-        let res = ctx_split_nt ctx 0 0 in
+        let ctx = lctx [] [] None @@ Some ([0], ty_np) in
+        let res = ctx_split_nt ctx nt_ity 0 0 in
         assert_equal ~printer:string_of_ity (ity_of_string "np") @@
         TyList.of_list @@ List.map fst res;
         let forced_locs = List.map (fun (_, ctx) -> option_map fst ctx.forced_nt_ty) res in
@@ -513,54 +513,48 @@ let penv_test () : test =
       );
 
     "enforce-nt-0" >:: (fun _ ->
-        let nt_ity = [|ity_of_string "np /\\ pr"|] in
-        let ctx = lctx [] [] None nt_ity None in
+        let ctx = lctx [] [] None None in
         assert_equal ~printer:string_of_int 1 @@
         List.length @@ ctx_enforce_nt ctx 0 ty_pr
       );
 
     (* enforcing nt when there are no nt restrictions does not change anything *)
     "enforce-nt-1" >:: (fun _ ->
-        let nt_ity = [|ity_of_string "np -> pr /\\ pr -> pr"|] in
-        let ctx = lctx [] [] None nt_ity None in
+        let ctx = lctx [] [] None None in
         assert_equal ~printer:string_of_int 1 @@
         List.length @@ ctx_enforce_nt ctx 0 @@ ty_of_string "np -> np"
       );
     
     "enforce-nt-2" >:: (fun _ ->
-        let nt_ity = [|ity_of_string "np /\\ pr"|] in
-        let ctx = lctx [] [] None nt_ity @@ Some ([0], ty_np) in
+        let ctx = lctx [] [] None @@ Some ([0], ty_np) in
         assert_equal ~printer:string_of_int 1 @@
         List.length @@ ctx_enforce_nt ctx 0 ty_np
       );
 
     "enforce-nt-3" >:: (fun _ ->
-        let nt_ity = [|ity_of_string "np /\\ pr"|] in
-        let ctx = lctx [] [] None nt_ity @@ Some ([0], ty_np) in
+        let ctx = lctx [] [] None @@ Some ([0], ty_np) in
         assert_equal ~printer:string_of_int 0 @@
         List.length @@ ctx_enforce_nt ctx 0 ty_pr
       );
 
     "intersect-0" >:: (fun _ ->
-        let nt_ity = [|ity_of_string "np /\\ pr"|] in
-        let ctx1 = lctx [] [] None nt_ity @@ Some ([0; 1], ty_np) in
-        let ctx2 = lctx [] [] None nt_ity @@ Some ([1; 2], ty_np) in
+        let ctx1 = lctx [] [] None @@ Some ([0; 1], ty_np) in
+        let ctx2 = lctx [] [] None @@ Some ([1; 2], ty_np) in
         let ctx = intersect_ctxs ctx1 ctx2 in
-        let expected = lctx [] [] None nt_ity @@ Some ([1], ty_np) in
+        let expected = lctx [] [] None @@ Some ([1], ty_np) in
         assert_equal ~cmp:ctx_equal expected @@ option_get ctx
       );
 
     "intersect-1" >:: (fun _ ->
-        let nt_ity = [|ity_of_string "np /\\ pr"|] in
-        let ctx1 = lctx [] [] None nt_ity @@ Some ([0], ty_np) in
-        let ctx2 = lctx [] [] None nt_ity @@ Some ([2], ty_np) in
+        let ctx1 = lctx [] [] None @@ Some ([0], ty_np) in
+        let ctx2 = lctx [] [] None @@ Some ([2], ty_np) in
         let ctx = intersect_ctxs ctx1 ctx2 in
         assert_equal None ctx
       );
 
     "intersect-2" >:: (fun _ ->
-        let ctx1 = lctx [] [] None [||] None in
-        let ctx2 = lctx [] [] None [||] None in
+        let ctx1 = lctx [] [] None None in
+        let ctx2 = lctx [] [] None None in
         let ctx = intersect_ctxs ctx1 ctx2 in
         assert_equal ~cmp:ctx_equal ctx1 @@ option_get ctx
       );
@@ -579,10 +573,10 @@ let penv_test () : test =
             (0, [[ity_of_string "T -> pr"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
-        let ctx1 = lctx var_bix bix_htys1 None [||] None in
-        let ctx2 = lctx var_bix bix_htys2 None [||] None in
+        let ctx1 = lctx var_bix bix_htys1 None None in
+        let ctx2 = lctx var_bix bix_htys2 None None in
         let ctx = intersect_ctxs ctx1 ctx2 in
-        let expected = lctx var_bix expected_bix_htys None [||] None in
+        let expected = lctx var_bix expected_bix_htys None None in
         assert_equal ~cmp:ctx_equal expected @@ option_get ctx
       );
 
@@ -598,8 +592,8 @@ let penv_test () : test =
             (0, [[ity_of_string "pr -> pr"]; [ity_of_string "T -> pr"]]);
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
-        let ctx1 = lctx var_bix bix_htys1 None [||] None in
-        let ctx2 = lctx var_bix bix_htys2 None [||] None in
+        let ctx1 = lctx var_bix bix_htys1 None None in
+        let ctx2 = lctx var_bix bix_htys2 None None in
         let ctx = intersect_ctxs ctx1 ctx2 in
         assert_equal None ctx
       );
@@ -624,10 +618,10 @@ let penv_test () : test =
             (0, [ity_of_string "T -> np"]);
             (1, [ity_of_string "T -> np"])
           ] in
-        let ctx1 = lctx var_bix bix_htys1 forced_hterms_hty [||] None in
-        let ctx2 = lctx var_bix bix_htys2 forced_hterms_hty [||] None in
+        let ctx1 = lctx var_bix bix_htys1 forced_hterms_hty None in
+        let ctx2 = lctx var_bix bix_htys2 forced_hterms_hty None in
         let ctx = intersect_ctxs ctx1 ctx2 in
-        let expected = lctx var_bix expected_bix_htys None [||] None in
+        let expected = lctx var_bix expected_bix_htys None None in
         assert_equal ~cmp:ctx_equal expected @@ option_get ctx;
         assert_equal None (option_get ctx).forced_hterms_hty
       );
@@ -646,8 +640,8 @@ let penv_test () : test =
             (0, [ity_of_string "T -> np"]);
             (1, [ity_of_string "T -> np"])
           ] in
-        let ctx1 = lctx var_bix bix_htys1 forced_hterms_hty [||] None in
-        let ctx2 = lctx var_bix bix_htys2 forced_hterms_hty [||] None in
+        let ctx1 = lctx var_bix bix_htys1 forced_hterms_hty None in
+        let ctx2 = lctx var_bix bix_htys2 forced_hterms_hty None in
         let ctx = intersect_ctxs ctx1 ctx2 in
         assert_equal None ctx
       );
@@ -656,17 +650,17 @@ let penv_test () : test =
         let ctx1 =
           lctx [(0, (0, 0)); (1, (1, 0))]
             ([(0, [[sty ty_pr]]); (1, [[sty ty_np]; [sty ty_pr]])])
-            None [||] None
+            None None
         in
         let ctx2 =
           lctx [(0, (0, 0)); (1, (1, 0))]
             [(0, [[sty ty_np]; [sty ty_pr]]); (1, [[sty ty_np]])]
-            None [||] None
+            None None
         in
         let ctx12 =
           lctx [(0, (0, 0)); (1, (1, 0))]
             [(0, [[sty ty_pr]]); (1, [[sty ty_np]])]
-            None [||] None
+            None None
         in
         assert_equal ~cmp:(option_equal ctx_equal) (Some ctx12) @@ intersect_ctxs ctx1 ctx2;
         assert_equal ~cmp:(option_equal ctx_equal) (Some ctx2) @@ intersect_ctxs ctx2 ctx2;
@@ -1417,17 +1411,17 @@ let te_test () : test =
         let ctx1 =
           lctx [(0, (0, 0)); (1, (1, 0))]
             [(0, [[sty ty_pr]]); (1, [[sty ty_np]; [sty ty_pr]])]
-            None [||] None
+            None None
         in
         let ctx2 =
           lctx [(0, (0, 0)); (1, (1, 0))]
             [(0, [[sty ty_np]; [sty ty_pr]]); (1, [[sty ty_np]])]
-            None [||] None
+            None None
         in
         let ctx12 =
           lctx [(0, (0, 0)); (1, (1, 0))]
             [(0, [[sty ty_pr]]); (1, [[sty ty_np]])]
-            None [||] None
+            None None
         in
         assert_equal_tes
           (TargetEnvs.of_list [
@@ -1467,12 +1461,12 @@ let te_test () : test =
         let ctx1 =
           lctx [(0, (0, 0)); (1, (0, 1))]
             [(0, [[ity_np_pr; sty ty_np]])]
-            None [||] None
+            None None
         in
         let ctx2 =
           lctx [(0, (0, 0)); (1, (0, 1))]
             [(0, [[ity_np_pr; sty ty_pr]])]
-            None [||] None
+            None None
         in
         assert_equal_tes
           (TargetEnvs.of_list [
@@ -1656,7 +1650,7 @@ let typing_xyyz_test () =
         assert_equal_tes
           (TargetEnvs.of_list [
               (ty_np, [
-                  (senv false 4 0 "pr", empty_ctx);
+                  (senv false 4 0 "np", empty_ctx);
                   (senv false 4 0 "pr", empty_ctx)
                 ])
             ]) @@
@@ -1679,7 +1673,7 @@ let typing_xyyz_test () =
             ])]
         in
         assert_equal_ctxs
-          (lctx var_bix1 bix_htys None [||] None) @@
+          (lctx var_bix1 bix_htys None None) @@
         typing#binding2ctx (hg#nt_body 1) None None None binding1
       );
 
@@ -1695,7 +1689,7 @@ let typing_xyyz_test () =
             ])]
         in
         assert_equal_ctxs
-          (lctx var_bix1 bix_htys None [||] None) @@
+          (lctx var_bix1 bix_htys None None) @@
         typing#binding2ctx (hg#nt_body 1) (Some (SortedVars.of_list [(0, 0)])) None None
           binding1
       );
@@ -1715,7 +1709,7 @@ let typing_xyyz_test () =
           Some [(0, [ity_of_string "T"; ity_of_string "T"; ity_of_string "np -> pr"])]
         in
         assert_equal_ctxs
-          (lctx var_bix1 bix_htys forced_hterms_hty [||] None) @@
+          (lctx var_bix1 bix_htys forced_hterms_hty None) @@
         typing#binding2ctx (hg#nt_body 1) (Some (SortedVars.of_list [(1, 2)]))
           (Some (id0_0, [ity_of_string "T"; ity_of_string "T"; ity_of_string "np -> pr"]))
           None

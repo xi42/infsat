@@ -25,12 +25,10 @@ type ctx = {
       and this context is empty. This is map instead of a set plus common type because of
       possible mask applied to variable types. *)
   forced_hterms_hty : hty BixMap.t option;
-  (** Possible types for nonterminals. *)
-  nt_ity : ity array;
   (** Optional restriction that one of nonterminals in given locations needs to have type ty.
       It is assumed (and not checked) that nonterminals in these locations have possible type
-      ty in nt_ity. If this set is empty then it means that the restriction can't be satisfied
-      and this context is empty. *)
+      ty in nt_ity supplied to operations working on nonterminals. If this set is empty then
+      it means that the restriction can't be satisfied and this context is empty. *)
   forced_nt_ty : (HlocSet.t * ty) option
 }
 
@@ -53,12 +51,11 @@ let ctx_normalize (ctx : ctx) : ctx =
 
 let mk_ctx (var_bix : (bix * int) IntMap.t) (bix_htys : HtySet.t BixMap.t)
     (forced_hterms_hty : hty BixMap.t option)
-    (nt_ity : ity array) (forced_nt_ty : (hloc list * ty) option) : ctx =
+    (forced_nt_ty : (hloc list * ty) option) : ctx =
   let ctx = {
     var_bix = var_bix;
     bix_htys = bix_htys;
     forced_hterms_hty = forced_hterms_hty;
-    nt_ity = nt_ity;
     forced_nt_ty = option_map (fun (hlocs, ty) ->
         (HlocSet.of_list hlocs, ty)
       ) forced_nt_ty
@@ -153,7 +150,7 @@ let ctx_enforce_var (ctx : ctx) (_, v : var_id) (ty : ty) : (ty * ctx) list =
   | None ->
     [(ty, ctx)]
 
-let ctx_split_nt (ctx : ctx) (nt : nt_id) (loc : hloc) : (ty * ctx) list =
+let ctx_split_nt (ctx : ctx) (nt_ity : ity array) (nt : nt_id) (loc : hloc) : (ty * ctx) list =
   match ctx.forced_nt_ty with
   | Some (flocs, fty) ->
     if HlocSet.mem loc flocs then
@@ -169,11 +166,11 @@ let ctx_split_nt (ctx : ctx) (nt : nt_id) (loc : hloc) : (ty * ctx) list =
             else
               (* requirement was not satisfied, but there are more options *)
               Some (ty, { ctx with forced_nt_ty = Some (flocs, fty) })
-        ) ctx.nt_ity.(nt)
+        ) nt_ity.(nt)
     else
-      TyList.map (fun ty -> (ty, ctx)) ctx.nt_ity.(nt)
+      TyList.map (fun ty -> (ty, ctx)) nt_ity.(nt)
   | None ->
-    TyList.map (fun ty -> (ty, ctx)) ctx.nt_ity.(nt)
+    TyList.map (fun ty -> (ty, ctx)) nt_ity.(nt)
 
 let ctx_enforce_nt (ctx : ctx) (loc : hloc) (ty : ty) : (ty * ctx) list =
   match ctx.forced_nt_ty with
@@ -246,7 +243,6 @@ let intersect_ctxs (ctx1 : ctx) (ctx2 : ctx) : ctx option =
       var_bix = ctx1.var_bix;
       bix_htys = bix_htys;
       forced_hterms_hty = forced_hterms_hty;
-      nt_ity = ctx1.nt_ity;
       forced_nt_ty = forced_nt_ty
     } in
     Some (ctx_normalize ctx)
@@ -272,7 +268,7 @@ let ctx_equal (ctx1 : ctx) (ctx2 : ctx) : bool =
   option_equal (BixMap.equal hty_eq) ctx1.forced_hterms_hty ctx2.forced_hterms_hty
 
 (** Empty context for testing purposes. *)
-let empty_ctx : ctx = mk_ctx IntMap.empty BixMap.empty None [||] None
+let empty_ctx : ctx = mk_ctx IntMap.empty BixMap.empty None None
 
 let string_of_ctx (ctx : ctx) : string =
   let bix_vars : IntSet.t BixMap.t =
