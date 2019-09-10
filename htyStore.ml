@@ -1,6 +1,7 @@
 open GrammarCommon
 open HGrammar
 open Type
+open TypingCommon
 open Utilities
 
 (* TODO this should be a data structure with fast merge of 1 element and iteration, not
@@ -12,11 +13,11 @@ class hty_store (hgrammar : hgrammar) = object(self)
 
   (** hterms_itys[id][i][j] is intersection types that hterms with identifier id have in i-th known
       typing in position j. *)
-  val htys : hty list array = Array.make hgrammar#hterms_count []
+  val htys : HtySet.t array = Array.make hgrammar#hterms_count HtySet.empty
 
   (* --- access --- *)
 
-  method get_htys (id : hterms_id) : hty list = htys.(id)
+  method get_htys (id : hterms_id) : HtySet.t = htys.(id)
 
   (* --- modification --- *)
 
@@ -25,14 +26,14 @@ class hty_store (hgrammar : hgrammar) = object(self)
   (** Idempodently adds mapping from id to hty to the storage. Returns whether it was new (did not
       already exist). *)
   method add_hty (id : hterms_id) (hty : hty) : bool =
-    let htys' = htys.(id) in
-    if not @@ List.exists (hty_eq hty) htys' then
+    let hterms_htys = htys.(id) in
+    if HtySet.mem hty hterms_htys then
+      false
+    else
       begin
-        htys.(id) <- hty :: htys';
+        htys.(id) <- HtySet.add hty hterms_htys;
         true
       end
-    else
-      false
 end
 
 let remove_hty_duplicates (htys : hty list) : hty list =

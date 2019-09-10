@@ -362,6 +362,10 @@ module IntMap = struct
 
   let of_list (l : (int * 'a) list) : 'a t =
     of_seq @@ List.to_seq l
+
+  let is_singleton (m : 'a t) : bool =
+    not @@ is_empty m &&
+    (fst @@ min_binding m) = (fst @@ max_binding m)
 end
 
 module IntSet = Set.Make (struct

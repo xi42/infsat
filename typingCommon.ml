@@ -37,7 +37,15 @@ module TyMap = Map.Make (struct
     let compare = Ty.compare
   end)
 
-module HtySet = Set.Make (struct
-    type t = hty
-    let compare = hty_compare
-  end)
+module HtySet = struct
+  include Set.Make (struct
+      type t = hty
+      let compare = hty_compare
+    end)
+
+  let of_list (l : hty list) : t = of_seq @@ List.to_seq l
+
+  let is_singleton (s : t) : bool =
+    not @@ is_empty s &&
+    hty_compare (min_elt s) (max_elt s) = 0
+end

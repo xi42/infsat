@@ -45,143 +45,7 @@ class typing (hg : hgrammar) = object(self)
   method add_hterms_hty (id : hterms_id) (hty : hty) : bool =
     hty_store#add_hty id hty
 
-  (* --- generating envs --- *)
-
-  (*
-  (** Converts bindings in the form "hterms identified by id are substituted for arguments i-j"
-      into bindings in the form "arguments i-j have the types <list of types>". If mask is
-      not None then typings of all other variables will be replaced with T. If fixed_hterms_hty
-      = Some (id, hty) then hty is used as a type of hterms identified with id in at least one
-      occurence of id in the binding. *)
-  method binding2hty_bindings (mask : vars option) (binding : hterms_id binding)
-      (fixed_hterms_hty : (hterms_id * hty) option) : hty binding list =
-    (* Ignoring the mask if it contains all variables. *)
-    let mask = match mask with
-      | None -> None
-      | Some mask ->
-        let mask_size = SortedVars.length mask in
-        (* Mask may be ignored if it is equal to all variables. *)
-        if mask_size = 0 || mask_size <> hg#nt_arity (fst @@ SortedVars.hd mask) then
-          Some mask
-        else
-          None
-    in
-    (* Replaces hty on indexes not mentioned in vars by T. *)
-    let apply_hty_mask mask i hty =
-      let rec apply_hty_mask_aux mask index acc hty =
-        match hty with
-        | [] -> List.rev acc
-        | ity :: hty' ->
-          match SortedVars.hd_tl_option mask with
-          | None ->
-            apply_hty_mask_aux mask (index + 1) (ity_top :: acc) hty'
-          | Some ((_, mask_index), mask') ->
-            if mask_index = index then
-              apply_hty_mask_aux mask' (index + 1) (ity :: acc) hty'
-            else if mask_index < index then
-              apply_hty_mask_aux mask' index acc hty
-            else
-              apply_hty_mask_aux mask (index + 1) (ity_top :: acc) hty'
-      in
-      apply_hty_mask_aux mask i [] hty
-    in
-    match binding, fixed_hterms_hty with
-    | [], _ -> [[]]
-    | _, Some (fixed_id, fixed_hty) ->
-      (* Preparing types for the product and applying the mask if needed. Specifically,
-         it contains the range of arguments i-j, possible hty without the fixed hty,
-         masked fixed hty (if mask is defined) and information whether arguments i-j have id
-         that can have fixed hty. *)
-      let htys_raw_binding : (int * int * hty list * hty * bool) list =
-        fold_left_short_circuit_after_first [] binding [] (fun acc (i, j, id) ->
-            match hty_store#get_htys id with
-            | [] -> []
-            | htys ->
-              match mask with
-              | None ->
-                (* Case without mask.
-                   If there is a fixed_hty, it has to be filtered out. *)
-                let htys = if id = fixed_id then
-                    htys |> remove_first @@ hty_eq fixed_hty
-                  else
-                    htys
-                in
-                (i, j, htys, fixed_hty, id = fixed_id) :: acc
-              | Some vars ->
-                (* When two different hty have a mask applied, they may become the same hty
-                   and can be merged, so duplicates have to be removed. *)
-                (* TODO htys are being sorted here each time, so maybe keep them sorted.
-                   or use a set. *)
-                let masked_htys =
-                  remove_hty_duplicates @@ List.rev_map (apply_hty_mask vars i) htys
-                in
-                (* The mask is applied to fixed_hty only when it is fixed_id, otherwise a dummy
-                   value is used. *)
-                let masked_fixed_hty =
-                  if id = fixed_id then
-                    apply_hty_mask vars i fixed_hty
-                  else
-                    []
-                in
-                (* If there is a fixed_hty, it has to filtered out after applying mask
-                   because it will be present there in the product anyway and not removing it
-                   would create duplicates. *)
-                let masked_htys = if id = fixed_id then
-                    masked_htys |> remove_first @@ hty_eq masked_fixed_hty
-                  else
-                    masked_htys
-                in
-                (i, j, masked_htys, masked_fixed_hty, id = fixed_id) :: acc
-          )
-      in
-      (* Hterms with fixed_id are treated differently. *)
-      let fixed_bindings, non_fixed_bindings =
-        htys_raw_binding |> List.partition (fun (_, _, _, _, fixed) -> fixed)
-      in
-      (* Computing product with at least one fixed_hty placed instead of normal types of
-         fixed_id. *)
-      let fixed_bindings_product : hty binding list =
-        product_with_one_fixed
-          (fixed_bindings |> List.rev_map (fun (i, j, htys, _, _) ->
-               htys |> List.rev_map (fun hty -> (i, j, hty))
-             )
-          )
-          (fixed_bindings |> List.rev_map (fun (i, j, _, fixed_hty, _) -> (i, j, fixed_hty)))
-      in
-      (* Combining output of the product for fixed_id with types for the rest of the binding. *)
-      flat_product @@ List.fold_left (fun acc (i, j, htys, _, _) ->
-          List.rev_map (fun hty -> [(i, j, hty)]) htys :: acc
-        ) [fixed_bindings_product] non_fixed_bindings
-    | _, None ->
-      (* Same as all of the above, but without the logic and additional computations for
-         fixed_id. *)
-      product @@ fold_left_short_circuit_after_first [] binding [] (fun acc (i, j, id) ->
-          match hty_store#get_htys id with
-          | [] -> []
-          | htys ->
-            let htys = match mask with
-              | None -> htys
-              | Some vars ->
-                remove_hty_duplicates @@ List.rev_map (apply_hty_mask vars i) htys
-            in
-            List.rev_map (fun hty -> (i, j, hty)) htys :: acc
-        )
-                                                      
-  (** Converts binding to possible environments using information on possible typings of hterms
-      flowing into given variables without regard for the context in which they were typed.
-      If mask is not None then only variables with specified indexes will be in the environment
-      and other will have type T. This can reduce the cost of creating the environment, as
-      replacing types with T can generate duplicates that are removed before computing a product.
-      This does not return duplicate environments, as it is the product of unique typings taken
-      from htys and hty_store does not store duplicates.
-      If fixed_hterms_hty is not None, then bindings have at least one of hterms with given
-      id typed as fixed hty. *)
-  method binding2envs (var_count : int) (mask : vars option)
-      (fixed_hterms_hty : (hterms_id * hty) option) (binding : hterms_id binding) : envs =
-    Envs.of_list_empty_meta @@
-    List.map (hty_binding2env var_count) @@
-    self#binding2hty_bindings mask binding fixed_hterms_hty
-  *)
+  (* --- constructing contexts --- *)
 
   (** Constructs product environment for hterms in the binding and a map from variable positions
       (i.e., without nonterminal) to index of hterm in the product environment (ih). *)
@@ -206,7 +70,7 @@ class typing (hg : hgrammar) = object(self)
     in
     let bix_htys =
       IntMap.map (fun (i, _, id) ->
-          List.map (apply_mask i) @@
+          HtySet.map (apply_mask i) @@
           hty_store#get_htys id
         ) bix_data
     in
@@ -214,17 +78,24 @@ class typing (hg : hgrammar) = object(self)
     let forced_hterms_hty =
       match fixed_hterms_hty with
       | Some (fid, fhty) ->
-        let bixs =
-          List.map fst @@
-          List.filter (fun (bix, (_, _, id)) ->
-              id = fid
+        let fbix_htys =
+          BixMap.of_seq @@
+          Seq.filter_map (fun (bix, (i, _, id)) ->
+              if id = fid then
+                Some (bix, apply_mask i fhty)
+              else
+                None
             ) @@
-          IntMap.bindings bix_data
+          BixMap.to_seq bix_data
         in
-        assert (List.for_all (fun bix ->
-            List.exists (hty_eq fhty) @@ IntMap.find bix bix_htys
-          ) bixs);
-        Some (bixs, fhty)
+        print_string "!!!! fbix_htys";
+        print_string @@ concat_map ", " (fun (a, b) -> string_of_int a ^ " " ^ string_of_hty b) (BixMap.bindings fbix_htys);
+        print_string "!!!! bix_htys";
+        print_string @@ concat_map ", " (fun (a, b) -> string_of_int a ^ " " ^ concat_map "|" string_of_hty (HtySet.elements b)) (BixMap.bindings bix_htys);
+        assert (BixMap.for_all (fun bix hty ->
+            HtySet.mem hty @@ BixMap.find bix bix_htys
+          ) fbix_htys);
+        Some fbix_htys
       | None -> None
     in
     (* assuming that forced ty is in nt_ity *)
@@ -388,8 +259,13 @@ class typing (hg : hgrammar) = object(self)
                 compatible_ctx
               end
           | None ->
-            (* if we're in this branch with None target then this must be a head variable or the
-               whole term is a variable *)
+            (* If we're in this branch with None target then this must be a head variable or the
+               whole term is a variable, since other variables will always have a target
+               inferred from the head.
+               If the context is defined, we take the variables from it. If not, we deem this
+               term untypable in current conditions. This is not a problem, because to construct
+               the proof tree for application of this nonterminal, we'll have to get the proof
+               tree for arguments first. *)
             (* TODO maybe change definition of headvar to include var-only terms *)
             TargetEnvs.of_list @@
             List.map (fun (ty, ctx) ->
@@ -736,7 +612,7 @@ class typing (hg : hgrammar) = object(self)
            if should_be_printed id then
              let htys = hty_store#get_htys id in
              string_of_int id ^ ":\n" ^
-             concat_map "\n" (string_of_list string_of_ity) htys
+             concat_map "\n" (string_of_list string_of_ity) @@ HtySet.elements htys
            else
              ""
          ))

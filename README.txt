@@ -78,6 +78,8 @@ TODO
 ----
 * check TODOs in code and resolve them or move here
 * update documentation
+* bring back computing no-head-vars w/o context
+* head vars optimization
 * Possible optimizations:
   - pre-computing short-circuit-friendly order of computing argument types for type_check_app
   - computing terms without variables first and short circuit after for all terms

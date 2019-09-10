@@ -71,23 +71,6 @@ let singleton_env (used_nts : used_nts) (loc_types : loc_types) (positive : bool
 
 (* --- access --- *)
 
-(*
-  method var_count : int = Array.length var_itys
-
-  method get_var_itys : ity array = var_itys
-
-  method get_var_ity (_, i : var_id) : ity = var_itys.(i)
-
-  method mk_fun (codomain : ty) : ty =
-    cons_fun (Array.to_list var_itys) codomain
-
-  method mem (v : var_id) (ty : ty) : bool =
-    TyList.mem ty @@ self#get_var_ity v
-
-  method has_pr_vars : bool =
-    Array.exists (fun ity -> TyList.exists is_productive ity) var_itys
-*)
-
 let env2fun (env : env) (codomain : ty) : ty =
   cons_fun (List.map snd @@ IntMap.bindings env.vars) codomain
 
@@ -155,13 +138,6 @@ let env_compare (env1 : env) (env2 : env) : int =
 
 let env_eq (env1 : env) (env2 : env) =
   env_compare env1 env2 = 0
-
-(*
-let env_hash (env : env) : int =
-  Array.fold_left (fun acc x ->
-      Hashtbl.hash (acc, Hashtbl.hash @@ List.map Ty.id_of_ty @@ TyList.to_list x)
-    ) 0 env.vars
-*)
 
 (* --- printing --- *)
 
