@@ -150,47 +150,51 @@ let ctx_enforce_var (ctx : ctx) (_, v : var_id) (ty : ty) : (ty * ctx) list =
   | None ->
     [(ty, ctx)]
 
-let ctx_split_nt (ctx : ctx) (nt_ity : ity array) (nt : nt_id) (loc : hloc) : (ty * ctx) list =
+let ctx_split_nt (ctx : ctx) (nt_ity : TySet.t array) (nt : nt_id) (loc : hloc) : (ty * ctx) list =
   match ctx.forced_nt_ty with
   | Some (flocs, fty) ->
     if HlocSet.mem loc flocs then
-      TyList.filter_map (fun ty ->
+      TySet.fold (fun ty acc ->
           if Ty.equal ty fty then
             (* requirement was satisfied *)
-            Some (ty, { ctx with forced_nt_ty = None })
+            (ty, { ctx with forced_nt_ty = None }) :: acc
           else
             let flocs = HlocSet.remove loc flocs in
             if HlocSet.is_empty flocs then
               (* requirement was not satisfied and it was the last chance *)
-              None
+              acc
             else
               (* requirement was not satisfied, but there are more options *)
-              Some (ty, { ctx with forced_nt_ty = Some (flocs, fty) })
-        ) nt_ity.(nt)
+              (ty, { ctx with forced_nt_ty = Some (flocs, fty) }) :: acc
+        ) nt_ity.(nt) []
     else
-      TyList.map (fun ty -> (ty, ctx)) nt_ity.(nt)
+      List.map (fun ty -> (ty, ctx)) @@ TySet.elements nt_ity.(nt)
   | None ->
-    TyList.map (fun ty -> (ty, ctx)) nt_ity.(nt)
+    List.map (fun ty -> (ty, ctx)) @@ TySet.elements nt_ity.(nt)
 
-let ctx_enforce_nt (ctx : ctx) (loc : hloc) (ty : ty) : (ty * ctx) list =
-  match ctx.forced_nt_ty with
-  | Some (flocs, fty) ->
-    if HlocSet.mem loc flocs then
-      if Ty.equal ty fty then
-        (* requirement was satisfied *)
-        [(ty, { ctx with forced_nt_ty = None })]
-      else
-        let flocs = HlocSet.remove loc flocs in
-        if HlocSet.is_empty flocs then
-          (* requirement was not satisfied and it was the last position *)
-          []
+let ctx_enforce_nt (ctx : ctx) (nt_ity : TySet.t array) (nt : nt_id) (loc : hloc)
+    (ty : ty) : (ty * ctx) option =
+  if TySet.mem ty nt_ity.(nt) then
+    match ctx.forced_nt_ty with
+    | Some (flocs, fty) ->
+      if HlocSet.mem loc flocs then
+        if Ty.equal ty fty then
+          (* requirement was satisfied *)
+          Some (ty, { ctx with forced_nt_ty = None })
         else
-          (* requirement was not satisfied, but there are more positions *)          
-          [(ty, { ctx with forced_nt_ty = Some (flocs, fty) })]
-    else
-      [(ty, ctx)]
-  | None ->
-    [(ty, ctx)]
+          let flocs = HlocSet.remove loc flocs in
+          if HlocSet.is_empty flocs then
+            (* requirement was not satisfied and it was the last position *)
+            None
+          else
+            (* requirement was not satisfied, but there are more positions *)          
+            Some (ty, { ctx with forced_nt_ty = Some (flocs, fty) })
+      else
+        Some (ty, ctx)
+    | None ->
+      Some (ty, ctx)
+  else
+    None
 
 exception EmptyIntersection
 

@@ -13,7 +13,7 @@ class typing (hg : hgrammar) = object(self)
   (* --- registers --- *)
 
   (** nt_ity[nt] has all typings of nonterminal nt. *)
-  val nt_ity : ity array = Array.make hg#nt_count TyList.empty
+  val nt_ity : TySet.t array = Array.make hg#nt_count TySet.empty
 
   (** htys[id] contains list of types derived under some environment for
       corresponding terms in the list of terms identified by id. *)
@@ -21,26 +21,22 @@ class typing (hg : hgrammar) = object(self)
 
   (* --- getting registered typings --- *)
 
-  method nt_ty_exists (nt : nt_id) (ty : ty) : bool =
-    TyList.exists (fun nt_ty -> nt_ty = ty) nt_ity.(nt)
-
-  method nt_ity (nt : nt_id) : ity = nt_ity.(nt)
+  method nt_ity (nt : nt_id) : TySet.t = nt_ity.(nt)
 
   (** For testing purposes *)
-  method get_nt_ity : ity array = nt_ity
+  method get_nt_ity : TySet.t array = nt_ity
 
   (* --- saving new typings --- *)
 
-  method add_nt_ity (nt : nt_id) (ity : ity) : bool =
-    let new_ity_count = ref @@ TyList.length ity in
-    nt_ity.(nt) <- TyList.merge_custom (fun x _ ->
-        new_ity_count := !new_ity_count - 1;
-        x
-      ) nt_ity.(nt) ity;
-    !new_ity_count <> 0
-
+  (** Adds nonterminal typing and returns whether it is a new one. *)
   method add_nt_ty (nt : nt_id) (ty : ty) : bool =
-    self#add_nt_ity nt @@ TyList.singleton ty
+    if TySet.mem ty nt_ity.(nt) then
+      false
+    else
+      begin
+        nt_ity.(nt) <- TySet.add ty nt_ity.(nt);
+        true
+      end
 
   method add_hterms_hty (id : hterms_id) (hty : hty) : bool =
     hty_store#add_hty id hty
@@ -104,7 +100,7 @@ class typing (hg : hgrammar) = object(self)
           HlocMap.bindings @@
           hg#loc2head_occurence hterm
         in
-        assert (TyList.mem ty nt_ity.(nt));
+        assert (TySet.mem ty nt_ity.(nt));
         Some (locs, ty)
       | None -> None
     in
@@ -210,7 +206,7 @@ class typing (hg : hgrammar) = object(self)
           let compatible_ctx =
             match target with
             | Some target ->
-              ctx_enforce_nt ctx loc target
+              list_of_option @@ ctx_enforce_nt ctx nt_ity nt loc target
             | None ->
               ctx_split_nt ctx nt_ity nt loc
           in
@@ -598,7 +594,7 @@ class typing (hg : hgrammar) = object(self)
   method string_of_nt_ity : string =
     "Types of nonterminals:\n" ^
     String.concat "\n" @@ (range 0 hg#nt_count |> List.map (fun nt ->
-        hg#nt_name nt ^ ": " ^ string_of_ity nt_ity.(nt)
+        hg#nt_name nt ^ ": " ^ string_of_ity (TySet.to_ity nt_ity.(nt))
       ))
 
   method string_of_hterms_hty (should_be_printed : hterms_id -> bool) : string =

@@ -55,6 +55,14 @@ let option_equal (eq : 'a -> 'a -> bool) (x1 : 'a option) (x2 : 'a option) : boo
   | Some _, None -> false
   | Some s1, Some s2 -> eq s1 s2
 
+let list_of_option : 'a option -> 'a list = function
+  | Some x -> [x]
+  | None -> []
+
+let is_some : 'a option -> bool = function
+  | Some _ -> true
+  | None -> false
+
 (* --- printing --- *)
 
 let string_of_bool = function

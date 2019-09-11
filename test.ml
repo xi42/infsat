@@ -18,7 +18,7 @@ open Utilities
 (* --- helper functions --- *)
 
 let init_flags () =
-  Flags.verbose_all := true;
+  Flags.verbose_all := false;
   Flags.type_format := "short";
   Flags.force_unsafe := false;
   Flags.propagate_flags ()
@@ -482,7 +482,7 @@ let penv_test () : test =
       );
 
     "split-nt-0" >:: (fun _ ->
-        let nt_ity = [|ity_of_string "np /\\ pr"|] in
+        let nt_ity = [|TySet.of_string "np /\\ pr"|] in
         let ctx = lctx [] [] None None in
         let res = ctx_split_nt ctx nt_ity 0 0 in
         assert_equal ~printer:string_of_ity (ity_of_string "np /\\ pr") @@
@@ -491,7 +491,7 @@ let penv_test () : test =
       );
 
     "split-nt-1" >:: (fun _ ->
-        let nt_ity = [|ity_of_string "np /\\ pr"|] in
+        let nt_ity = [|TySet.of_string "np /\\ pr"|] in
         let ctx = lctx [] [] None @@ Some ([0; 1; 2], ty_np) in
         let res = ctx_split_nt ctx nt_ity 0 0 in
         assert_equal ~printer:string_of_ity (ity_of_string "np /\\ pr") @@
@@ -504,7 +504,7 @@ let penv_test () : test =
       );
 
     "split-nt-2" >:: (fun _ ->
-        let nt_ity = [|ity_of_string "np /\\ pr"|] in
+        let nt_ity = [|TySet.of_string "np /\\ pr"|] in
         let ctx = lctx [] [] None @@ Some ([0], ty_np) in
         let res = ctx_split_nt ctx nt_ity 0 0 in
         assert_equal ~printer:string_of_ity (ity_of_string "np") @@
@@ -514,28 +514,40 @@ let penv_test () : test =
       );
 
     "enforce-nt-0" >:: (fun _ ->
+        let nt_ity = [|TySet.of_string "np /\\ pr"|] in
         let ctx = lctx [] [] None None in
-        assert_equal ~printer:string_of_int 1 @@
-        List.length @@ ctx_enforce_nt ctx 0 ty_pr
+        assert_equal ~printer:string_of_bool true @@
+        is_some @@ ctx_enforce_nt ctx nt_ity 0 0 ty_pr
       );
 
     (* enforcing nt when there are no nt restrictions does not change anything *)
     "enforce-nt-1" >:: (fun _ ->
+        let nt_ity = [|TySet.of_string "np -> np /\\ pr -> pr"|] in
         let ctx = lctx [] [] None None in
-        assert_equal ~printer:string_of_int 1 @@
-        List.length @@ ctx_enforce_nt ctx 0 @@ ty_of_string "np -> np"
+        assert_equal ~printer:string_of_bool true @@
+        is_some @@ ctx_enforce_nt ctx nt_ity 0 0 @@ ty_of_string "np -> np"
       );
     
     "enforce-nt-2" >:: (fun _ ->
+        let nt_ity = [|TySet.of_string "np /\\ pr"|] in
         let ctx = lctx [] [] None @@ Some ([0], ty_np) in
-        assert_equal ~printer:string_of_int 1 @@
-        List.length @@ ctx_enforce_nt ctx 0 ty_np
+        assert_equal ~printer:string_of_bool true @@
+        is_some @@ ctx_enforce_nt ctx nt_ity 0 0 ty_np
       );
 
     "enforce-nt-3" >:: (fun _ ->
+        let nt_ity = [|TySet.of_string "np /\\ pr"|] in
         let ctx = lctx [] [] None @@ Some ([0], ty_np) in
-        assert_equal ~printer:string_of_int 0 @@
-        List.length @@ ctx_enforce_nt ctx 0 ty_pr
+        assert_equal ~printer:string_of_bool false @@
+        is_some @@ ctx_enforce_nt ctx nt_ity 0 0 ty_pr
+      );
+
+    (* enforcing nt when nt can't have that type *)
+    "enforce-nt-4" >:: (fun _ ->
+        let nt_ity = [|TySet.of_string "np -> np /\\ pr -> pr"|] in
+        let ctx = lctx [] [] None None in
+        assert_equal ~printer:string_of_bool false @@
+        is_some @@ ctx_enforce_nt ctx nt_ity 0 0 @@ ty_of_string "np -> pr"
       );
 
     "intersect-0" >:: (fun _ ->
@@ -2029,7 +2041,9 @@ let grammar_misc () = mk_grammar
       (* N0 -> N1 e *)
       (0, App (NT 1, TE E));
       (* N1 x -> a x *)
-      (1, App (TE A, Var (1, 0)))
+      (1, App (TE A, Var (1, 0)));
+      (* N2 -> N2 *)
+      (0, NT 2)
     |]
 
 let typing_misc_test () =
@@ -2070,6 +2084,20 @@ let typing_misc_test () =
                 ])
             ]) @@
         typing#type_check (hg#nt_body 1) None empty_ctx false false
+      );
+
+    (* Can't type a nonterminal with no data on dependencies without target. *)
+    "type_check-19" >:: (fun _ ->
+        assert_equal_tes
+          TargetEnvs.empty @@
+        typing#type_check (hg#nt_body 2) None empty_ctx false false
+      );
+
+    (* Can't type a nonterminal with no data on dependencies with target. *)
+    "type_check-20" >:: (fun _ ->
+        assert_equal_tes
+          TargetEnvs.empty @@
+        typing#type_check (hg#nt_body 2) (Some ty_np) empty_ctx false false
       );
   ]
 
