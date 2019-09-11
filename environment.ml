@@ -71,8 +71,10 @@ let singleton_env (used_nts : used_nts) (loc_types : loc_types) (positive : bool
 
 (* --- access --- *)
 
-let env2fun (env : env) (codomain : ty) : ty =
-  cons_fun (List.map snd @@ IntMap.bindings env.vars) codomain
+let env2fun (arity : int) (env : env) (codomain : ty) : ty =
+  cons_fun (List.map (fun v ->
+      option_default ity_top @@ IntMap.find_opt v env.vars
+    ) @@ range 0 arity) codomain
 
 let env_has_pr_vars (env : env) : bool =
   IntMap.exists (fun _ ity -> TyList.exists is_productive ity) env.vars

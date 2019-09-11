@@ -218,10 +218,10 @@ module TargetEnvs = struct
 
   (** Creates function types from targets and variables in their environments and iterates over
       all resulting function types along with environment. *)
-  let iter_fun_ty (f : ty -> env -> unit) : t -> unit =
+  let iter_fun_ty (arity : int) (f : ty -> env -> unit) : t -> unit =
     TyMap.iter (fun target envs ->
         ContextEnvs.iter (fun (env, _) ->
-            let ty = env2fun env target in
+            let ty = env2fun arity env target in
             f ty env
           ) envs
       )

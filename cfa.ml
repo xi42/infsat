@@ -447,8 +447,8 @@ class cfa (hg : hgrammar) = object(self)
       let vars' = SortedVars.map snd vars in
       let bindings = nt_bindings.(f) in
       let bindings' =
-        sort_and_delete_duplicates (* sorts and removes duplicates *)
-          (List.rev_map (fun binding -> self#filter_binding vars' binding) bindings)
+        sort_and_delete_duplicates @@
+        List.rev_map (fun binding -> self#filter_binding vars' binding) bindings
       in
       (*
       let bindings_with_vars =

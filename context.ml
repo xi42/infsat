@@ -290,7 +290,7 @@ let string_of_ctx (ctx : ctx) : string =
           concat_map ", " string_of_int @@ IntSet.elements @@ BixMap.find bix bix_vars
         in
         let htys =
-          concat_map "\\/" string_of_hty @@ HtySet.elements htys
+          concat_map " \\/ " string_of_hty @@ HtySet.elements htys
         in
         ("(" ^ vars ^ " : " ^ htys ^ ")") :: acc
       ) ctx.bix_htys []

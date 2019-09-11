@@ -134,7 +134,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     if typing#add_hterms_hty id hty then
       begin
         print_verbose !Flags.verbose_typing @@ lazy (
-          "Registering new typing of hterms " ^ string_of_int id ^ ": " ^
+          "Registering new typing of hterms " ^ hg#string_of_hterms id ^ ": " ^
           hg#string_of_hterms id ^ " : " ^
           string_of_hty hty
         );
@@ -146,14 +146,14 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   (** Infers types of given nonterminal. Has an option to force types of some hterms.
       Works by generating a list of all possible environments based on bindings and then iterating
       over it while typing the nonterminal. *)
-  method infer_nt_ity (nt : nt_id) (fixed_hterms_hty : (hterms_id * hty) option)
+  method infer_nt_ty (nt : nt_id) (fixed_hterms_hty : (hterms_id * hty) option)
       (binding : hterms_id binding) =
     print_verbose !Flags.verbose_queues @@ lazy (
       let typings_info =
         match fixed_hterms_hty with
         | Some (id, hty) ->
-          "fixed typing of hterms " ^ string_of_int id ^ " to " ^
-          string_of_hty hty
+          "fixed typing of hterms " ^ string_of_int id ^ " " ^ hg#string_of_hterms id ^
+          " to " ^ string_of_hty hty
         | None ->
           "no fixed typings"
       in
@@ -164,7 +164,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     let body = hg#nt_body nt in
     let ctx = typing#binding2ctx body None fixed_hterms_hty None binding in
     let te = typing#type_check body None ctx false false in
-    te |> TargetEnvs.iter_fun_ty (fun ty env ->
+    te |> TargetEnvs.iter_fun_ty (hg#nt_arity nt) (fun ty env ->
         self#register_nt_ty nt ty env
       );
     indent (-1)
@@ -179,12 +179,15 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       let typing_info =
         match fixed_hterms_hty with
         | Some (id, hty) ->
-          "fixed typing of hterms " ^ string_of_int id ^ " to " ^
-          string_of_hty hty
+          "fixed typing of hterms " ^ hg#string_of_hterms id ^ " " ^
+          hg#string_of_hterms id ^ " to " ^ string_of_hty hty
         | None ->
           "no fixed typings"
       in
-      "* Inferring type of hterms " ^ string_of_int id ^ " under binding " ^
+      let hterms_str =
+        hg#string_of_hterms id
+      in
+      "* Inferring type of hterms " ^ hterms_str ^ " under binding " ^
       string_of_binding string_of_int binding ^ " and " ^ typing_info ^ "."
     );
     indent (+1);
@@ -207,7 +210,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       let id, hty = TwoLayerQueue.dequeue prop_hterms_hty_queue in
       print_verbose !Flags.verbose_queues @@ lazy (
         "prop_nt_queue: Propagating new types of hterms " ^
-        string_of_int id ^ " : " ^ string_of_hty hty ^ "."
+        hg#string_of_hterms id ^ " : " ^ string_of_hty hty ^ "."
       );
       (* This step is required, because new typing of hterms might be enough to type other hterms,
          but not enough to type a whole nonterminal if it needs typings of more hterms. And these
@@ -216,6 +219,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       cfa#get_hterms_where_hterms_flow id |> SortedHTermsIds.iter (fun id' ->
           cfa#get_hterms_bindings id' |>
           (* TODO this should be pre-filtered in cfa, like for nt *)
+          (* TODO this doubles the work when the same hterms are present
+             multiple times in the binding *)
           List.filter (List.exists (fun (_, _, id'') -> id'' = id)) |>
           List.iter @@ self#infer_hterms_hty id' (Some (id, hty))
         );
@@ -223,7 +228,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
          nonterminals are typed with new possible typings of arguments, which may generate
          new nonterminal typings. *)
       cfa#get_nt_bindings_applied_to_hterms id |> List.iter (fun (nt, binding) ->
-          self#infer_nt_ity nt (Some (id, hty)) binding
+          self#infer_nt_ty nt (Some (id, hty)) binding
         );
       true
     with
@@ -267,7 +272,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         "nt_binding_queue: Typing nonterminal " ^ hg#nt_name nt ^
         " with binding " ^ string_of_binding string_of_int binding ^ "."
       );
-      self#infer_nt_ity nt None binding;
+      self#infer_nt_ty nt None binding;
       true
     with
     | TwoLayerQueue.Empty -> false
@@ -296,7 +301,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       let id = SetQueue.dequeue hterms_queue in
       let bindings = cfa#get_hterms_bindings id in
       print_verbose !Flags.verbose_queues @@ lazy (
-        "hterms_queue: Typing hterms " ^ string_of_int id ^ " with " ^
+        "hterms_queue: Typing hterms " ^ hg#string_of_hterms id ^ " with " ^
         string_of_int (List.length bindings) ^ " bindings.";
       );
       bindings |> List.iter @@ self#infer_hterms_hty id None;

@@ -180,8 +180,11 @@ class typing (hg : hgrammar) = object(self)
         | Some target -> " : " ^ string_of_ty target;
         | None -> ""
       in
+      let ctx_info =
+        string_of_ctx ctx
+      in
       "Inferring environment for " ^ hg#string_of_hterm true HlocMap.empty 0 hterm ^
-      target_info ^ vars_info
+      target_info ^ vars_info ^ " under context " ^ ctx_info
     );
     let res = match hterm with
       | HT a, [] ->
@@ -299,6 +302,10 @@ class typing (hg : hgrammar) = object(self)
     (* Get all head typings using type_check. Head typings are targets of this TE. Note that
        types of variables may have different productivity from the variable itself. *)
     let all_h_te = self#type_check_hterm (h, []) None ctx loc no_pr_vars force_pr_var in
+    print_verbose !Flags.verbose_proofs @@ lazy (
+      "head_ity: " ^
+      string_of_ity (TyList.of_list @@ TargetEnvs.targets all_h_te)
+    );
     (* Filtering compatible head types so that the type after application will be equal to
        target type. *)
     let h_data =
@@ -307,8 +314,6 @@ class typing (hg : hgrammar) = object(self)
       self#filter_compatible_heads all_h_te h_arity
     in
     print_verbose !Flags.verbose_proofs @@ lazy (
-      "head_ity: " ^
-      string_of_ity (TyList.of_list @@ TargetEnvs.targets all_h_te) ^ "\n" ^
       "compatible head_ity: " ^
       string_of_ity (TyList.of_list @@ TargetEnvs.targets h_data)
     );
