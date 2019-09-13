@@ -5,6 +5,7 @@ let verbose_proofs : bool ref = ref false
 let verbose_typing : bool ref = ref false
 let verbose_queues : bool ref = ref false
 let verbose_profiling : bool ref = ref false
+let verbose_iters : bool ref = ref false
 let normalize = ref false
 let normalization_depth = ref 1
 let quiet : bool ref = ref false

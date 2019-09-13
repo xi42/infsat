@@ -90,6 +90,9 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     self#string_of_queues ^ "\n\n" ^
     "Duplication Factor Graph:\n" ^ dfg#to_string hg#nt_name
 
+  method iter_counter : string =
+    "Starting iteration " ^ string_of_int iteration ^ "."
+
   (* --- processing results of typing --- *)
 
   method register_nt_ty (nt : nt_id) (ty : ty) (env : env) =
@@ -315,6 +318,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       Returns whether at least one of the queues was not empty. *)
   method process_queues : bool =
     print_verbose !Flags.verbose_queues @@ lazy self#status;
+    print_verbose (!Flags.verbose_iters && not !Flags.verbose_queues) @@ lazy self#iter_counter;
     self#process_prop_hterms_hty_queue ||
     self#process_prop_nt_ty_queue ||
     self#process_prop_nt_queue ||

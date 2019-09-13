@@ -23,6 +23,7 @@ let options = [
   ("-vtype", Arg.Set Flags.verbose_typing, "Enables verbose typing results");
   ("-vsat", Arg.Set Flags.verbose_queues, "Enables verbose saturation tasks");
   ("-vprof", Arg.Set Flags.verbose_profiling, "Enables verbose profiling");
+  ("-viter", Arg.Set Flags.verbose_iters, "Enables verbose iteration counter");
   ("-maxiters", Arg.Set_int Flags.maxiters,
    "Maximum number of saturation iterations before giving up");
   ("-tf", Arg.Symbol (
