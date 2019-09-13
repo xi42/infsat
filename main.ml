@@ -12,10 +12,6 @@ let program_info = "InfSat 0.1: Saturation-based finiteness checker for higher-o
                    "recursion schemes"
 
 let options = [
-  ("-q", Arg.Set Flags.quiet, "Enables quiet mode and exits with code 0 for infinite " ^
-                              "language, 1 for finite, 2 for maybe finite (with unsafe terms) " ^
-                              "and something else on error");
-  ("-f", Arg.Set Flags.force_unsafe, "Skip term safety check");
   ("-v", Arg.Set Flags.verbose_main, "Enables basic verbosity");
   ("-vv", Arg.Set Flags.verbose_all, "Enables full verbosity");
   ("-vprep", Arg.Set Flags.verbose_preprocessing, "Enables verbose parsing and preprocessing");
@@ -24,8 +20,9 @@ let options = [
   ("-vsat", Arg.Set Flags.verbose_queues, "Enables verbose saturation tasks");
   ("-vprof", Arg.Set Flags.verbose_profiling, "Enables verbose profiling");
   ("-viter", Arg.Set Flags.verbose_iters, "Enables verbose iteration counter");
-  ("-maxiters", Arg.Set_int Flags.maxiters,
-   "Maximum number of saturation iterations before giving up");
+  ("-q", Arg.Set Flags.quiet, "Enables quiet mode and exits with code 0 for infinite " ^
+                              "language, 1 for finite, 2 for maybe finite (with unsafe terms) " ^
+                              "and something else on error");
   ("-tf", Arg.Symbol (
       ["full"; "shortened"; "short"],
       fun f -> Flags.type_format := f
@@ -34,6 +31,15 @@ let options = [
    "(pr, (np, (pr, o) -> o) -> (np, o) -> o), \"shortened\" for " ^
    "(pr, (np, pr -> o) -> np -> o), or \"short\" for (pr -> np) -> np -> pr. " ^
    "Default is \"full\".");
+  ("-f", Arg.Set Flags.force_unsafe, "Skip term safety check");
+  ("-maxiters", Arg.Set_int Flags.maxiters,
+   "Maximum number of saturation iterations before giving up");
+  ("-nohvo", Arg.Set Flags.no_headvar_opt,
+   "Turn off optimization to separately compute terms with no head variables.");
+  ("-nofntty", Arg.Set Flags.no_force_nt_ty_opt,
+   "Turn off optimization to recompute with only new typings of nonterminals.");
+  ("-noftty", Arg.Set Flags.no_force_hterms_hty_opt,
+   "Turn off optimization to recompute with only new typings of argument terms.");
 ]
 
 (** Parses a file to HORS prerules and automata definition. *)

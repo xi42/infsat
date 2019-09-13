@@ -45,8 +45,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       Subsequently dequeued typings are for the same hterms as previously, if available. *)
   val prop_hterms_hty_queue : hty TwoLayerQueue.t = TwoLayerQueue.make hg#hterms_count
 
-  (** Each element of this queue has all new typings of a nonterminal that should be propagated
-      by recomputing nonterminals that contain this nonterminal in a linear way.
+  (** Each element of this queue is a new typing of a nonterminal that should be propagated
+      by recomputing nonterminals and hterms that contain this nonterminal.
       Typings are dequeued in batches, i.e., as a pair of nonterminal and all new typings. *)
   val prop_nt_ty_queue : ty BatchQueue.t = BatchQueue.make hg#nt_count
 
@@ -54,10 +54,6 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       propagated by recomputing everything that contains this nonterminal in a nonlinear way.
       Enqueuing to this queue is idempotent. *)
   val prop_nt_queue = SetQueue.make hg#nt_count
-
-  (** Each element of this queue is a specific nonterminal binding to be typed. Subsequently
-      dequeued bindings are for the same nonterminal as previously, if available. *)
-  val nt_binding_queue : hterms_id binding TwoLayerQueue.t = TwoLayerQueue.make hg#nt_count
 
   (** Each element of this queue is a nonterminal to be typed. Enqueuing to this queue is
       idempotent. *)
@@ -75,10 +71,6 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     ^ "\n" ^
     (* "prop_nt_ty_queue: " ^ BatchQueue.print_queue string_of_ty ^ "\n" ^ *)
     "prop_nt_queue: " ^ SetQueue.string_of_queue prop_nt_queue ^ "\n" ^
-    "nt_binding_queue: " ^
-    TwoLayerQueue.string_of_queue (string_of_binding string_of_int)
-      nt_binding_queue ^
-    "\n" ^
     "nt_queue: " ^ SetQueue.string_of_queue nt_queue ^ "\n" ^
     "hterms_queue: " ^ SetQueue.string_of_queue hterms_queue
 
@@ -102,7 +94,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
           "Registering new typing of nonterminal " ^ hg#nt_name nt ^ " : " ^
           string_of_ty ty ^ "."
         );
-        SetQueue.enqueue prop_nt_queue nt
+        BatchQueue.enqueue prop_nt_ty_queue nt ty
       end;
     let proof = {
       derived = (nt, ty);
@@ -150,7 +142,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       Works by generating a list of all possible environments based on bindings and then iterating
       over it while typing the nonterminal. *)
   method infer_nt_ty (nt : nt_id) (fixed_hterms_hty : (hterms_id * hty) option)
-      (binding : hterms_id binding) =
+      (fixed_nt_ity : (nt_id * TySet.t) option) (binding : hterms_id binding) =
     print_verbose !Flags.verbose_queues @@ lazy (
       let typings_info =
         match fixed_hterms_hty with
@@ -177,7 +169,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       Works by generating a list of all possible environments based on bindings and then iterating
       over it while typing the nonterminal. *)
   method infer_hterms_hty (id : hterms_id) (fixed_hterms_hty : (hterms_id * hty) option)
-      (binding : hterms_id binding) =
+      (fixed_nt_ity : (nt_id * TySet.t) option) (binding : hterms_id binding) =
     print_verbose !Flags.verbose_queues @@ lazy (
       let typing_info =
         match fixed_hterms_hty with
@@ -219,19 +211,23 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
          but not enough to type a whole nonterminal if it needs typings of more hterms. And these
          newly typed hterms may be enough to type some nonterminal, while it would be impossible
          without their new typing. *)
-      cfa#get_hterms_where_hterms_flow id |> SortedHTermsIds.iter (fun id' ->
-          cfa#get_hterms_bindings id' |>
-          (* TODO this should be pre-filtered in cfa, like for nt *)
-          (* TODO this doubles the work when the same hterms are present
-             multiple times in the binding *)
-          List.filter (List.exists (fun (_, _, id'') -> id'' = id)) |>
-          List.iter @@ self#infer_hterms_hty id' (Some (id, hty))
+      cfa#get_hterms_where_hterms_flow id |> SortedHTermsIds.iter (fun recomputed_id ->
+          if !Flags.no_force_hterms_hty_opt then
+            SetQueue.enqueue hterms_queue recomputed_id
+          else
+            (* sort_and_delete_duplicates is here to not repeat the work when the same
+               binding is present twice (a rare occurence). This will break if these bindings
+               stop being tuples of ints due to default compare. *)
+            cfa#get_hterms_bindings recomputed_id |>
+            sort_and_delete_duplicates |>
+            List.filter (List.exists (fun (_, _, id'') -> id'' = id)) |>
+            List.iter @@ self#infer_hterms_hty recomputed_id (Some (id, hty)) None
         );
       (* This step is required, because when a new type is computed for hterms,
          nonterminals are typed with new possible typings of arguments, which may generate
          new nonterminal typings. *)
       cfa#get_nt_bindings_applied_to_hterms id |> List.iter (fun (nt, binding) ->
-          self#infer_nt_ty nt (Some (id, hty)) binding
+          self#infer_nt_ty nt (Some (id, hty)) None binding
         );
       true
     with
@@ -239,8 +235,35 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
 
   (** Processes prop_nt_ty_queue if not empty and returns if it was not empty. *)
   method process_prop_nt_ty_queue : bool =
-    (* TODO this is to be implemented when implementing special case for linear nonterminals *)
-    false
+    (* TODO merge with nt queue by changing batchqueue to accept empty list of types *)
+    try
+      let nt, tys = BatchQueue.dequeue prop_nt_ty_queue in
+      if !Flags.no_force_nt_ty_opt then
+        SetQueue.enqueue prop_nt_queue nt
+      else
+        begin
+          print_verbose !Flags.verbose_queues @@ lazy (
+            "prop_nt_queue: Propagating new types of nonterminal " ^
+            hg#nt_name nt ^ " : " ^ string_of_ity (TyList.of_list tys) ^ "."
+          );
+          let ftys = TySet.of_list tys in
+          (* Inferring type of nonterminals that contain this one while enforcing usage of
+             new types. *)
+          cfa#get_nt_containing_nt nt |> SortedNTs.iter (fun nt' ->
+              cfa#lookup_nt_bindings nt |>
+              List.iter @@ self#infer_nt_ty nt None (Some (nt, ftys))
+            );
+          (* Inferring type of hterms that contain this nonterminal while enforcing usage of
+             new types. *)
+          cfa#get_hterms_containing_nt nt |> SortedHTermsIds.iter (fun recomputed_id ->
+              cfa#get_hterms_bindings recomputed_id |>
+              sort_and_delete_duplicates |>
+              List.iter @@ self#infer_hterms_hty recomputed_id None (Some (nt, ftys))
+            );
+        end;
+      true
+    with
+    | BatchQueue.Empty -> false
 
   (** Processes prop_nt_queue if not empty and returns if it was not empty. *)
   method process_prop_nt_queue : bool =
@@ -254,9 +277,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
          application of this nonterminal to other terms may yield new possible typings and
          effectively give new type for the terms it is contained in. *)
       cfa#get_nt_containing_nt nt |> SortedNTs.iter (fun nt' ->
-          SetQueue.enqueue nt_queue nt';
-          (* removing bindings for that nt, since all of its bindings will be recomputed *)
-          TwoLayerQueue.remove_all nt_binding_queue nt'
+          SetQueue.enqueue nt_queue nt'
         );
       (* This step is required, because when a new type is computed for a nonterminal, new typings
          of hterms that contain it may be computed. *)
@@ -266,19 +287,6 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       true
     with
     | SetQueue.Empty -> false
-      
-  (** Processes prop_nt_binding_queue if not empty and returns if it was not empty. *)
-  method process_nt_binding_queue : bool =
-    try
-      let nt, binding = TwoLayerQueue.dequeue nt_binding_queue in
-      print_verbose !Flags.verbose_queues @@ lazy (
-        "nt_binding_queue: Typing nonterminal " ^ hg#nt_name nt ^
-        " with binding " ^ string_of_binding string_of_int binding ^ "."
-      );
-      self#infer_nt_ty nt None binding;
-      true
-    with
-    | TwoLayerQueue.Empty -> false
 
   (** Processes nt_queue if not empty and returns if it was not empty.
       It finds all bindings of a nonterminal and enqueues them to be typed. *)
@@ -292,7 +300,11 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         " bindings of nonterminal " ^ hg#nt_name nt ^ "."
       );
       List.iter (fun binding ->
-          TwoLayerQueue.enqueue nt_binding_queue nt binding
+          print_verbose !Flags.verbose_typing @@ lazy (
+            "Typing nonterminal " ^ hg#nt_name nt ^
+            " with binding " ^ string_of_binding string_of_int binding ^ "."
+          );
+          self#infer_nt_ty nt None None binding;
         ) bindings;
       true
     with
@@ -307,7 +319,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         "hterms_queue: Typing hterms " ^ hg#string_of_hterms id ^ " with " ^
         string_of_int (List.length bindings) ^ " bindings.";
       );
-      bindings |> List.iter @@ self#infer_hterms_hty id None;
+      bindings |> sort_and_delete_duplicates |>
+      List.iter @@ self#infer_hterms_hty id None None;
       true
     with
     | SetQueue.Empty -> false
@@ -322,7 +335,6 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     self#process_prop_hterms_hty_queue ||
     self#process_prop_nt_ty_queue ||
     self#process_prop_nt_queue ||
-    self#process_nt_binding_queue ||
     self#process_nt_queue ||
     self#process_hterms_queue
   

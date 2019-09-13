@@ -21,6 +21,9 @@ let init_flags () =
   Flags.verbose_all := false;
   Flags.type_format := "short";
   Flags.force_unsafe := false;
+  Flags.no_headvar_opt := true;
+  Flags.no_force_nt_ty_opt := true;
+  Flags.no_force_hterms_hty_opt := false;
   Flags.propagate_flags ()
 
 let rec paths_equal path1 path2 =
@@ -313,14 +316,14 @@ let penv_test () : test =
     (* nt requirement not satisfied and impossible to satisfy *)
     "req-sat-2" >:: (fun _ ->
         let bix_htys = [(0, [[ity_top]]); (1, [[ity_top]])] in
-        let ctx = lctx [] bix_htys None (Some ([], ty_pr)) in
+        let ctx = lctx [] bix_htys None (Some ([], TySet.singleton ty_pr)) in
         assert_equal false @@ ctx_requirements_satisfied ctx
       );
 
     (* nt requirement not satisfied *)
     "req-sat-3" >:: (fun _ ->
         let bix_htys = [(0, [[ity_top]]); (1, [[ity_top]])] in
-        let ctx = lctx [] bix_htys None (Some ([1], ty_pr)) in
+        let ctx = lctx [] bix_htys None (Some ([1], TySet.singleton ty_pr)) in
         assert_equal false @@ ctx_requirements_satisfied ctx
       );
 
@@ -497,7 +500,7 @@ let penv_test () : test =
 
     "split-nt-1" >:: (fun _ ->
         let nt_ity = [|TySet.of_string "np /\\ pr"|] in
-        let ctx = lctx [] [] None @@ Some ([0; 1; 2], ty_np) in
+        let ctx = lctx [] [] None @@ Some ([0; 1; 2], TySet.singleton ty_np) in
         let res = ctx_split_nt ctx nt_ity 0 0 in
         assert_equal ~printer:string_of_ity (ity_of_string "np /\\ pr") @@
         TyList.of_list @@ List.map fst res;
@@ -510,7 +513,7 @@ let penv_test () : test =
 
     "split-nt-2" >:: (fun _ ->
         let nt_ity = [|TySet.of_string "np /\\ pr"|] in
-        let ctx = lctx [] [] None @@ Some ([0], ty_np) in
+        let ctx = lctx [] [] None @@ Some ([0], TySet.singleton ty_np) in
         let res = ctx_split_nt ctx nt_ity 0 0 in
         assert_equal ~printer:string_of_ity (ity_of_string "np") @@
         TyList.of_list @@ List.map fst res;
@@ -535,14 +538,14 @@ let penv_test () : test =
     
     "enforce-nt-2" >:: (fun _ ->
         let nt_ity = [|TySet.of_string "np /\\ pr"|] in
-        let ctx = lctx [] [] None @@ Some ([0], ty_np) in
+        let ctx = lctx [] [] None @@ Some ([0], TySet.singleton ty_np) in
         assert_equal ~printer:string_of_bool true @@
         is_some @@ ctx_enforce_nt ctx nt_ity 0 0 ty_np
       );
 
     "enforce-nt-3" >:: (fun _ ->
         let nt_ity = [|TySet.of_string "np /\\ pr"|] in
-        let ctx = lctx [] [] None @@ Some ([0], ty_np) in
+        let ctx = lctx [] [] None @@ Some ([0], TySet.singleton ty_np) in
         assert_equal ~printer:string_of_bool false @@
         is_some @@ ctx_enforce_nt ctx nt_ity 0 0 ty_pr
       );
@@ -555,17 +558,24 @@ let penv_test () : test =
         is_some @@ ctx_enforce_nt ctx nt_ity 0 0 @@ ty_of_string "np -> pr"
       );
 
+    "enforce-nt-5" >:: (fun _ ->
+        let nt_ity = [|TySet.of_string "np /\\ pr"|] in
+        let ctx = lctx [] [] None @@ Some ([0], TySet.of_string "np /\\ pr") in
+        assert_equal ~printer:string_of_bool true @@
+        is_some @@ ctx_enforce_nt ctx nt_ity 0 0 ty_np
+      );
+
     "intersect-0" >:: (fun _ ->
-        let ctx1 = lctx [] [] None @@ Some ([0; 1], ty_np) in
-        let ctx2 = lctx [] [] None @@ Some ([1; 2], ty_np) in
+        let ctx1 = lctx [] [] None @@ Some ([0; 1], TySet.singleton ty_np) in
+        let ctx2 = lctx [] [] None @@ Some ([1; 2], TySet.singleton ty_np) in
         let ctx = intersect_ctxs ctx1 ctx2 in
-        let expected = lctx [] [] None @@ Some ([1], ty_np) in
+        let expected = lctx [] [] None @@ Some ([1], TySet.singleton ty_np) in
         assert_equal ~cmp:ctx_equal expected @@ option_get ctx
       );
 
     "intersect-1" >:: (fun _ ->
-        let ctx1 = lctx [] [] None @@ Some ([0], ty_np) in
-        let ctx2 = lctx [] [] None @@ Some ([2], ty_np) in
+        let ctx1 = lctx [] [] None @@ Some ([0], TySet.singleton ty_np) in
+        let ctx2 = lctx [] [] None @@ Some ([2], TySet.singleton ty_np) in
         let ctx = intersect_ctxs ctx1 ctx2 in
         assert_equal None ctx
       );

@@ -47,7 +47,7 @@ class typing (hg : hgrammar) = object(self)
       (i.e., without nonterminal) to index of hterm in the product environment (ih). *)
   method binding2ctx (hterm : hterm) (mask : vars option)
       (fixed_hterms_hty : (hterms_id * hty) option)
-      (fixed_nt_ty : (nt_id * ty) option)
+      (fixed_nt_ty : (nt_id * TySet.t) option)
       (binding : hterms_id binding) : ctx =
     let var_bix = var_bix binding in
     let bix_data = IntMap.of_list @@ index_list binding in
@@ -93,15 +93,15 @@ class typing (hg : hgrammar) = object(self)
     (* assuming that forced ty is in nt_ity *)
     let forced_nt_ty =
       match fixed_nt_ty with
-      | Some (nt, ty) ->
+      | Some (nt, tys) ->
         let locs =
           List.map fst @@
           List.filter (fun (l, (h, i)) -> h = HNT nt) @@
           HlocMap.bindings @@
           hg#loc2head_occurence hterm
         in
-        assert (TySet.mem ty nt_ity.(nt));
-        Some (locs, ty)
+        assert (TySet.subset tys nt_ity.(nt));
+        Some (locs, tys)
       | None -> None
     in
     mk_ctx var_bix bix_htys forced_hterms_hty forced_nt_ty

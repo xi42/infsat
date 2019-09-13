@@ -29,7 +29,7 @@ type ctx = {
       It is assumed (and not checked) that nonterminals in these locations have possible type
       ty in nt_ity supplied to operations working on nonterminals. If this set is empty then
       it means that the restriction can't be satisfied and this context is empty. *)
-  forced_nt_ty : (HlocSet.t * ty) option
+  forced_nt_ty : (HlocSet.t * TySet.t) option
 }
 
 (** Normalize the context, i.e., remove non-forced typings for given binding index (bix) if it
@@ -51,13 +51,13 @@ let ctx_normalize (ctx : ctx) : ctx =
 
 let mk_ctx (var_bix : (bix * int) IntMap.t) (bix_htys : HtySet.t BixMap.t)
     (forced_hterms_hty : hty BixMap.t option)
-    (forced_nt_ty : (hloc list * ty) option) : ctx =
+    (forced_nt_ty : (hloc list * TySet.t) option) : ctx =
   let ctx = {
     var_bix = var_bix;
     bix_htys = bix_htys;
     forced_hterms_hty = forced_hterms_hty;
-    forced_nt_ty = option_map (fun (hlocs, ty) ->
-        (HlocSet.of_list hlocs, ty)
+    forced_nt_ty = option_map (fun (flocs, ftys) ->
+        (HlocSet.of_list flocs, ftys)
       ) forced_nt_ty
   } in
   ctx_normalize ctx
@@ -152,10 +152,10 @@ let ctx_enforce_var (ctx : ctx) (_, v : var_id) (ty : ty) : (ty * ctx) list =
 
 let ctx_split_nt (ctx : ctx) (nt_ity : TySet.t array) (nt : nt_id) (loc : hloc) : (ty * ctx) list =
   match ctx.forced_nt_ty with
-  | Some (flocs, fty) ->
+  | Some (flocs, ftys) ->
     if HlocSet.mem loc flocs then
       TySet.fold (fun ty acc ->
-          if Ty.equal ty fty then
+          if TySet.mem ty ftys then
             (* requirement was satisfied *)
             (ty, { ctx with forced_nt_ty = None }) :: acc
           else
@@ -165,7 +165,7 @@ let ctx_split_nt (ctx : ctx) (nt_ity : TySet.t array) (nt : nt_id) (loc : hloc) 
               acc
             else
               (* requirement was not satisfied, but there are more options *)
-              (ty, { ctx with forced_nt_ty = Some (flocs, fty) }) :: acc
+              (ty, { ctx with forced_nt_ty = Some (flocs, ftys) }) :: acc
         ) nt_ity.(nt) []
     else
       List.map (fun ty -> (ty, ctx)) @@ TySet.elements nt_ity.(nt)
@@ -176,9 +176,9 @@ let ctx_enforce_nt (ctx : ctx) (nt_ity : TySet.t array) (nt : nt_id) (loc : hloc
     (ty : ty) : (ty * ctx) option =
   if TySet.mem ty nt_ity.(nt) then
     match ctx.forced_nt_ty with
-    | Some (flocs, fty) ->
+    | Some (flocs, ftys) ->
       if HlocSet.mem loc flocs then
-        if Ty.equal ty fty then
+        if TySet.mem ty ftys then
           (* requirement was satisfied *)
           Some (ty, { ctx with forced_nt_ty = None })
         else
@@ -188,7 +188,7 @@ let ctx_enforce_nt (ctx : ctx) (nt_ity : TySet.t array) (nt : nt_id) (loc : hloc
             None
           else
             (* requirement was not satisfied, but there are more positions *)          
-            Some (ty, { ctx with forced_nt_ty = Some (flocs, fty) })
+            Some (ty, { ctx with forced_nt_ty = Some (flocs, ftys) })
       else
         Some (ty, ctx)
     | None ->
@@ -313,9 +313,9 @@ let string_of_ctx (ctx : ctx) : string =
   in
   let forced_nt_ty_str =
     match ctx.forced_nt_ty with
-    | Some (flocs, fty) ->
+    | Some (flocs, ftys) ->
       " FNT (" ^ concat_map ", " string_of_int (HlocSet.elements flocs) ^ " : " ^
-      string_of_ty fty ^ ")"
+      (concat_map " \\/ " string_of_ty @@ TySet.elements ftys) ^ ")"
     | None -> ""
   in
   bix_htys_str ^ forced_hterms_hty_str ^ forced_nt_ty_str

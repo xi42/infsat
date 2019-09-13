@@ -5,7 +5,7 @@ let make (max_first : int) : 'a t =
 
 let enqueue (firsts, seconds : 'a t) (first : int) (second : 'a) : unit =
   let sec = seconds.(first) in
-  seconds.(first) <- second::sec;
+  seconds.(first) <- second :: sec;
   if sec = [] then
     firsts := first :: !firsts
 
