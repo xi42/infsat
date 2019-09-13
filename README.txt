@@ -78,8 +78,7 @@ TODO
 ----
 * check TODOs in code and resolve them or move here
 * update documentation
-* bring back computing no-head-vars w/o context
-* head vars optimization
+* bring back computing no-head-vars w/o context with a flag, make id also a special case
 * Possible optimizations:
   - pre-computing short-circuit-friendly order of computing argument types for type_check_app
   - computing terms without variables first and short circuit after for all terms
@@ -90,3 +89,7 @@ TODO
   - early removing contexts that do not satisfy requirements when it is known a branch with
     needed loc won't be taken
   - reusing output context from previous argument instead of intersecting it in typing app
+  - computing minimum mask of variables that are needed to compute type of hterms or nt to
+    remove types like [T; T; ...]
+  - not using types like [T; T; ...] when a type having no T is present (basic subtyping with
+    only one relation T >= t for all t)

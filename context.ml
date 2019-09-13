@@ -295,6 +295,11 @@ let string_of_ctx (ctx : ctx) : string =
         ("(" ^ vars ^ " : " ^ htys ^ ")") :: acc
       ) ctx.bix_htys []
   in
+  let bix_htys_str =
+    match bix_htys_strs with
+    | [] -> "()"
+    | _ -> String.concat ", " bix_htys_strs
+  in
   let forced_hterms_hty_str =
     match ctx.forced_hterms_hty with
     | Some fbix_htys ->
@@ -313,4 +318,4 @@ let string_of_ctx (ctx : ctx) : string =
       string_of_ty fty ^ ")"
     | None -> ""
   in
-  String.concat ", " bix_htys_strs ^ forced_hterms_hty_str ^ forced_nt_ty_str
+  bix_htys_str ^ forced_hterms_hty_str ^ forced_nt_ty_str

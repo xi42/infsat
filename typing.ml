@@ -277,6 +277,11 @@ class typing (hg : hgrammar) = object(self)
     in
     assert (target = None || TargetEnvs.targets_count res <= 1);
     print_verbose !Flags.verbose_proofs @@ lazy (
+      let target_info =
+        match target with
+        | Some target -> " : " ^ string_of_ty target
+        | None -> ""
+      in
       let check_info =
         if TargetEnvs.is_empty res then
           " does not type check"
@@ -284,7 +289,7 @@ class typing (hg : hgrammar) = object(self)
           " type checks with the following targets and environments: " ^
           TargetEnvs.to_string res
       in
-      hg#string_of_hterm true HlocMap.empty 0 hterm ^ check_info
+      hg#string_of_hterm true HlocMap.empty 0 hterm ^ target_info ^ check_info
     );
     res
 
@@ -301,7 +306,7 @@ class typing (hg : hgrammar) = object(self)
     let h_arity = List.length args in
     (* Get all head typings using type_check. Head typings are targets of this TE. Note that
        types of variables may have different productivity from the variable itself. *)
-    let all_h_te = self#type_check_hterm (h, []) None ctx loc no_pr_vars force_pr_var in
+    let all_h_te = self#type_check_hterm (h, []) None ctx loc no_pr_vars false in
     print_verbose !Flags.verbose_proofs @@ lazy (
       "head_ity: " ^
       string_of_ity (TyList.of_list @@ TargetEnvs.targets all_h_te)
@@ -470,8 +475,7 @@ class typing (hg : hgrammar) = object(self)
                    target argument is not productive, the actual argument must be not
                    productive and have no productive variables. *)
                 let arg_te =
-                  self#type_check_arg arg_term arg_ty pr_target np_target ctx arg_loc
-                    no_pr_vars force_pr_var
+                  self#type_check_arg arg_term arg_ty pr_target np_target ctx arg_loc no_pr_vars
                 in
                 let intersection = TargetEnvs.intersect te arg_te in
                 print_verbose !Flags.verbose_proofs @@ lazy (
@@ -489,7 +493,9 @@ class typing (hg : hgrammar) = object(self)
                    Nonproductive target requires no duplication. *)
                 let res = TargetEnvs.filter_no_dup_for_np_targets intersection in
                 print_verbose !Flags.verbose_proofs @@ lazy (
-                  "env count after no duplication filtering: " ^
+                  "envs after no duplication filtering: " ^
+                  TargetEnvs.to_string res ^ "\n" ^
+                  "envs count: " ^
                   string_of_int (TargetEnvs.size res)
                 );
                 indent (-1);
@@ -535,13 +541,13 @@ class typing (hg : hgrammar) = object(self)
   method type_check_arg (hterm : hterm) (arg_target : ty)
       (pr_target : ty option) (np_target : ty option)
       (ctx : ctx) (loc : hloc)
-      (no_pr_vars : bool) (force_pr_var : bool) : te =
+      (no_pr_vars : bool) : te =
     if is_productive arg_target then
       (* case when target argument is productive *)
       (* subcase when actual argument is productive *)
       let pr_arg_te =
         (* productive actual argument implies productive target *)
-        match pr_target with (* TODO target is in keys of te *)
+        match pr_target with (* TODO target is in keys of te, no need to pass it *)
         | Some pr_target ->
           (* Retarget also marks these environments with information that
              productive actual argument was used and removes duplication

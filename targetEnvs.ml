@@ -16,13 +16,6 @@ module ContextEnvs = struct
         compare_pair env_compare ctx_compare
     end)
 
-  (*
-  (** Conversion of list of envs to an envs without metadata. Careful with making sure that
-      location types are added elsewhere. *)
-  let of_list_empty_meta (l : env list) : t =
-    of_list @@ List.map mk_env_empty_meta l
-  *)
-
   (** Returns the same envs with flags set to default values. *)
   let with_empty_temp_flags_and_locs (envs : t) : t =
     map (fun (env, ctx) ->
@@ -94,13 +87,6 @@ module TargetEnvs = struct
   let targets (te : t) : ty list =
     List.map fst @@ TyMap.bindings te
 
-  (*
-  let for_all (f : ty -> env -> bool) : t -> bool =
-    M.for_all (fun target envs ->
-        ContextEnvs.for_all (fun env -> f target env) envs
-      )
-  *)
-
   (** Removes targets with empty list of envs. *)
   let remove_empty_targets : t -> t =
     TyMap.filter (fun target envs -> not @@ ContextEnvs.is_empty envs)
@@ -165,7 +151,7 @@ module TargetEnvs = struct
   (** Flatten an intersection of variable environments, intersected separately for each target.
       Environments are essentially OR-separated sets of AND-separated sets of typings of
       variables with contexts. Flattening means moving outer intersection (AND) inside.
-      AND of two environments is just summing all restrictions, i.e., summing intersection
+      AND of two environments is just summing all restrictions, i.e., intersecting intersection
       types. Intersection of contexts is intersection of product with additional border cases
       with hterms/nonterminal typing restrictions. *)
   let intersect (te1 : t) (te2 : t) : t =

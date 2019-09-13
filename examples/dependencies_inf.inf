@@ -1,0 +1,9 @@
+(* This grammar forces computation of A with [P; Q] : [T; T] and everything needs a variable. This grammar tests ability to bootstrap the typing with T. *)
+Grammar.
+S -> A P Q S.
+P x -> x.
+Q x -> x.
+A x y z -> b (B x y z) (A (C a x) (C a Q) z).
+B x y z -> b e (y z).
+C f g x -> f (g x).
+End.

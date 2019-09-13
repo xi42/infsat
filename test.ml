@@ -73,6 +73,11 @@ let mk_typing g =
   let hg = mk_hgrammar g in
   (hg, new Typing.typing hg)
 
+let mk_examples_typing filename =
+  let g = Conversion.prerules2gram @@ Main.parse_file filename in
+  EtaExpansion.eta_expand g;
+  mk_typing g
+
 let type_check_nt (typing : typing) (hg : hgrammar) (nt : nt_id) (target: ty) =
   typing#type_check (hg#nt_body nt) (Some target)
 
@@ -2035,7 +2040,7 @@ let typing_double_test () =
 
 
 
-(** Grammar to test uncategorized typing schemes. *)
+(** Grammar to test other features of typing algorithm. *)
 let grammar_misc () = mk_grammar
     [|
       (* N0 -> N1 e *)
@@ -2043,7 +2048,7 @@ let grammar_misc () = mk_grammar
       (* N1 x -> a x *)
       (1, App (TE A, Var (1, 0)));
       (* N2 -> N2 *)
-      (0, NT 2)
+      (0, NT 2);
     |]
 
 let typing_misc_test () =
@@ -2103,6 +2108,66 @@ let typing_misc_test () =
 
 
 
+(** Testing grammars from examples directory under specific conditions. *)
+let typing_examples_border_cases () =
+  [
+    (* regression test *)
+    "type_check-ex-1" >:: (fun _ ->
+        let hg, typing = mk_examples_typing "examples/dependencies_inf.inf" in
+        let id_into_A = hg#locate_hterms_id 3 [0; 1; 0] in
+        ignore @@ typing#add_hterms_hty id_into_A @@
+        [ity_top; ity_of_string "np -> pr"; ity_of_string "np"];
+        ignore @@ typing#add_hterms_hty id_into_A @@
+        [ity_top; ity_of_string "np -> pr"; ity_top];
+        ignore @@ typing#add_hterms_hty id_into_A @@
+        [ity_top; ity_top; ity_of_string "np"];
+        ignore @@ typing#add_hterms_hty id_into_A @@
+        [ity_top; ity_top; ity_top];
+        ignore @@ typing#add_nt_ty 4 @@ ty_of_string "T -> (np -> pr) -> np -> np";
+        let ctx = typing#binding2ctx (hg#nt_body 3) None None None [(0, 2, id_into_A)] in
+        let ctx_expected =
+          lctx [(0, (0, 0)); (1, (0, 1)); (2, (0, 2))]
+            [(0, [[ity_top; ity_of_string "np -> pr"; ity_of_string "np"]])] None None
+        in
+        let used_nts =
+          NTTyMap.singleton (4, ty_of_string "T -> (np -> pr) -> np -> np") false
+        in
+        assert_equal_tes
+          (TargetEnvs.of_list @@ [
+              (ty_np, [
+                  (mk_env used_nts empty_loc_types false @@
+                   IntMap.of_list [(1, ity_of_string "np -> pr"); (2, ity_of_string "np")],
+                   ctx_expected)
+                ])
+            ]) @@
+        typing#type_check (hg#nt_body 3) None ctx false false
+      );
+
+    (* sub-case of 1 with the bug *)
+    "type_check-ex-2" >:: (fun _ ->
+        let hg, typing = mk_examples_typing "examples/dependencies_inf.inf" in
+        let id_into_A = hg#locate_hterms_id 3 [0; 1; 0] in
+        ignore @@ typing#add_hterms_hty id_into_A @@
+        [ity_top; ity_of_string "np -> pr"; ity_of_string "np"];
+        ignore @@ typing#add_nt_ty 4 @@ ty_of_string "T -> (np -> pr) -> np -> np";
+        let ctx = typing#binding2ctx (hg#nt_body 3) None None None [(0, 2, id_into_A)] in
+        let id_A_xyz = hg#locate_hterms_id 3 [0; 0; 0] in
+        let used_nts =
+          NTTyMap.singleton (4, ty_of_string "T -> (np -> pr) -> np -> np") false
+        in
+        assert_equal_tes
+          (TargetEnvs.of_list @@ [
+              (ty_np, [
+                  (mk_env used_nts empty_loc_types false @@
+                   IntMap.of_list [(1, ity_of_string "np -> pr"); (2, ity_of_string "np")],
+                   ctx)
+                ])
+            ]) @@
+        typing#type_check (HNT 4, [id_A_xyz]) (Some ty_np) ctx false true
+      );
+  ]
+  
+
 let typing_test () : test =
   init_flags ();
   "typing" >:::
@@ -2111,7 +2176,8 @@ let typing_test () : test =
   typing_xyyz_test () @
   typing_dup_test () @
   typing_double_test () @
-  typing_misc_test ()
+  typing_misc_test () @
+  typing_examples_border_cases ()
 
 
 

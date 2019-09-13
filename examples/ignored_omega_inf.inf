@@ -1,0 +1,7 @@
+Grammar.
+S -> b Omega (L K (E Omega Omega) Omega).
+Omega -> Omega.
+L x y z -> b (x y z) (a (L x y z)).
+K x y -> x.
+E x y -> e.
+End.

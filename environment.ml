@@ -93,8 +93,9 @@ let with_used_nts (used_nts : used_nts) (env : env) : env =
 let with_single_loc_ty (loc : hloc) (ty : ty) (env : env) : env =
   { env with loc_types = loc_with_single_type loc ty }
 
-(** Merging vars is summation of itys of the same var. The result is a new, merged
-    environment and information whether duplication of a productive variable occured. *)
+(** Merging vars is intersection of itys of the same var (i.e., summation of restrictions, so
+    it is implemented as sum of sets). The result is a new, merged environment and information
+    whether duplication of a productive variable occured. *)
 let intersect_vars (vars1 : ity IntMap.t) (vars2 : ity IntMap.t) : ity IntMap.t * bool =
   let dup = ref false in
   let vars = IntMap.union (fun _ ity1 ity2 ->
@@ -146,7 +147,7 @@ let env_eq (env1 : env) (env2 : env) =
 let string_of_env (env : env) : string =
   let vars_str =
     if IntMap.is_empty env.vars then
-      "*"
+      "()"
     else
       String.concat ", " @@ List.of_seq @@
       Seq.map (fun (i, ity) -> string_of_int i ^ " : " ^ string_of_ity ity) @@

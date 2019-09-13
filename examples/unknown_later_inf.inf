@@ -1,0 +1,5 @@
+(* First A has to be computed with no info on variables, then S : np, then A again. *)
+Grammar.
+S -> A S.
+A x -> b e (t x (a S)).
+End.

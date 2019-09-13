@@ -437,10 +437,13 @@ class dfg = object(self)
   method to_string (nt_name : nt_id -> string) : string =
     NTTyMap.fold (fun (nt, ty) (out_edges, _) acc ->
         let edges_str =
-          String.concat "; " @@ NTTyMap.fold (fun (nt', ty') (_, edge_pos) acc ->
-              (nt_name nt' ^ " : " ^ string_of_ty ty' ^ " (" ^
-               string_of_int (int_of_bool edge_pos) ^ ")") :: acc
-            ) out_edges []
+          if NTTyMap.is_empty out_edges then
+            "()"
+          else
+            String.concat "; " @@ NTTyMap.fold (fun (nt', ty') (_, edge_pos) acc ->
+                (nt_name nt' ^ " : " ^ string_of_ty ty' ^ " (" ^
+                 string_of_int (int_of_bool edge_pos) ^ ")") :: acc
+              ) out_edges []
         in
         acc ^ nt_name nt ^ " : " ^ string_of_ty ty ^ " => " ^ edges_str ^ "\n"
       ) graph ""
