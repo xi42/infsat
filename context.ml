@@ -143,7 +143,8 @@ let ctx_enforce_var (ctx : ctx) (_, v : var_id) (ty : ty) : (ty * ctx) list =
     let htys = IntMap.find bix ctx.bix_htys in
     let htys =
       HtySet.filter (fun hty ->
-          TyList.exists (Ty.equal ty) (List.nth hty i)
+          (* TODO this should be a TySet *)
+          TyList.mem ty (List.nth hty i)
         ) htys
     in
     List.map (fun ctx -> (ty, ctx)) @@ ctx_shrink_htys ctx bix htys

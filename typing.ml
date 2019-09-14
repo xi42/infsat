@@ -254,14 +254,12 @@ class typing (hg : hgrammar) = object(self)
                 compatible_ctx
               end
           | None ->
-            (* If we're in this branch with None target then this must be a head variable or the
-               whole term is a variable, since other variables will always have a target
-               inferred from the head.
+            (* If we're in this branch with None target then this must be a head variable,
+               since other variables will always have a target inferred from the head.
                If the context is defined, we take the variables from it. If not, we deem this
                term untypable in current conditions. This is not a problem, because to construct
                the proof tree for application of this nonterminal, we'll have to get the proof
                tree for arguments first. *)
-            (* TODO maybe change definition of headvar to include var-only terms *)
             TargetEnvs.of_list @@
             List.map (fun (ty, ctx) ->
                 let env =

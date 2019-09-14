@@ -78,7 +78,6 @@ TODO
 ----
 * check TODOs in code and resolve them or move here
 * update documentation
-* bring back computing no-head-vars w/o context with a flag, make id also a special case
 * Possible optimizations:
   - pre-computing short-circuit-friendly order of computing argument types for type_check_app
   - computing terms without variables first and short circuit after for all terms
@@ -93,3 +92,4 @@ TODO
     remove types like [T; T; ...]
   - not using types like [T; T; ...] when a type having no T is present (basic subtyping with
     only one relation T >= t for all t)
+  - replace TyList with TySet in Htys due to ctx_enforce_var checking mem
