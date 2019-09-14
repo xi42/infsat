@@ -168,16 +168,20 @@ let rec vars_in_terms (terms : term list) : vars =
   | t :: terms' ->
     SortedVars.merge (vars_in_term t) (vars_in_terms terms')
 
-(** Returns ascending list of variables in term that are not in an argument of a nonterminal or
-    a terminal and are applied to something. *)
-let rec headvars_in_term (term : term) : vars =
+(** Returns ascending list of variables in term whose whole type is not decided by parent,
+    i.e. variables applied to a term and the sole variable if the whole term is san identity. *)
+let rec headvars_in_term (root : bool) (term : term) : vars =
   match term with
   | TE _ | NT _ -> SortedVars.empty
-  | Var _ -> SortedVars.empty
+  | Var x ->
+    if root then
+      SortedVars.singleton x
+    else
+      SortedVars.empty
   | App (Var x, t2) ->
-    SortedVars.merge (SortedVars.singleton x) (headvars_in_term t2)
+    SortedVars.merge (SortedVars.singleton x) (headvars_in_term false t2)
   | App (t1, t2) ->
-    SortedVars.merge (headvars_in_term t1) (headvars_in_term t2)
+    SortedVars.merge (headvars_in_term false t1) (headvars_in_term false t2)
 
 (** List of nonterminals used in term. *)
 let rec nt_in_term (term : term) : SortedNTs.t =

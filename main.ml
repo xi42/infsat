@@ -36,10 +36,10 @@ let options = [
    "Maximum number of saturation iterations before giving up");
   ("-nohvo", Arg.Set Flags.no_headvar_opt,
    "Turn off optimization to separately compute terms with no head variables.");
-  ("-nofntty", Arg.Set Flags.no_force_nt_ty_opt,
-   "Turn off optimization to recompute with only new typings of nonterminals.");
   ("-noftty", Arg.Set Flags.no_force_hterms_hty_opt,
    "Turn off optimization to recompute with only new typings of argument terms.");
+  ("-nofntty", Arg.Set Flags.no_force_nt_ty_opt,
+   "Turn off optimization to recompute with only new typings of nonterminals.");
 ]
 
 (** Parses a file to HORS prerules and automata definition. *)

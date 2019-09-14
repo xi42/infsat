@@ -160,7 +160,7 @@ class hgrammar (grammar : grammar) = object(self)
     (h, hterms)
 
   method headvars_in_nt (nt : nt_id) : vars =
-    headvars_in_term @@ snd @@ grammar#rule nt
+    headvars_in_term true @@ snd @@ grammar#rule nt
 
   (** Number of leafs in a hterm. *)
   method hterm_size (_, ids : hterm) : int =
@@ -385,7 +385,12 @@ class hgrammar (grammar : grammar) = object(self)
     String.concat "\n" @@ Array.to_list (
       nt_bodies |>
       Array.mapi (fun nt body ->
-          self#nt_name nt ^ " -> " ^ self#string_of_hterm false HlocMap.empty 0 body ^ "."
+          let var_names =
+            concat_map "" (fun v -> " " ^ self#var_name (nt, v)) @@
+            range 0 @@ self#nt_arity nt
+          in
+          self#nt_name nt ^ var_names ^ " -> " ^
+          self#string_of_hterm false HlocMap.empty 0 body ^ "."
         )
     )
      

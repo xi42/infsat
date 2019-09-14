@@ -271,7 +271,7 @@ let ctx_equal (ctx1 : ctx) (ctx2 : ctx) : bool =
   ctx_compare ctx1 ctx2 = 0 && IntMap.equal (=) ctx1.var_bix ctx2.var_bix &&
   option_equal (BixMap.equal hty_eq) ctx1.forced_hterms_hty ctx2.forced_hterms_hty
 
-(** Empty context for testing purposes. *)
+(** Empty context. *)
 let empty_ctx : ctx = mk_ctx IntMap.empty BixMap.empty None None
 
 let string_of_ctx (ctx : ctx) : string =

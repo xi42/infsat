@@ -21,8 +21,8 @@ let init_flags () =
   Flags.verbose_all := false;
   Flags.type_format := "short";
   Flags.force_unsafe := false;
-  Flags.no_headvar_opt := true;
-  Flags.no_force_nt_ty_opt := true;
+  Flags.no_headvar_opt := false;
+  Flags.no_force_nt_ty_opt := false;
   Flags.no_force_hterms_hty_opt := false;
   Flags.propagate_flags ()
 
@@ -2335,18 +2335,32 @@ let examples_test () : test =
     else
       Main.parse_and_report_finiteness (path filename)
   in
-  "Examples" >::: [
-    "Infinite examples" >::: List.map (fun filename ->
-        filename >:: (fun _ ->
-            assert_equal ~printer:id "infinite" @@
-            Saturation.string_of_infsat_result @@ run filename))
-      inf_filenames;
-    "Finite examples" >::: List.map (fun filename ->
-        filename >:: (fun _ ->
-            assert_equal ~printer:Saturation.string_of_infsat_result Finite @@
-            run filename))
-      fin_filenames
-  ]
+  let flag_states = [true; false] in
+  let all_flag_states = product [flag_states; flag_states; flag_states] in
+  let tests : test list =
+    all_flag_states |>
+    List.map (function
+        | [no_headvar_opt; no_force_hterms_hty_opt; no_force_nt_ty_opt] as flags ->
+          Flags.no_headvar_opt := no_headvar_opt;
+          Flags.no_force_hterms_hty_opt := no_force_hterms_hty_opt;
+          Flags.no_force_nt_ty_opt := no_force_nt_ty_opt;
+          let name = "flags-" ^ concat_map "-" string_of_bool flags in
+          name >::: [
+            "Infinite examples" >::: List.map (fun filename ->
+                filename >:: (fun _ ->
+                    assert_equal ~printer:id "infinite" @@
+                    Saturation.string_of_infsat_result @@ run filename))
+              inf_filenames;
+            "Finite examples" >::: List.map (fun filename ->
+                filename >:: (fun _ ->
+                    assert_equal ~printer:Saturation.string_of_infsat_result Finite @@
+                    run filename))
+              fin_filenames
+          ]
+        | _ -> failwith "Unreachable"
+      )
+  in
+  "Examples" >::: tests
 
 
 

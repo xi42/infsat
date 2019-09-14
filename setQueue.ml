@@ -24,13 +24,6 @@ let rec dequeue (qref, bitmap) =
          are ignored and only the topmost value is used. *)
       dequeue (qref, bitmap)
 
-let print_queue (qref, bitmap) =
-  List.iter (fun x ->
-      if bitmap.(x) then
-        print_string ((string_of_int x)^",")
-    ) !qref;
-  print_string "\n"
-
 (** Enqueues an integer if it isn't in the queue yet. *)
 let enqueue (qref, bitmap) n =
   if bitmap.(n) = false then

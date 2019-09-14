@@ -5,9 +5,9 @@ let make (max_first : int) : 'a t =
 
 let enqueue (firsts, seconds : 'a t) (first : int) (second : 'a) : unit =
   let sec = seconds.(first) in
-  seconds.(first) <- second :: sec;
   if sec = [] then
-    firsts := first :: !firsts
+    firsts := first :: !firsts;
+  seconds.(first) <- second :: sec
 
 exception Empty
 
@@ -22,3 +22,9 @@ let dequeue (firsts, seconds : 'a t) : int * 'a list =
 
 let size (firsts, seconds : 'a t) : int =
   List.length !firsts
+
+let string_of_queue (s : 'a -> string) (firsts, seconds : 'a t) : string =
+  Utilities.string_of_list Utilities.id @@
+  List.map (fun first ->
+      string_of_int first ^ " -> " ^ (String.concat ", " @@ List.map s seconds.(first))
+    ) !firsts

@@ -14,8 +14,8 @@ let maxiters : int ref = ref 0
 let normalize = ref false
 let normalization_depth = ref 1
 let no_headvar_opt : bool ref = ref false
-let no_force_nt_ty_opt : bool ref = ref false
 let no_force_hterms_hty_opt : bool ref = ref false
+let no_force_nt_ty_opt : bool ref = ref false
 
 let propagate_flags () : unit =
   if !verbose_all then

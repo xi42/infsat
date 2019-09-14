@@ -65,13 +65,11 @@ class cfa (hg : hgrammar) = object(self)
 
   (** variable_head_nodes[nt][i] is a list of processed hterms that have variable (nt, i) as
       head, i.e., i-th variable in definition of nonterminal nt. Internal for this module. *)
-  (* TODO cleanup of docs *)
   val variable_head_nodes : hterm list array array = Array.make hg#nt_count [||]
 
-  (** array_headvars[f] is a list of head variables in nonterminal's definition, i.e., variables
-      that are applied to something. *)
-  (* TODO cleanup of docs *)
-  val array_headvars : vars array = Array.make hg#nt_count SortedVars.empty
+  (** nt_headvars[f] is a list of head variables in nonterminal's definition, i.e., variables
+      that are applied to something or the sole variable if the term is an identity. *)
+  val nt_headvars : vars array = Array.make hg#nt_count SortedVars.empty
 
   (** hterms_where_hterms_flow[id] contains a list of ids of hterms that contain a variable that
       could be substituted with a hterm from hterms idenfitied by id. In other words, this is a
@@ -109,8 +107,8 @@ class cfa (hg : hgrammar) = object(self)
   method hterms_are_arg (id : hterms_id) : bool =
     hterms_are_arg.(id)
   
-  method has_head_vars (nt : nt_id) : bool =
-    SortedVars.is_empty array_headvars.(nt)
+  method nt_has_headvars (nt : nt_id) : bool =
+    not @@ SortedVars.is_empty nt_headvars.(nt)
   
   (* --- printing --- *)
 
@@ -170,11 +168,6 @@ class cfa (hg : hgrammar) = object(self)
       (terms, false)
     else
       (term :: terms, true)
-
-  (*
-  method print_hterm hterm =
-    hg#print_hterm hterm
-*)
 
   method enqueue_hterm hterm =
     hterm_queue <- hterm :: hterm_queue
@@ -318,11 +311,6 @@ class cfa (hg : hgrammar) = object(self)
   method get_hterms_bindings (id : hterms_id) : hterms_id binding list =
     hterms_bindings.(id)
 
-  (*
-  method get_nt_containing_nt_lin nt =
-    nt_containing_nt_linearly.(nt)
-  *)
-
   (* --- registering dependencies --- *)
 
   (** Appends hterm id2 to id1's list of hterms_where_hterms_flow. *)
@@ -344,29 +332,7 @@ class cfa (hg : hgrammar) = object(self)
     let nts' = SortedNTs.merge (SortedNTs.singleton nt2) nts in
     nt_containing_nt.(nt1) <- nts'
 
-  (*
-  method register_dep_nt_nt_lin nt1 nt2 =
-    let nts = nt_containing_nt_linearly.(nt1) in
-    let nts' = SortedNTs.merge (SortedNTs.singleton nt2) nts in
-    nt_containing_nt_linearly.(nt1) <- nts'
-  *)
-
   (* --- computing dependencies --- *)
-
-  (*
-  method private print_binding_vars (vars : vars) =
-    print_string "[";
-    SortedVars.iter (fun (nt, i) -> print_string @@ string_of_int i ^ ",") vars;
-    print_string "]"
-
-  method print_binding_with_mask (binding : (vars * hterms_id) binding) =
-    List.iter (fun (i, j, (vars, id)) ->
-        print_string @@ "(" ^ string_of_int i ^ "," ^ string_of_int j ^ ",";
-        self#print_binding_vars vars;
-        print_string @@ ", " ^ string_of_int id ^ "), "
-      ) binding; 
-    print_string "\n"
-  *)
 
   method string_of_hterms_bindings : string =
     "Dependency info (hterms_id -> [(from,to,hterms_id); ...]):\n" ^
@@ -481,22 +447,9 @@ class cfa (hg : hgrammar) = object(self)
         )
       )
 
-  (*
-  method print_dep_nt_nt_lin =
-    for i = 0 to Array.length nt_containing_nt_linearly - 1 do
-      let nts = nt_containing_nt_linearly.(i) in
-      if not (nts = SortedNTs.empty) then
-        begin
-          print_string @@ hg#nt_name i ^ " linearly occurs in ";
-          SortedNTs.iter (fun j -> print_string @@ hg#nt_name j ^ ",") nts;
-          print_string "\n"
-        end
-    done
-  *)
-
   method compute_dependencies =
     for nt = 0 to hg#nt_count - 1 do
-      array_headvars.(nt) <- hg#headvars_in_nt nt;
+      nt_headvars.(nt) <- hg#headvars_in_nt nt;
       self#mk_binding_depgraph_for_nt nt nt_bindings.(nt)
     done;
     (* make dependency nt --> id (which means "id depends on nt") *)
@@ -516,23 +469,24 @@ class cfa (hg : hgrammar) = object(self)
     for nt1 = 0 to hg#nt_count - 1 do
       let nts1, nts2 = hg#nt_in_nt_with_linearity nt1 in
       SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1) nts2;
-      (* TODO support for linearity
-      if !Flags.incremental then
-        SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt_lin nt2 nt1) nts1
-         else *)
       SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1) nts1
     done;
     print_verbose !Flags.verbose_preprocessing @@ lazy (
-      self#string_of_hterms_bindings
-      (* TODO print_nt_containing_nt ? *)
-      (*
-      self#print_dep_nt_nt_lin
-      *)
+      self#string_of_hterms_bindings ^
+      "\n\nNonterminals with head variables: " ^
+      (concat_map ", " hg#nt_name @@ List.filter_map (fun nt ->
+           if self#nt_has_headvars nt then
+             None
+           else
+             Some nt
+         ) @@ range 0 @@ hg#nt_count) ^
+      "\n"
     )
 
   initializer
     for i = 0 to hg#nt_count - 1 do
-      variable_head_nodes.(i) <- Array.make (hg#nt_arity i) [] (* variable_head_nodes[nt_id][arg_id] = [] *)
+      variable_head_nodes.(i) <- Array.make (hg#nt_arity i) []
     done;
-    self#enqueue_hterm (HNT(0), []) (* enqueue first nonterminal with no args and first state *)
+    (* enqueue the first nonterminal with no args *)
+    self#enqueue_hterm (HNT 0, [])
 end
