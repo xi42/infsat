@@ -206,12 +206,16 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     indent (+1);
     let mask = hg#id2vars id in
     let hterms = hg#id2hterms id in
-    let tels = hterms |> List.map (fun hterm ->
+    let tes = hterms |> List.map (fun hterm ->
         let ctx = typing#binding2ctx hterm (Some mask) forced_hterms_hty None binding in
         typing#type_check hterm None ctx false false
       )
     in
-    let hty = tels |> List.map TargetEnvs.targets_as_args in
+    let hty =
+      Array.of_list @@
+      List.map (fun te -> TySet.of_ity @@ TargetEnvs.targets_as_args te) @@
+      tes
+    in
     self#register_hterms_hty id hty;
     indent (-1)
 

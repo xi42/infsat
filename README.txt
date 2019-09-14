@@ -92,4 +92,3 @@ TODO
     remove types like [T; T; ...]
   - not using types like [T; T; ...] when a type having no T is present (basic subtyping with
     only one relation T >= t for all t)
-  - replace TyList with TySet in Htys due to ctx_enforce_var checking mem

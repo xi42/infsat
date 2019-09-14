@@ -49,18 +49,3 @@ module HtySet = struct
     not @@ is_empty s &&
     hty_compare (min_elt s) (max_elt s) = 0
 end
-
-module TySet = struct
-  include Set.Make (struct
-      type t = ty
-      let compare = Ty.compare
-    end)
-
-  let of_list (l : ty list) : t = of_seq @@ List.to_seq l
-
-  let to_ity (s : t) : TyList.t = TyList.of_list @@ elements s
-
-  let of_string (str : string) : t = of_list @@ TyList.to_list @@ ity_of_string str
-
-  let to_string (s : t) : string = string_of_ity @@ to_ity s
-end

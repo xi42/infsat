@@ -119,15 +119,15 @@ let ctx_split_var (ctx : ctx) (_, v : var_id) : (ty * ctx) list =
   (* splitting htys by type of i-th variable in them *)
   let ty_htys : HtySet.t TyMap.t =
     HtySet.fold (fun hty acc ->
-        let ity = List.nth hty i in
-        TyList.fold_left (fun acc ty ->
+        let ity = hty.(i) in
+        TySet.fold (fun ty acc ->
             let htys =
               match TyMap.find_opt ty acc with
               | Some htys -> HtySet.add hty htys
               | None -> HtySet.singleton hty
             in
             TyMap.add ty htys acc
-          ) acc ity
+          ) ity acc
       ) htys TyMap.empty
   in
   TyMap.fold (fun ty htys acc ->
@@ -143,8 +143,7 @@ let ctx_enforce_var (ctx : ctx) (_, v : var_id) (ty : ty) : (ty * ctx) list =
     let htys = IntMap.find bix ctx.bix_htys in
     let htys =
       HtySet.filter (fun hty ->
-          (* TODO this should be a TySet *)
-          TyList.mem ty (List.nth hty i)
+          TySet.mem ty hty.(i)
         ) htys
     in
     List.map (fun ctx -> (ty, ctx)) @@ ctx_shrink_htys ctx bix htys

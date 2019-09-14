@@ -57,12 +57,12 @@ class typing (hg : hgrammar) = object(self)
       | Some mask ->
         let maskSet = IntSet.of_list @@ List.map snd @@ SortedVars.to_list mask in
         fun i hty ->
-          List.map (fun (ix, ity) ->
+          Array.mapi (fun ix tys ->
               if IntSet.mem (ix + i) maskSet then
-                ity
+                tys
               else
-                ity_top
-            ) @@ index_list hty
+                tys_top
+            ) hty
     in
     let bix_htys =
       IntMap.map (fun (i, _, id) ->
@@ -613,7 +613,7 @@ class typing (hg : hgrammar) = object(self)
            if should_be_printed id then
              let htys = hty_store#get_htys id in
              string_of_int id ^ ":\n" ^
-             concat_map "\n" (string_of_list string_of_ity) @@ HtySet.elements htys
+             concat_map "\n" string_of_hty @@ HtySet.elements htys
            else
              ""
          ))

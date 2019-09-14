@@ -177,19 +177,34 @@ and ity_of_string (ity_str : string) : ity =
 
 (* --- hterms type --- *)
 
+module TySet = struct
+  include Set.Make (struct
+      type t = ty
+      let compare = Ty.compare
+    end)
+
+  let of_list (l : ty list) : t = of_seq @@ List.to_seq l
+
+  let to_ity (s : t) : TyList.t = TyList.of_list @@ elements s
+
+  let of_ity (ity : ity) : t = of_list @@ TyList.to_list ity
+
+  let of_string (str : string) : t = of_list @@ TyList.to_list @@ ity_of_string str
+
+  let to_string (s : t) : string = string_of_ity @@ to_ity s
+end
+
+let tys_top = TySet.empty
+
 (** Typing of each of hterm's arguments. *)
-type hty = ity list
+type hty = TySet.t array
 
 (** Lexicographical order on hty. *)
 let rec hty_compare : hty -> hty -> int =
-  compare_lists TyList.compare
+  compare_arrays TySet.compare
 
 let rec hty_eq (hty1 : hty) (hty2 : hty) : bool =
-  match hty1, hty2 with
-  | [], [] -> true
-  | ity1 :: hty1', ity2 :: hty2' ->
-    TyList.equal ity1 ity2 && hty_eq hty1' hty2'
-  | _, _ -> false
+  hty_compare hty1 hty2 = 0
 
 let string_of_hty (hty : hty) : string =
-  string_of_list string_of_ity hty
+  string_of_list (fun tys -> string_of_ity @@ TySet.to_ity tys) @@ Array.to_list hty

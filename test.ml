@@ -95,13 +95,21 @@ let senv positive v ity_str =
   singleton_env empty_used_nts empty_loc_types positive (-1, v) @@ ity_of_string ity_str
 
 let sctx typing ity_strs =
-  let hty = List.map ity_of_string ity_strs in
-  let var_bix = IntMap.of_list @@ List.map (fun (ix, _) -> (ix, (0, ix))) @@ index_list hty in
+  let tys_list = List.map TySet.of_string ity_strs in
+  let hty = Array.of_list @@ tys_list in
+  let var_bix =
+    IntMap.of_list @@ List.map (fun (ix, _) -> (ix, (0, ix))) @@ index_list tys_list
+  in
   let bix_htys = IntMap.singleton 0 [hty] in
   mk_ctx var_bix (IntMap.map HtySet.of_list bix_htys) None None
 
-let lctx var_bix bix_htys forced_hterms_hty forced_nt_ty : ctx =
-  mk_ctx (IntMap.of_list var_bix) (IntMap.map HtySet.of_list @@ IntMap.of_list bix_htys)
+let lctx var_bix (bix_htys : (int * ity list list) list) forced_hterms_hty forced_nt_ty : ctx =
+  mk_ctx (IntMap.of_list var_bix) (IntMap.map (fun itys ->
+      HtySet.of_list @@ List.map (fun itys ->
+          Array.of_list @@
+          List.map (fun ity -> TySet.of_ity ity) itys
+        ) itys
+    ) @@ IntMap.of_list bix_htys)
     (option_map BixMap.of_list forced_hterms_hty) forced_nt_ty
 
 let list_sort_eq (l1 : 'a list list) (l2 : 'a list list) : bool =
@@ -111,12 +119,8 @@ let list_sort_eq (l1 : 'a list list) (l2 : 'a list list) : bool =
 let string_of_ll = string_of_list (string_of_list string_of_int)
 
 (** Fake hterm location. *)
-let l : int = 0
+(*let l : int = 0*)
 
-(*
-let mk_fake_envm (used_nts : used_nts) : bool -> env -> envm =
-  mk_envm used_nts empty_loc_types
-*)
 let assert_regexp_count (expected_count : int) (regexp : Str.regexp) (str : string) : unit =
   let rec count_aux i count =
     if i > String.length str then
@@ -330,7 +334,7 @@ let penv_test () : test =
     (* hterms requirement not satisfied *)
     "req-sat-4" >:: (fun _ ->
         let bix_htys = [(0, [[ity_top]]); (1, [[ity_top]])] in
-        let ctx = lctx [] bix_htys (Some [(0, [ity_top]); (1, [ity_top])]) None in
+        let ctx = lctx [] bix_htys (Some [(0, [|tys_top|]); (1, [|tys_top|])]) None in
         assert_equal false @@ ctx_requirements_satisfied ctx
       );
 
@@ -350,7 +354,7 @@ let penv_test () : test =
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx [] bix_htys (Some [(0, [ity_top])]) None in
+        let ctx = lctx [] bix_htys (Some [(0, [|tys_top|])]) None in
         assert_equal ~printer:string_of_int 6 @@ ctx_var_combinations ctx
       );
 
@@ -360,7 +364,7 @@ let penv_test () : test =
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx [] bix_htys (Some [(0, [ity_top]); (2, [ity_top])]) None in
+        let ctx = lctx [] bix_htys (Some [(0, [|tys_top|]); (2, [|tys_top|])]) None in
         assert_equal ~printer:string_of_int 10 @@ ctx_var_combinations ctx
       );
 
@@ -390,11 +394,12 @@ let penv_test () : test =
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (2, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
+        let tys_pr = [|TySet.of_string "pr"|] in
         let ctx = lctx [] bix_htys
             (Some [
-                (0, [ity_of_string "pr"]);
-                (1, [ity_of_string "pr"]);
-                (2, [ity_of_string "pr"])
+                (0, tys_pr);
+                (1, tys_pr);
+                (2, tys_pr)
               ]) None in
         assert_equal ~printer:string_of_int 14 @@ ctx_var_combinations ctx
       );
@@ -404,7 +409,7 @@ let penv_test () : test =
             (0, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_top]; [ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx [] bix_htys (Some [(0, [ity_top]); (1, [ity_top])]) None in
+        let ctx = lctx [] bix_htys (Some [(0, [|tys_top|]); (1, [|tys_top|])]) None in
         assert_equal ~printer:string_of_int 5 @@ ctx_var_combinations ctx
       );
 
@@ -426,9 +431,10 @@ let penv_test () : test =
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
+        let tys_pr = [|TySet.of_string "pr"|] in
         let ctx = lctx var_bix bix_htys (Some [
-            (0, [ity_of_string "pr"]);
-            (1, [ity_of_string "pr"])
+            (0, tys_pr);
+            (1, tys_pr)
           ]) None in
         assert_equal ~printer:(string_of_list string_of_int) [1; 2] @@
         List.sort compare @@
@@ -453,9 +459,10 @@ let penv_test () : test =
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
+        let tys_pr = [|TySet.of_string "pr"|] in
         let ctx = lctx var_bix bix_htys (Some [
-            (0, [ity_of_string "pr"]);
-            (1, [ity_of_string "pr"])
+            (0, tys_pr);
+            (1, tys_pr)
           ]) None in
         assert_equal ~printer:(string_of_list string_of_int) [1] @@
         List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
@@ -468,7 +475,8 @@ let penv_test () : test =
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]]);
             (1, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
-        let ctx = lctx var_bix bix_htys (Some [(0, [ity_of_string "np"])]) None in
+        let tys_np = [|TySet.of_string "np"|] in
+        let ctx = lctx var_bix bix_htys (Some [(0, tys_np)]) None in
         assert_equal ~printer:(string_of_list string_of_int) [2] @@
         List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
         ctx_enforce_var ctx (0, 0) ty_np
@@ -481,8 +489,8 @@ let penv_test () : test =
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
         let ctx = lctx var_bix bix_htys (Some [
-            (0, [ity_of_string "T -> pr"]);
-            (1, [ity_of_string "T -> pr"])
+            (0, [|TySet.of_string "T -> pr"|]);
+            (1, [|TySet.of_string "T -> pr"|])
           ]) None in
         assert_equal ~printer:(string_of_list string_of_int) [] @@
         List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
@@ -643,8 +651,8 @@ let penv_test () : test =
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
         let forced_hterms_hty = Some [
-            (0, [ity_of_string "T -> np"]);
-            (1, [ity_of_string "T -> np"])
+            (0, [|TySet.of_string "T -> np"|]);
+            (1, [|TySet.of_string "T -> np"|])
           ] in
         let ctx1 = lctx var_bix bix_htys1 forced_hterms_hty None in
         let ctx2 = lctx var_bix bix_htys2 forced_hterms_hty None in
@@ -665,8 +673,8 @@ let penv_test () : test =
             (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
           ] in
         let forced_hterms_hty = Some [
-            (0, [ity_of_string "T -> np"]);
-            (1, [ity_of_string "T -> np"])
+            (0, [|TySet.of_string "T -> np"|]);
+            (1, [|TySet.of_string "T -> np"|])
           ] in
         let ctx1 = lctx var_bix bix_htys1 forced_hterms_hty None in
         let ctx2 = lctx var_bix bix_htys2 forced_hterms_hty None in
@@ -1626,17 +1634,17 @@ let typing_xyyz_test () =
   ignore @@ typing#add_nt_ty 3 @@ ty_of_string "(np -> np) -> np -> np";
   let id0_0 = hg#locate_hterms_id 0 [0] in
   ignore @@ typing#get_hty_store#add_hty id0_0
-    [
-      ity_of_string "pr -> pr";
-      ity_of_string "np -> np";
-      ity_of_string "np -> pr"
-    ];
+    [|
+      TySet.of_string "pr -> pr";
+      TySet.of_string "np -> np";
+      TySet.of_string "np -> pr"
+    |];
   ignore @@ typing#get_hty_store#add_hty id0_0
-    [
-      ity_of_string "pr -> pr";
-      ity_of_string "pr -> pr";
-      ity_of_string "pr -> pr"
-    ];
+    [|
+      TySet.of_string "pr -> pr";
+      TySet.of_string "pr -> pr";
+      TySet.of_string "pr -> pr"
+    |];
   let binding1 = [(0, 2, id0_0)] in
   let var_bix1 = [(0, (0, 0)); (1, (0, 1)); (2, (0, 2))] in
   [
@@ -1727,19 +1735,19 @@ let typing_xyyz_test () =
         let bix_htys = [
           (0, [
               [
-                ity_of_string "T";
-                ity_of_string "T";
+                ity_top;
+                ity_top;
                 ity_of_string "np -> pr"
               ]
             ])
         ] in
         let forced_hterms_hty =
-          Some [(0, [ity_of_string "T"; ity_of_string "T"; ity_of_string "np -> pr"])]
+          Some [(0, [|tys_top; tys_top; TySet.of_string "np -> pr"|])]
         in
         assert_equal_ctxs
           (lctx var_bix1 bix_htys forced_hterms_hty None) @@
         typing#binding2ctx (hg#nt_body 1) (Some (SortedVars.of_list [(1, 2)]))
-          (Some (id0_0, [ity_of_string "T"; ity_of_string "T"; ity_of_string "np -> pr"]))
+          (Some (id0_0, [|tys_top; tys_top; TySet.of_string "np -> pr"|]))
           None
           binding1
       );
@@ -1939,12 +1947,12 @@ let typing_double_test () =
   let hg, typing = mk_typing @@ grammar_double () in
   let id0_abaee = hg#locate_hterms_id 0 [0] in
   ignore @@ typing#add_hterms_hty id0_abaee @@
-  [ity_of_string "np -> pr /\\ pr -> pr"; ity_of_string "pr"];
+  [|TySet.of_string "np -> pr /\\ pr -> pr"; TySet.of_string "pr"|];
     ignore @@ typing#add_hterms_hty id0_abaee @@
-  [ity_of_string "np -> pr /\\ pr -> pr"; ity_of_string "np"];
+  [|TySet.of_string "np -> pr /\\ pr -> pr"; TySet.of_string "np"|];
   let id1_y = hg#locate_hterms_id 1 [0; 0; 0] in
-  ignore @@ typing#add_hterms_hty id1_y @@ [ity_of_string "pr"];
-  ignore @@ typing#add_hterms_hty id1_y @@ [ity_of_string "np"];
+  ignore @@ typing#add_hterms_hty id1_y @@ [|TySet.of_string "pr"|];
+  ignore @@ typing#add_hterms_hty id1_y @@ [|TySet.of_string "np"|];
   let var_bix1 = [(0, (0, 0)); (1, (0, 1))] in
   let var_bix2 = [(0, (0, 0)); (1, (1, 0))] in
   [
@@ -1956,11 +1964,11 @@ let typing_double_test () =
           (1, [[ity_of_string "pr"]; [ity_of_string "np"]])
         ] in
         let forced_hterms_hty =
-          Some [(0, [ity_of_string "pr"]); (1, [ity_of_string "pr"])]
+          Some [(0, [|TySet.of_string "pr"|]); (1, [|TySet.of_string "pr"|])]
         in
         assert_equal_ctxs
           (lctx var_bix2 bix_htys forced_hterms_hty None) @@
-        typing#binding2ctx (hg#nt_body 2) None (Some (id1_y, [ity_of_string "pr"])) None
+        typing#binding2ctx (hg#nt_body 2) None (Some (id1_y, [|TySet.of_string "pr"|])) None
           [(0, 0, id1_y); (1, 1, id1_y)]
       );
 
@@ -1972,12 +1980,12 @@ let typing_double_test () =
           (1, [[ity_of_string "T"]])
         ] in
         let forced_hterms_hty =
-          Some [(0, [ity_of_string "pr"]); (1, [ity_of_string "T"])]
+          Some [(0, [|TySet.of_string "pr"|]); (1, [|tys_top|])]
         in
         assert_equal_ctxs
           (lctx var_bix2 bix_htys forced_hterms_hty None) @@
         typing#binding2ctx (hg#nt_body 2) (Some (SortedVars.singleton (2, 0)))
-          (Some (id1_y, [ity_of_string "pr"])) None [(0, 0, id1_y); (1, 1, id1_y)]
+          (Some (id1_y, [|TySet.of_string "pr"|])) None [(0, 0, id1_y); (1, 1, id1_y)]
       );
 
     (* Creation of context without mask or forced hty when there are two copies of same
@@ -2018,7 +2026,7 @@ let typing_double_test () =
           (lctx var_bix1 bix_htys None None) @@
         typing#binding2ctx (hg#nt_body 1)
           (Some (SortedVars.singleton (1, 0)))
-          (Some (id0_abaee, [ity_of_string "pr -> pr /\\ np -> pr"; ity_of_string "np"]))
+          (Some (id0_abaee, [|TySet.of_string "pr -> pr /\\ np -> pr"; TySet.of_string "np"|]))
           None
           [(0, 1, id0_abaee)]
       );
@@ -2035,7 +2043,7 @@ let typing_double_test () =
           (lctx var_bix1 bix_htys None None) @@
         typing#binding2ctx (hg#nt_body 1)
           (Some (SortedVars.singleton (1, 1)))
-          (Some (id0_abaee, [ity_of_string "pr -> pr /\\ np -> pr"; ity_of_string "np"]))
+          (Some (id0_abaee, [|TySet.of_string "pr -> pr /\\ np -> pr"; TySet.of_string "np"|]))
           None
           [(0, 1, id0_abaee)]
       );
@@ -2126,13 +2134,13 @@ let typing_examples_border_cases () =
         let hg, typing = mk_examples_typing "examples/dependencies_inf.inf" in
         let id_into_A = hg#locate_hterms_id 3 [0; 1; 0] in
         ignore @@ typing#add_hterms_hty id_into_A @@
-        [ity_top; ity_of_string "np -> pr"; ity_of_string "np"];
+        [|tys_top; TySet.of_string "np -> pr"; TySet.of_string "np"|];
         ignore @@ typing#add_hterms_hty id_into_A @@
-        [ity_top; ity_of_string "np -> pr"; ity_top];
+        [|tys_top; TySet.of_string "np -> pr"; tys_top|];
         ignore @@ typing#add_hterms_hty id_into_A @@
-        [ity_top; ity_top; ity_of_string "np"];
+        [|tys_top; tys_top; TySet.of_string "np"|];
         ignore @@ typing#add_hterms_hty id_into_A @@
-        [ity_top; ity_top; ity_top];
+        [|tys_top; tys_top; tys_top|];
         ignore @@ typing#add_nt_ty 4 @@ ty_of_string "T -> (np -> pr) -> np -> np";
         let ctx = typing#binding2ctx (hg#nt_body 3) None None None [(0, 2, id_into_A)] in
         let ctx_expected =
@@ -2158,7 +2166,7 @@ let typing_examples_border_cases () =
         let hg, typing = mk_examples_typing "examples/dependencies_inf.inf" in
         let id_into_A = hg#locate_hterms_id 3 [0; 1; 0] in
         ignore @@ typing#add_hterms_hty id_into_A @@
-        [ity_top; ity_of_string "np -> pr"; ity_of_string "np"];
+        [|tys_top; TySet.of_string "np -> pr"; TySet.of_string "np"|];
         ignore @@ typing#add_nt_ty 4 @@ ty_of_string "T -> (np -> pr) -> np -> np";
         let ctx = typing#binding2ctx (hg#nt_body 3) None None None [(0, 2, id_into_A)] in
         let id_A_xyz = hg#locate_hterms_id 3 [0; 0; 0] in

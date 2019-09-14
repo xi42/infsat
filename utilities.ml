@@ -179,6 +179,23 @@ let rec compare_lists (cmp : 'a -> 'a -> int) (l1 : 'a list) (l2 : 'a list) : in
   | [], _ -> -1
   | _, [] -> 1
 
+let compare_arrays (cmp : 'a -> 'a -> int) (a1 : 'a array) (a2 : 'a array) : int =
+  let lc = compare (Array.length a1) (Array.length a2) in
+  if lc <> 0 then
+    lc
+  else
+    let rec aux i =
+      if i >= Array.length a1 then
+        0
+      else
+        let c = compare a1.(i) a2.(i) in
+        if c <> 0 then
+          c
+        else
+          aux (i + 1)
+    in
+    aux 0
+
 (** A list of integers from m to n - 1 (empty if m >= n). *)
 let rec range (m : int) (n : int) : int list =
   if m >= n then
