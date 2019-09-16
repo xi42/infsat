@@ -471,7 +471,7 @@ Num59
 End.
 
 Terminals.
-aa -> 2 +.
+aa -> 2 + $.
 abbr -> 2 +.
 acronym -> 2 +.
 address -> 2 +.
@@ -536,11 +536,11 @@ small -> 2 +.
 span -> 2 +.
 strong -> 2 +.
 style -> 2 +.
-sub -> 2 +.
-sup -> 2 +.
+sub -> 2 + $.
+sup -> 2 + $.
 table -> 2 +.
 tbody -> 2 +.
-td -> 2 +.
+td -> 2 + $.
 text -> 2 +.
 textarea -> 2 +.
 tfoot -> 2 +.
@@ -551,5 +551,5 @@ tr -> 2 +.
 tt -> 2 +.
 ul -> 2 +.
 var -> 2 +.
-fail -> 0.
+fail -> 0 $.
 End.

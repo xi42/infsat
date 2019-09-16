@@ -13,7 +13,7 @@ if [[ "$1" == "-t" ]]; then
   TIMEOUT=$2
   shift 2
 else
-  TIMEOUT=180
+  TIMEOUT=60
 fi
 
 OPTS="-q $@"

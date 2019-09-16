@@ -215,8 +215,8 @@ End.
 
 Terminals.
 br -> 2 +.
-event_fail -> 1 $.
+event_fail -> 1.
 l0 -> 1 $.
-l1 -> 1 $.
+l1 -> 1.
 unit -> 0.
 End.

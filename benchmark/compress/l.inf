@@ -8,9 +8,9 @@ H g z -> g (rpar (g z)).
 End.
 
 Terminals.
-f -> 1 $.
-lpar -> 1.
-rpar -> 1.
+f -> 1.
+lpar -> 1 $.
+rpar -> 1 $.
 plus -> 1.
 minus -> 1.
 End.

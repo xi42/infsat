@@ -91,16 +91,7 @@ class cfa (hg : hgrammar) = object(self)
   
   (** nt_containing_nt[nt] contains ids of all nonterminals that have nonterminal with id nt
       present in their body. *)
-  (* TODO when adding linearity - except for ones present in nt_containing_nt_lin[nt]. *)
   val nt_containing_nt : nts array = Array.make hg#nt_count SortedNTs.empty
-
-  (* If Flags.incremental is false then nt_containing_nt_linearly[f] contains list of nonterminals g that
-      have f present in their body exactly once at root or applied a number of times to a terminal,
-      i.e., t1 .. (t2 .. (tN (f arg1 .. argK) ..) ..) .. for some terminals tX and terms argY. *)
-  (* TODO cleanup of docs, unused for now *)
-  (*
-  val nt_containing_nt_linearly : nts array = Array.make hg#nt_count SortedNTs.empty
-  *)
 
   (* --- access --- *)
 
@@ -345,36 +336,6 @@ class cfa (hg : hgrammar) = object(self)
           ""
       )
 
-  (*
-  (** Splits a list of vars to ones less or equal to j and larger than j. *)
-  method split_vars vars j =
-    match vars with
-    | [] -> ([], [])
-    | v :: vars' ->
-      if v > j then
-        ([], vars)
-      else
-        let vars1, vars2 = self#split_vars vars' j in
-        (v :: vars1, vars2)
-  *)
-
-  (*
-  (** Given vars of a nonterminal f and bindings (i, j, asX) with arguments that were substituting
-      some of these vars, it returns tuples (i, j, vs, asX) with vs being all vars between i and j,
-      inclusive. *)
-  (* TODO why not do it in the first fun? *)
-  method mk_binding_with_vars vars binding : (vars * hterms_id) binding =
-    match binding with
-    | [] -> []
-    | (i, j, id) :: binding' ->
-      let vars1, vars2 = self#split_vars vars j in
-      if vars1 = [] then
-        self#mk_binding_with_vars vars2 binding'
-      else
-        (* let vars1c = List.filter (fun i->not(List.mem i vars1)) (fromto i (j+1)) in *)
-        (i, j, (vars1, id)) :: self#mk_binding_with_vars vars2 binding'
-  *)
-
   (** Given a list of variables v1, v2, ... from a nonterminal f and bindings from application
       f as1 as2 ..., where asX translates to lists of terms through tab_id_terms, it returns all
       bindings (i, j, asY) such that i <= vK <= j for some K, i.e., that at least one of terms in
@@ -416,12 +377,6 @@ class cfa (hg : hgrammar) = object(self)
         sort_and_delete_duplicates @@
         List.rev_map (fun binding -> self#filter_binding vars' binding) bindings
       in
-      (*
-      let bindings_with_vars =
-        (* tuples (i, j, vs, as) where as was substituted for variables vs from vars' *)
-        List.rev_map (self#mk_binding_with_vars vars') bindings'
-      in
-      *)
       let ids = self#ids_in_bindings bindings' in (* asX that are substituted into f's variables *)
       self#register_hterms_bindings id bindings'; (* register that term with given term id
                                                          had was present in some nonterminal and

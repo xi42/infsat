@@ -62,7 +62,7 @@ true -> 6 +.
 c_cons_x41_xs4376_t -> 0.
 c_nil74_t -> 0.
 c_succ__3772_t -> 0.
-c_z70_t -> 0.
+c_z70_t -> 0 $.
 c_true68_t -> 0.
 c_false66_t -> 0.
 End.
