@@ -83,14 +83,16 @@ let dummy_vname = "dummy_var"
 let dummy_term = NT 0
 let dummy_nt_name = "DummyNT"
 
-let midrule2rule aux_rules nt_counter nt_names rules vinfo (f, (_, ss, pterm)) =
-  let ss' = index_list ss in
-  let arity = List.length ss in
-  let vmap = List.map (fun (i, v) -> (v, (f, i))) ss' in (* [(arg name, (nonterm ix, arg ix)) *)
-  vinfo.(f) <- Array.make arity dummy_vname;
-  List.iter (fun (i,v) -> (vinfo.(f).(i) <- v)) ss'; (* vinfo[nonterm id][arg ix] = arg name *)
+let midrule2rule aux_rules nt_counter nt_names rules vinfo (nt, (_, var_names, pterm)) =
+  let var_names' = index_list var_names in
+  let arity = List.length var_names in
+  (* a map from var names to their identifiers, i.e., (nt id, var index) *)
+  let vmap = List.map (fun (i, v) -> (v, (nt, i))) var_names' in
+  vinfo.(nt) <- Array.make arity dummy_vname;
+  (* vinfo[nt][arg_ix] contains the argument's name *)
+  List.iter (fun (i,v) -> (vinfo.(nt).(i) <- v)) var_names';
   let term = midterm2term aux_rules nt_counter nt_names vmap pterm in
-  rules.(f) <- (arity, term) (* F x_1 .. x_n = t => rules[F] = (n, potentially normalized term with names changed either to var or to terminal) *)
+  rules.(nt) <- (arity, term) (* F x_1 .. x_n = t => rules[F] = (n, potentially normalized term with names changed either to var or to terminal) *)
 
 let midrules2rules aux_rules nt_counter nt_names rules vinfo (midrules : midrules) =
   let midrules_indexed = index_list midrules in
@@ -124,7 +126,6 @@ let filter_used_vars (pterm : midterm) (vars : string list)
     | MVar v ->
       SS.add v used
     | MFun (fun_vars, body) ->
-      (* TODO what if names in fun_vars and scope_vars clash? *)
       SS.union used @@ SS.diff (gather_used_vars body) (SS.of_list fun_vars)
   in
   let used = SS.diff (gather_used_vars pterm) @@ SS.of_list exclude_vars in
@@ -136,12 +137,12 @@ let rec elim_fun_from_midterm fun_counter vl (term : midterm) newrules : midterm
   let MApp (h', pterms''), newrules'' = elim_fun_from_head fun_counter vl h newrules' in
   (MApp (h', pterms'' @ pterms'), newrules'')
   
-and elim_fun_from_midterms fun_counter vl (terms : midterm list) newrules =
+and elim_fun_from_midterms fun_counter scope_vars (terms : midterm list) newrules =
   match terms with
   | [] -> ([], newrules)
   | pterm :: pterms ->
-    let pterms',newrules' = elim_fun_from_midterms fun_counter vl pterms newrules in
-    let pterm', newrules'' = elim_fun_from_midterm fun_counter vl pterm newrules' in
+    let pterms', newrules' = elim_fun_from_midterms fun_counter scope_vars pterms newrules in
+    let pterm', newrules'' = elim_fun_from_midterm fun_counter scope_vars pterm newrules' in
     (pterm' :: pterms', newrules'')
     
 and elim_fun_from_head (fun_counter : int ref) (scope_vars : string list) (h : midhead)
@@ -156,10 +157,13 @@ and elim_fun_from_head (fun_counter : int ref) (scope_vars : string list) (h : m
     let terms1 = List.map (fun v -> MApp (MVar v, [])) used_scope_vars in
     (MApp (MNT f, terms1), (f, fun_nt_vars, pterm') :: newrules')
 
+(** Recursively remove fun terms from rules by generating new nonterminals out of them.
+    If a fun parameter has the same name as some other variable defined outside, the variable
+    defined outside is shadowed by function parameter. *)
 let elim_fun_from_midrule fun_counter (rule : midrule) newrules : midrule * midrules =
-  let f, vl, term = rule in
-  let term', newrules' = elim_fun_from_midterm fun_counter vl term newrules in
-  ((f, vl, term'), newrules')
+  let nt, scope_vars, term = rule in
+  let term', newrules' = elim_fun_from_midterm fun_counter scope_vars term newrules in
+  ((nt, scope_vars, term'), newrules')
   
 (** Removes lambdas from bodies of nonterminals. *)
 let elim_fun_from_midrules fun_counter (rules : midrules) : midrules =

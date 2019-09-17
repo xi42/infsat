@@ -72,20 +72,27 @@ NonterminalName
 (term)
 term1 term2
 
-Examples can be found in directory "examples".
+Examples can be found in directory "examples". Larger examples can be found in directory
+"benchmark".
 
 TODO
 ----
 * check TODOs in code and resolve them or move here
 * update documentation
 * cleanup of 0CFA module
+* cleanup of conversion module by converting it to a class
+* remove global state in type module (where types are assigned a unique integer and the counter
+  used to generate them is still a global state)
 * Possible optimizations:
   - pre-computing short-circuit-friendly order of computing argument types for type_check_app
   - computing terms without variables first and short circuit after for all terms
   - computing terms with non-duplicating variables last with short-circuiting when duplication
     is expected
-  - some kind of cache for type_check even for failed typings, possibly even with versioning
-    due to constant changes in typings of nonterminals and hterms flowing into variables
+  - some kind of cache for typings of hterms computed by type_check even for failed typings;
+    the main problem is that the typing depends on pr var flags, context, and typing of
+    nonterminals, so efficient way of checking which context is a subset of current one would
+    be needed along with invalidating on nonterminal change (though this does not work well
+    with optimization to force nonterminal typings)
   - early removing contexts that do not satisfy requirements when it is known a branch with
     needed loc won't be taken
   - reusing output context from previous argument instead of intersecting it in typing app
