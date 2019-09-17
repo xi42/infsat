@@ -392,9 +392,6 @@ class cfa (hg : hgrammar) = object(self)
     (* when no vars are only in arguments of nonterminals and terminals *)
     (* if no variable occurs in the head position, we do not use binding information to compute
        the type of f *)
-    (* TODO this is optional if Flags.eager is true
-    if not (SortedVars.is_empty array_headvars.(f) && !Flags.eager) then
-    *)
     List.iter (fun binding ->
         binding |> List.iter (
           (* TODO possible duplicates when a binding has two same hterms *)

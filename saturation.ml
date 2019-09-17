@@ -121,7 +121,6 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       )
 
   method register_hterms_hty (id : hterms_id) (hty : hty) =
-    (* TODO subtyping and overwriting logic *)
     if typing#add_hterms_hty id hty then
       begin
         print_verbose !Flags.verbose_typing @@ lazy (

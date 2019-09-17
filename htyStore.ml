@@ -4,9 +4,6 @@ open Type
 open TypingCommon
 open Utilities
 
-(* TODO this should be a data structure with fast merge of 1 element and iteration, not
-   necessarity ordered - maybe ity list hashset array or radix tree like in horsat, maybe some
-   custom optimization for adding products would be useful *)
 (** Mapping from hterms ids to possible typings of these hterms. *)
 class hty_store (hgrammar : hgrammar) = object(self)
   (* --- data --- *)
@@ -20,8 +17,6 @@ class hty_store (hgrammar : hgrammar) = object(self)
   method get_htys (id : hterms_id) : HtySet.t = htys.(id)
 
   (* --- modification --- *)
-
-  (* TODO this should be array hterms_id -> set of hty, also ty funs should change to arg list -> res *)
 
   (** Idempodently adds mapping from id to hty to the storage. Returns whether it was new (did not
       already exist). *)
