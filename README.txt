@@ -77,9 +77,7 @@ Examples can be found in directory "examples". Larger examples can be found in d
 
 TODO
 ----
-* check TODOs in code and resolve them or move here
-* update documentation
-* cleanup of 0CFA module
+* cleanup of 0CFA module and its documentation
 * cleanup of conversion module by converting it to a class
 * remove global state in type module (where types are assigned a unique integer and the counter
   used to generate them is still a global state)

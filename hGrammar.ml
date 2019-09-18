@@ -200,64 +200,16 @@ class hgrammar (grammar : grammar) = object(self)
     loc2occ
 
   (** List of all nonterminals in terms without duplicates. *)
-  method nt_in_terms (terms : term list) : nts =
+  method nts_in_terms (terms : term list) : nts =
     match terms with
     | [] -> SortedNTs.empty
-    | t :: terms' -> SortedNTs.merge (nt_in_term t) (self#nt_in_terms terms')
-
-  method merge_nts_lin (nts1, nts2) (nts3, nts4) =
-    let nts11, nts12 =
-      SortedNTs.partition (fun f -> SortedNTs.mem f nts3 || SortedNTs.mem f nts4) nts1 in
-    let nts31, nts32 =
-      SortedNTs.partition (fun f -> SortedNTs.mem f nts1 || SortedNTs.mem f nts2) nts3 in
-    (SortedNTs.merge nts12 nts32,
-     SortedNTs.merge nts11
-       (SortedNTs.merge nts31 
-          (SortedNTs.merge nts2 nts4)))
-
-  (** Takes all nonterminals L in position at either term = L1, L1 arg1 .. argK, or
-      t1 (.. (tN (L1 ..) ..) .., where tX are terminals, where L additionally satisfy the condition
-      that they appear exactly once in the term. It returns ([L1; ..], [N1; ..]), where NX are
-      other nonterminals present in the term.
-      Intuitively, it returns on the left all nonterminals that have have a sequence (possibly
-      empty) of terminals applied to them and appear exactly once in the term, and the rest of
-      nonterminals on the right. *)
-  method nt_in_term_with_linearity (term : term) : nts * nts =
-    match term with
-    | TE _ | Var _ -> (SortedNTs.empty, SortedNTs.empty)
-    | NT f -> (SortedNTs.singleton f, SortedNTs.empty)
-    | App _ ->
-      let h, terms = decompose_term term in
-      match h with
-      | NT f -> let nts = self#nt_in_terms terms in
-        if SortedNTs.mem f nts then
-          (SortedNTs.empty, nts) (* if head nt used twice *)
-        else
-          (SortedNTs.singleton f, nts) (* if head nt used once *)
-      | Var _ -> (SortedNTs.empty, self#nt_in_terms terms)
-      | TE _ ->
-        (* c has no children. a has a single child, so it is linear. b has two children, but only
-           one at a time is used. Even if we do b (N ..) (N ..) that yield different types, only
-           one N is used as long as there is no other N present. Therefore, b is also linear. *)
-        self#nt_in_terms_with_linearity terms 0 (SortedNTs.empty, SortedNTs.empty)
-      | _ -> assert false
-
-  method nt_in_terms_with_linearity terms i (nts1, nts2) : nts * nts =
-    match terms with (* iteration over terms and linearity info simultaneously *)
-    | [] -> (nts1, nts2) 
-    | t :: terms' ->
-      let (nts1', nts2') = self#nt_in_term_with_linearity t (* recursively *) in
-      let (nts1'', nts2'') = self#merge_nts_lin (nts1', nts2') (nts1, nts2) in
-      self#nt_in_terms_with_linearity terms' (i + 1) (nts1'', nts2'')
+    | t :: terms' -> SortedNTs.merge (nts_in_term t) (self#nts_in_terms terms')
   
-  method nt_in_nt_with_linearity (nt : nt_id) : nts * nts =
-    let term = snd @@ grammar#rule nt in
-    self#nt_in_term_with_linearity term
+  method nts_in_nt (nt : nt_id) : nts =
+    nts_in_term @@ snd @@ grammar#rule nt
 
-  method nts_in_hterms (nt : nt_id) : nts =
-    let terms = self#id2terms nt in (* and is in applicative form list of terms,
-                                       and has variables vars *)
-    self#nt_in_terms terms
+  method nts_in_hterms (id : hterms_id) : nts =
+    self#nts_in_terms @@ self#id2terms id
 
   (* --- construction --- *)
 

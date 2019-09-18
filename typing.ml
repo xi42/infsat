@@ -321,8 +321,9 @@ class typing (hg : hgrammar) = object(self)
       string_of_ity (TyList.of_list @@ TargetEnvs.targets h_data)
     );
     (* Iteration over each compatible with the target typing of the head. annotate_args
-       takes care of grouping types of arguments with their respective terms in args. h_target
-       is the *)
+       takes care of grouping target types of arguments with their respective terms in args.
+       h_target is the type of the head without arguments present in this application (the
+       effective productivity may still be different due to, e.g., duplications). *)
     List.fold_left TargetEnvs.union TargetEnvs.empty @@
     (self#annotate_args args (loc + 1) h_data |>
      List.map (fun (args, h_target, env, ctx) ->
@@ -435,24 +436,22 @@ class typing (hg : hgrammar) = object(self)
       head_info
     );
     indent (+1);
-    (* TODO update description *)
-    (* The target is args = (arg_i: arg_ity_i)_i and the codomain is head_pr.
-       Iterate over arguments while intersecting variable environments with short-circuit.
-       Note that below productive argument describes productivity of the argument term, not
-       productivity of the argument in head's type.
+    (* The target is args = (arg_i: arg_ity_i)_i and the productivity of head is head_pr.
+       arg_ity_i are the target types of respective arguments. We already know the actual type
+       of head, so actual/target type terminology does not apply to head type.
+       We iterate over arguments while intersecting variable environments with short-circuit.
 
-       When the target is productive, there are three options:
-       (1) head is productive and there are no restrictions on arguments, or
-       (2) head is not productive and at least one argument is productive, or
-       (3) head is not productive and all arguments are not productive and there
-         is a duplication (which implies that at least two arguments are
-         productive in head type assuming no head variables).
+       (PR) When the target is productive, there are three cases:
+         (1) head is productive and there are no restrictions on arguments, or
+         (2) head is not productive and at least one actual type of argument is productive, or
+         (3) head is not productive and all actual types of arguments are not productive and
+           there is a duplication (which also implies that at least two target types of
+           arguments are productive in head type assuming there are no head variables).
 
-       (NP) When the target is not productive, the head is not productive, no
-          arguments are productive, and there are no duplications. There still can
-          be productive arguments in head's type, as long as that does not force a
-          duplication. *)
-    (* TODO somehow include changing contexts. *)
+       (NP) When the target is not productive, the head is not productive, actual types of
+            arguments are not productive, and there are no duplications.
+            Target types of arguments may still be productive as long as that does not imply
+            a duplication. *)
     let te = fold_left_short_circuit initial_te args TargetEnvs.empty
         (fun te (arg_term, (arg_ity, arg_loc)) ->
            (* te contains not only variable environments, but also information whether
@@ -468,8 +467,8 @@ class typing (hg : hgrammar) = object(self)
                 indent (+1);
                 (* te are possible variable environments constructed so far from previous
                    arguments, only for the current target.
-                   When target argument is productive, the actual argument can be either
-                   productive or not productive, but with a productive variable. When
+                   When target argument type is productive, the actual argument type can be
+                   either productive or not productive, but with a productive variable. When
                    target argument is not productive, the actual argument must be not
                    productive and have no productive variables. *)
                 let arg_te =
@@ -486,9 +485,9 @@ class typing (hg : hgrammar) = object(self)
                   "env count after intersection: " ^
                   string_of_int (TargetEnvs.size intersection)
                 );
-                (* Productive target might require duplication in (3), but this can only
-                   be checked at the end. (or TODO optimization in argument order).
-                   Nonproductive target requires no duplication. *)
+                (* Productive target might require duplication in (3), but this requirement
+                   is checked after all arguments are processed.
+                   Target type being not productive implies there may be no duplication. *)
                 let res = TargetEnvs.filter_no_dup_for_np_targets intersection in
                 print_verbose !Flags.verbose_proofs @@ lazy (
                   "envs after no duplication filtering: " ^
@@ -508,8 +507,8 @@ class typing (hg : hgrammar) = object(self)
     let te =
       if not head_pr then
         begin
-          (* a duplication or productive actual argument is required when head is not
-             productive and target is productive *)
+          (* A duplication or productive actual argument is required when head is not
+             productive and target type is productive. *)
           let te = TargetEnvs.filter_dup_or_pr_arg_for_pr_targets te in
           print_verbose !Flags.verbose_proofs @@ lazy (
             "* env count after duplication or pr arg filtering: " ^
@@ -545,7 +544,9 @@ class typing (hg : hgrammar) = object(self)
       (* subcase when actual argument is productive *)
       let pr_arg_te =
         (* productive actual argument implies productive target *)
-        match pr_target with (* TODO target is in keys of te, no need to pass it *)
+        (* TODO target is in keys of te, it can be extracted from there instead of passing it
+           as another argument *)
+        match pr_target with
         | Some pr_target ->
           (* Retarget also marks these environments with information that
              productive actual argument was used and removes duplication

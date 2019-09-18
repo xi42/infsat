@@ -183,10 +183,10 @@ let rec headvars_in_term (root : bool) (term : term) : vars =
   | App (t1, t2) ->
     SortedVars.merge (headvars_in_term false t1) (headvars_in_term false t2)
 
-(** List of nonterminals used in term. *)
-let rec nt_in_term (term : term) : SortedNTs.t =
+(** Sorted list of unique nonterminals used in term. *)
+let rec nts_in_term (term : term) : SortedNTs.t =
   match term with
   | TE _ | Var _ -> SortedNTs.empty
   | NT x -> SortedNTs.singleton x
   | App (t1, t2) ->
-    SortedNTs.merge (nt_in_term t1)  (nt_in_term t2)
+    SortedNTs.merge (nts_in_term t1)  (nts_in_term t2)

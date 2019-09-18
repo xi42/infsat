@@ -23,9 +23,10 @@ exception Max_iterations_reached
 exception Positive_cycle_found of cycle_proof
 
 class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
-  (* Design note: typing with specific environments occurs in Typing. This module is used to
-     prepare precise specification of these environments based on 0CFA output. Typing does not
-     use 0CFA depdendency information. *)
+  (* Design note: typing with specific contexts occurs in Typing module. This
+     module is used to prepare specification of these contexts based on 0CFA output.
+     The difference in scope of these modules is that Typing module does not use 0CFA
+     depdendency information. *)
 
   (** Current iteration number kept for debugging purposes only. *)
   val mutable iteration : int = 1
@@ -238,7 +239,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
           else
             (* sort_and_delete_duplicates is here to not repeat the work when the same
                binding is present twice (a rare occurence). This will break if these bindings
-               stop being tuples of ints due to default compare. *)
+               stop being tuples of ints due to default compare.
+               TODO maybe this is not true and sorting/taking unique is not needed *)
             cfa#get_hterms_bindings recomputed_id |>
             sort_and_delete_duplicates |>
             List.filter (List.exists (fun (_, _, id'') -> id'' = id)) |>

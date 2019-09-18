@@ -36,8 +36,7 @@ class cfa (hg : hgrammar) = object(self)
   
   (* --- output of 0CFA --- *)
 
-  (* TODO do cleanup on what needs to be sorted and what is guaranteed to not be duplicated when
-     inserting it. *)
+  (* TODO do cleanup on what is sorted and what has no duplicates. *)
 
   (** hterms_are_arg[id] contains a boolean whether hterms with given id can possibly be an
       argument to a nonterminal. It contains exactly the ids of hterms may be an argument to
@@ -58,8 +57,6 @@ class cfa (hg : hgrammar) = object(self)
 
   (** nt_bindings_applied_to_hterms[id] contains tuples of nonterminal ids and hterms bindings
       under which these nonterminals were applied to hterms identified by id. *)
-      (* TODO after implementing eager flag - that is only if either Flags.eager is false or
-         nt has a head variable in its definition. *)
   val nt_bindings_applied_to_hterms : (nt_id * hterms_id binding) list array =
     Array.make hg#hterms_count []
 
@@ -100,31 +97,21 @@ class cfa (hg : hgrammar) = object(self)
   
   method nt_has_headvars (nt : nt_id) : bool =
     not @@ SortedVars.is_empty nt_headvars.(nt)
-  
-  (* --- printing --- *)
 
-  method string_of_binding (binding : hterms_id binding) : string=
-    String.concat ", " @@ List.map (fun (i, j, id) ->
-        string_of_int i ^ "-" ^ string_of_int j ^ " <- " ^ string_of_int id
-      ) binding
+  method lookup_binding_var (nt, i) = 
+    var_bindings.(nt).(i)
 
-  method string_of_binding_array : string =
-    "bindings (nt -> bindings, one per line, comma-sep same-nt parts):\n" ^
-    String.concat "\n\n" @@ array_listmap nt_bindings (fun nt binding ->
-        hg#nt_name nt ^ ":\n" ^
-        String.concat "\n" @@ List.map self#string_of_binding (nt_bindings).(nt)
-      )
+  method lookup_nt_bindings (nt : nt_id) : hterms_id binding list =
+    nt_bindings.(nt)
+
+  (* --- modificaiton --- *)
+
+  method register_variable_head_node (v : var_id) (hterm: hterm) =
+    let nt, i = v in
+    let a = variable_head_nodes.(nt) in
+    a.(i) <- hterm :: a.(i)
     
-  (* --- TODO split into categories --- *)
-
-  method add_index rho i =
-    match rho with
-    | [] -> []
-    | ids :: rho' -> (* for each args_id *)
-      (* check how many terms are under args_id *)
-      let n = List.length @@ hg#id2terms ids in
-      let j = i+n in
-      (i, j - 1, ids) :: self#add_index rho' j (* each termsid is converted to (first_term_number, last_term_number, termsid), like (0, 3, ...);(4, 5, ...);(6, 11, ...), i.e., start and end positions on a concatenated list of all terms *)
+  (* --- bindings --- *)
 
   method register_nt_bindings_applied_to_hterms (id : hterms_id) (nt : nt_id)
       (binding : hterms_id binding) =
@@ -143,14 +130,21 @@ class cfa (hg : hgrammar) = object(self)
       This function prepends to bindings a tuple (A, ref qs), where A is a list of (n, m, id), where
       id is the args_id from tab_id_terms, and n, n+1, ..., m are numbers that represent which
       arguments does that list stand for (e.g., arg3, arg4 in f arg1 arg2 arg3 arg4 arg5). *)
-  method insert_nt_binding (args : int list) bindings = 
-    let iargs = self#add_index args 0 in
+  method insert_nt_binding (args : int list) bindings =
+    (* refines a list of hterms by adding information on the first and last index of hterms in
+       a concatenated list of all hterms, e.g., [[h1; h2]; [h3]] changes to
+       [(0, 1, [h1; h2]); (2, 2, [h3])]. *)
+    let rec add_index rho i =
+      match rho with
+      | [] -> []
+      | ids :: rho' -> (* for each args_id *)
+        (* check how many terms are under args_id *)
+        let n = List.length @@ hg#id2terms ids in
+        let j = i + n in
+        (i, j - 1, ids) :: add_index rho' j
+    in
+    let iargs = add_index args 0 in
     iargs::bindings
-
-  method register_variable_head_node (v : var_id) (hterm: hterm) =
-    let nt, i = v in
-    let a = variable_head_nodes.(nt) in
-    a.(i) <- hterm :: a.(i)
 
   (** Prepends term to list terms if it is not already there. Returns tuple of resulting list and
       boolean whether it was prepended to list. *)
@@ -159,6 +153,8 @@ class cfa (hg : hgrammar) = object(self)
       (terms, false)
     else
       (term :: terms, true)
+
+  (* --- 0CFA main phase --- *)
 
   method enqueue_hterm hterm =
     hterm_queue <- hterm :: hterm_queue
@@ -191,16 +187,14 @@ class cfa (hg : hgrammar) = object(self)
       i-th argument to nonterminal f, and calls expand_varheadnodes f i term when it was the first
       time adding it to var_bindings. *)
   method register_binding_singlevar nt i term =
-    let tab = var_bindings.(nt) in (* var_bindings[nt_id][arg_id] = [...] *)
-    let binds, changed = self#insert_var_binding term tab.(i) in (* making sure term is in var_bindings[nt_id][arg_id] *)
+    let tab = var_bindings.(nt) in
+    (* making sure term is in var_bindings[nt_id][arg_id] *)
+    let binds, changed = self#insert_var_binding term tab.(i) in
     if changed then (* if it was added just now *)
       begin
         tab.(i) <- binds; (* persist the addition *)
         self#expand_varheadnodes nt i term
       end
-
-  method lookup_binding_var (nt, i) = 
-    var_bindings.(nt).(i)
 
   (** converts rho to lists of args in form (H, [ID..]) as they would appear in
       f arg1 arg2 ...
@@ -229,9 +223,6 @@ class cfa (hg : hgrammar) = object(self)
       ) args;
     nt_bindings.(nt) <- self#insert_nt_binding args nt_bindings.(nt);
     self#register_var_bindings nt args 0
-
-  method lookup_nt_bindings (nt : nt_id) : hterms_id binding list =
-    nt_bindings.(nt)
 
   (** Marking in visited_nodes a hterm that started being processed. *)
   method register_hterm (hterm : hterm) = 
@@ -325,17 +316,6 @@ class cfa (hg : hgrammar) = object(self)
 
   (* --- computing dependencies --- *)
 
-  method string_of_hterms_bindings : string =
-    "Dependency info (hterms_id -> [(from,to,hterms_id); ...]):\n" ^
-    String.concat "\n" @@ List.filter (fun s -> s <> "") @@
-    array_listmap hterms_bindings (fun id binding ->
-        if hterms_are_arg.(id) then
-          string_of_int id ^ ":\n" ^
-          concat_map "\n" self#string_of_binding hterms_bindings.(id)
-        else
-          ""
-      )
-
   (** Given a list of variables v1, v2, ... from a nonterminal f and bindings from application
       f as1 as2 ..., where asX translates to lists of terms through tab_id_terms, it returns all
       bindings (i, j, asY) such that i <= vK <= j for some K, i.e., that at least one of terms in
@@ -369,21 +349,20 @@ class cfa (hg : hgrammar) = object(self)
     if SortedVars.is_empty vars then
       self#register_hterms_bindings id [[]]
     else
-      let f = fst @@ SortedVars.hd vars in (* figure out in which nonterminal the term is defined using
-                                              variable id *)
+      (* figure out in which nonterminal the term is defined using variable id *)
+      let f = fst @@ SortedVars.hd vars in
       let vars' = SortedVars.map snd vars in
       let bindings = nt_bindings.(f) in
       let bindings' =
         sort_and_delete_duplicates @@
         List.rev_map (fun binding -> self#filter_binding vars' binding) bindings
       in
-      let ids = self#ids_in_bindings bindings' in (* asX that are substituted into f's variables *)
-      self#register_hterms_bindings id bindings'; (* register that term with given term id
-                                                         had was present in some nonterminal and
-                                                         given term sequences with id asX were
-                                                         substituted for arguments i-j of this
-                                                         nonterminal and specifically the list of
-                                                         variables used was vsX *)
+      (* asX that are substituted into f's variables *)
+      let ids = self#ids_in_bindings bindings' in
+      (* register that term with given term id had was present in some nonterminal and
+         given term sequences with id asX were substituted for arguments i-j of this
+         nonterminal and specifically the list of variables used was vsX *)
+      self#register_hterms_bindings id bindings';
       List.iter (fun id1 -> self#register_hterms_where_hterms_flow id1 id) ids
   (* appending current hterm's id to hterms_where_hterms_flow[asX] if f was applied to asX making a
      substitution of some variable in hterm to asX *)
@@ -419,9 +398,8 @@ class cfa (hg : hgrammar) = object(self)
     done;
     (* make dependency nt1 --> nt2 (which means "nt2 depends on nt1") *)
     for nt1 = 0 to hg#nt_count - 1 do
-      let nts1, nts2 = hg#nt_in_nt_with_linearity nt1 in
-      SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1) nts2;
-      SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1) nts1
+      let nts = hg#nts_in_nt nt1 in
+      nts |> SortedNTs.iter (fun nt2 -> self#register_dep_nt_nt nt2 nt1)
     done;
     print_verbose !Flags.verbose_preprocessing @@ lazy (
       self#string_of_hterms_bindings ^
@@ -434,6 +412,31 @@ class cfa (hg : hgrammar) = object(self)
          ) @@ range 0 @@ hg#nt_count) ^
       "\n"
     )
+
+  (* --- printing --- *)
+
+  method string_of_binding (binding : hterms_id binding) : string=
+    String.concat ", " @@ List.map (fun (i, j, id) ->
+        string_of_int i ^ "-" ^ string_of_int j ^ " <- " ^ string_of_int id
+      ) binding
+
+  method string_of_binding_array : string =
+    "bindings (nt -> bindings, one per line, comma-sep same-nt parts):\n" ^
+    String.concat "\n\n" @@ array_listmap nt_bindings (fun nt binding ->
+        hg#nt_name nt ^ ":\n" ^
+        String.concat "\n" @@ List.map self#string_of_binding (nt_bindings).(nt)
+      )
+
+  method string_of_hterms_bindings : string =
+    "Dependency info (hterms_id -> [(from,to,hterms_id); ...]):\n" ^
+    String.concat "\n" @@ List.filter (fun s -> s <> "") @@
+    array_listmap hterms_bindings (fun id binding ->
+        if hterms_are_arg.(id) then
+          string_of_int id ^ ":\n" ^
+          concat_map "\n" self#string_of_binding hterms_bindings.(id)
+        else
+          ""
+      )
 
   initializer
     for i = 0 to hg#nt_count - 1 do
