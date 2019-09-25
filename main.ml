@@ -1,4 +1,3 @@
-
 open Timing
 open Utilities
 
@@ -20,8 +19,9 @@ let options = [
   ("-vsat", Arg.Set Flags.verbose_queues, "Enables verbose saturation tasks");
   ("-vprof", Arg.Set Flags.verbose_profiling, "Enables verbose profiling");
   ("-viter", Arg.Set Flags.verbose_iters, "Enables verbose iteration counter");
+  ("-vfinal", Arg.Set Flags.verbose_iters, "Enables extra verbosity when displaying the result");
   ("-q", Arg.Set Flags.quiet, "Enables quiet mode and exits with code 0 for infinite " ^
-                              "language, 1 for finite, 2 for maybe finite (with unsafe terms) " ^
+                              "language, 42 for finite, 1 for maybe finite (with unsafe terms) " ^
                               "and something else on error");
   ("-tf", Arg.Symbol (
       ["full"; "shortened"; "short"],
@@ -160,11 +160,11 @@ let main () : unit =
     | Infinite _ -> exit 0
     | Finite ->
       if !Flags.quiet then
-        exit 1
+        exit 42
       else
         exit 0
     | Unknown ->
-      exit 2
+      exit 1
   with
   | Failure msg ->
     prerr_endline msg;

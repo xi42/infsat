@@ -6,6 +6,7 @@ let verbose_typing : bool ref = ref false
 let verbose_queues : bool ref = ref false
 let verbose_profiling : bool ref = ref false
 let verbose_iters : bool ref = ref false
+let verbose_final : bool ref = ref false
 let quiet : bool ref = ref false
 let type_format : string ref = ref "full"
 let force_unsafe : bool ref = ref false

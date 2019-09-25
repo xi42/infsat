@@ -39,9 +39,9 @@ function bench {
     if [[ ${OUT[0]} == 0 ]]; then
       RESULT="INF"
     elif [[ ${OUT[0]} == 1 ]]; then
-      RESULT="FIN"
-    elif [[ ${OUT[0]} == 2 ]]; then
       RESULT="FIN (UNSAFE)"
+    elif [[ ${OUT[0]} == 42 ]]; then
+      RESULT="FIN"
     elif [[ ${OUT[0]} == 143 ]]; then
       RESULT="SIGTERM"
     else

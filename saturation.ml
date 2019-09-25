@@ -72,8 +72,6 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     "hterms_queue: " ^ SetQueue.string_of_queue hterms_queue
 
   method status : string =
-    "\n================ ITERATION " ^ string_of_int iteration ^
-    " ================\n" ^
     typing#string_of_nt_ity ^ "\n\n" ^
     typing#string_of_hterms_hty cfa#hterms_are_arg ^ "\n\n" ^
     self#string_of_queues ^ "\n\n" ^
@@ -143,7 +141,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       let binding_info =
         match binding with
         | Some binding ->
-          " under binding " ^ string_of_binding string_of_int binding ^ " and"
+          " under binding " ^ string_of_binding string_of_int binding
         | None -> ""
       in
       let forced_hterms_hty_str =
@@ -162,8 +160,8 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
         | None ->
           ""
       in
-      "* Inferring type of nonterminal " ^ hg#nt_name nt ^ binding_info ^
-      forced_hterms_hty_str ^ forced_nt_ity_str ^ "."
+      "* Inferring type of nonterminal " ^ hg#nt_name nt ^
+      String.concat " and" [binding_info; forced_hterms_hty_str; forced_nt_ity_str] ^ "."
     );
     indent (+1);
     let body = hg#nt_body nt in
@@ -226,7 +224,7 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     try
       let id, hty = TwoLayerQueue.dequeue prop_hterms_hty_queue in
       print_verbose !Flags.verbose_queues @@ lazy (
-        "prop_nt_queue: Propagating new types of hterms " ^
+        "prop_nt_queue: Propagating new types of hterms " ^ string_of_int id ^ " " ^
         hg#string_of_hterms id ^ " : " ^ string_of_hty hty ^ "."
       );
       (* This step is required, because new typing of hterms might be enough to type other hterms,
@@ -355,7 +353,11 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
   (** Performs a single iteration of the main loop. Processes a single task from one of the queues.
       Returns whether at least one of the queues was not empty. *)
   method process_queues : bool =
-    print_verbose !Flags.verbose_queues @@ lazy self#status;
+    print_verbose !Flags.verbose_queues @@ lazy (
+      "\n================ ITERATION " ^ string_of_int iteration ^
+      " ================\n" ^
+      self#status
+    );
     print_verbose (!Flags.verbose_iters && not !Flags.verbose_queues) @@ lazy self#iter_counter;
     self#process_prop_hterms_hty_queue ||
     self#process_prop_nt_ty_queue ||
@@ -375,7 +377,12 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       done;
       let t = Sys.time () -. start_t in
       print_verbose (not !Flags.quiet) @@ lazy (
-        "Duplication Factor Graph:\n" ^ dfg#to_string hg#nt_name ^ "\n" ^
+        let final = if !Flags.verbose_final then
+            self#status
+          else
+            "Duplication Factor Graph:\n" ^ dfg#to_string hg#nt_name
+        in
+        final ^ "\n" ^
         "Computed saturation result after " ^ string_of_int iteration ^ " iterations in " ^
         string_of_float t ^ "s.\n" ^
         "The input HORS contains only paths with uniformly bounded number " ^
@@ -398,8 +405,12 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
       reset_indentation ();
       let cycle_proof_str = cycle_proof#to_string hg in
       print_verbose (not !Flags.quiet) @@ lazy (
-        "Duplication Factor Graph:\n" ^
-        dfg#to_string hg#nt_name ^ "\n" ^
+        let final = if !Flags.verbose_final then
+            self#status
+          else
+            "Duplication Factor Graph:\n" ^ dfg#to_string hg#nt_name
+        in
+        final ^ "\n" ^
         cycle_proof_str ^ "\n\n" ^
         "Computed saturation result after " ^ string_of_int iteration ^ " iterations in " ^
         string_of_float t ^ "s.\n" ^
@@ -409,6 +420,12 @@ class saturation (hg : HGrammar.hgrammar) (cfa : cfa) = object(self)
     | Max_iterations_reached ->
       let t = Sys.time () -. start_t in
       print_verbose (not !Flags.quiet) @@ lazy (
+        let final = if !Flags.verbose_final then
+            self#status
+          else
+            "Duplication Factor Graph:\n" ^ dfg#to_string hg#nt_name
+        in
+        final ^ "\n" ^
         "Could not determine saturation result in " ^ string_of_int iteration ^
         " iterations in " ^ string_of_float t ^ "s.\n."
       );
