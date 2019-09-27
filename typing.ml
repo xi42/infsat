@@ -23,9 +23,6 @@ class typing (hg : hgrammar) = object(self)
 
   method nt_ity (nt : nt_id) : TySet.t = nt_ity.(nt)
 
-  (** For testing purposes *)
-  method get_nt_ity : TySet.t array = nt_ity
-
   (* --- saving new typings --- *)
 
   (** Adds nonterminal typing and returns whether it is a new one. *)
@@ -230,16 +227,17 @@ class typing (hg : hgrammar) = object(self)
               TargetEnvs.empty
             else
               begin
-                let compatible_ctx =
+                let compatible_ctx : (ty * ctx) list =
                   if no_pr_vars then
-                    ctx_enforce_var ctx v target
+                    list_of_option @@ ctx_enforce_var ctx v target
                   else if force_pr_var then
                     let pr_target = with_productivity true target in
-                    ctx_enforce_var ctx v pr_target
+                    list_of_option @@ ctx_enforce_var ctx v pr_target
                   else
                     (* both NP and PR versions are possible *)
                     let pr_target = with_productivity true target in
-                    ctx_enforce_var ctx v target @ ctx_enforce_var ctx v pr_target
+                    list_of_option (ctx_enforce_var ctx v target) @
+                    list_of_option (ctx_enforce_var ctx v pr_target)
                 in
                 (* selecting a typing for a variable fixes hty to occurence of hterms, so
                    for each variable type a context where that variable has that type is used

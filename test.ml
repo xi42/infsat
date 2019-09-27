@@ -24,6 +24,7 @@ let init_flags () =
   Flags.no_headvar_opt := false;
   Flags.no_force_nt_ty_opt := false;
   Flags.no_force_hterms_hty_opt := false;
+  Flags.quiet := true;
   Flags.propagate_flags ()
 
 let rec paths_equal path1 path2 =
@@ -302,7 +303,7 @@ let utilities_test () : test =
 
 
 
-let penv_test () : test =
+let ctx_test () : test =
   "context" >::: [
     "req-sat-0" >:: (fun _ ->
         let bix_htys = [(0, [[ity_top]]); (1, [[ity_top]])] in
@@ -441,6 +442,22 @@ let penv_test () : test =
         List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
         ctx_split_var ctx (0, 0)
       );
+    
+    "split-var-2" >:: (fun _ ->
+        let var_bix = [(0, (0, 0)); (1, (0, 1))] in
+        let bix_htys = [
+          (0, [[ity_of_string "pr"; ity_of_string "pr"];
+               [ity_of_string "pr"; ity_of_string "np"]])
+        ] in
+        let ctx = lctx var_bix bix_htys None None in
+        match ctx_split_var ctx (0, 0) with
+        | [(ty, c)] ->
+          assert_equal ~cmp:Ty.equal ty ty_pr;
+          assert_equal ~cmp:ctx_equal
+            (lctx var_bix bix_htys None None)
+            c
+        | _ -> assert_failure "expected singleton"
+      );
 
     "enforce-var-0" >:: (fun _ ->
         let var_bix = [(0, (0, 0))] in
@@ -448,8 +465,8 @@ let penv_test () : test =
             (0, [[ity_of_string "pr"]; [ity_of_string "np"]])
           ] in
         let ctx = lctx var_bix bix_htys None None in
-        assert_equal ~printer:(string_of_list string_of_int) [1] @@
-        List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
+        assert_equal ~printer:string_of_int 1 @@
+        ctx_var_combinations @@ snd @@ option_get @@
         ctx_enforce_var ctx (0, 0) ty_pr
       );
 
@@ -464,8 +481,8 @@ let penv_test () : test =
             (0, tys_pr);
             (1, tys_pr)
           ]) None in
-        assert_equal ~printer:(string_of_list string_of_int) [1] @@
-        List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
+        assert_equal ~printer:string_of_int 1 @@
+        ctx_var_combinations @@ snd @@ option_get @@
         ctx_enforce_var ctx (0, 0) ty_np
       );
 
@@ -477,8 +494,8 @@ let penv_test () : test =
           ] in
         let tys_np = [|TySet.of_string "np"|] in
         let ctx = lctx var_bix bix_htys (Some [(0, tys_np)]) None in
-        assert_equal ~printer:(string_of_list string_of_int) [2] @@
-        List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
+        assert_equal ~printer:string_of_int 2 @@
+        ctx_var_combinations @@ snd @@ option_get @@
         ctx_enforce_var ctx (0, 0) ty_np
       );
 
@@ -492,9 +509,56 @@ let penv_test () : test =
             (0, [|TySet.of_string "T -> pr"|]);
             (1, [|TySet.of_string "T -> pr"|])
           ]) None in
-        assert_equal ~printer:(string_of_list string_of_int) [] @@
-        List.map (fun (ty, ctx) -> ctx_var_combinations ctx) @@
+        assert_equal None @@
         ctx_enforce_var ctx (0, 0) @@ ty_of_string "pr -> pr"
+      );
+    
+    "enforce-var-4" >:: (fun _ ->
+        let var_bix = [(0, (0, 0)); (1, (1, 0))] in
+        let bix_htys = [
+          (0, [[ity_of_string "pr"]; [ity_of_string "np"]]);
+          (1, [[ity_of_string "pr"]; [ity_of_string "np"]])
+        ] in
+        let bix_htys2 = [
+          (0, [[ity_of_string "pr"]]);
+          (1, [[ity_of_string "pr"]; [ity_of_string "np"]])
+        ] in
+        let tys_pr = [|TySet.of_string "pr"|] in
+        let ctx = lctx var_bix bix_htys (Some [
+            (0, tys_pr);
+            (1, tys_pr)
+          ]) None in
+        assert_equal ~cmp:ctx_equal
+          (lctx var_bix bix_htys2 None None) @@
+        snd @@ option_get @@
+        ctx_enforce_var ctx (0, 0) ty_pr
+      );
+
+    "enforce-var-5" >:: (fun _ ->
+        let var_bix = [(0, (0, 0)); (1, (1, 0)); (2, (2, 0))] in
+        let bix_htys = [
+          (0, [[ity_of_string "pr"]; [ity_of_string "np"]]);
+          (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
+          (2, [[ity_of_string "pr"]; [ity_of_string "np"]])
+        ] in
+        let bix_htys2 = [
+          (0, [[ity_of_string "np"]]);
+          (1, [[ity_of_string "pr"]; [ity_of_string "np"]]);
+          (2, [[ity_of_string "pr"]; [ity_of_string "np"]])
+        ] in
+        let tys_pr = [|TySet.of_string "pr"|] in
+        let ctx = lctx var_bix bix_htys (Some [
+            (0, tys_pr);
+            (1, tys_pr);
+            (2, tys_pr)
+          ]) None in
+        assert_equal ~printer:string_of_ctx ~cmp:ctx_equal
+          (lctx var_bix bix_htys2 (Some [
+               (1, tys_pr);
+               (2, tys_pr)
+             ]) None) @@
+        snd @@ option_get @@
+        ctx_enforce_var ctx (0, 0) ty_np
       );
 
     "split-nt-0" >:: (fun _ ->
@@ -571,6 +635,14 @@ let penv_test () : test =
         let ctx = lctx [] [] None @@ Some ([0], TySet.of_string "np /\\ pr") in
         assert_equal ~printer:string_of_bool true @@
         is_some @@ ctx_enforce_nt ctx nt_ity 0 0 ty_np
+      );
+
+    "enforce-nt-6" >:: (fun _ ->
+        let nt_ity = [|TySet.of_string "np /\\ pr"|] in
+        let ctx = lctx [] [] None @@ Some ([0; 1; 2], TySet.of_string "pr") in
+        let ctx2 = lctx [] [] None @@ Some ([1; 2], TySet.of_string "pr") in
+        assert_equal ~printer:string_of_ctx ~cmp:ctx_equal ctx2 @@
+        snd @@ option_get @@ ctx_enforce_nt ctx nt_ity 0 0 ty_np
       );
 
     "intersect-0" >:: (fun _ ->
@@ -701,6 +773,33 @@ let penv_test () : test =
         assert_equal ~cmp:(option_equal ctx_equal) (Some ctx12) @@ intersect_ctxs ctx1 ctx2;
         assert_equal ~cmp:(option_equal ctx_equal) (Some ctx2) @@ intersect_ctxs ctx2 ctx2;
         assert_equal ~cmp:(option_equal ctx_equal) (Some ctx1) @@ intersect_ctxs ctx1 ctx1
+      );
+
+    "intersect-8" >:: (fun _ ->
+        let var_bix = [(0, (0, 0)); (1, (1, 0)); (2, (2, 0)); (3, (3, 0))] in
+        let bix_htys1 = [
+          (0, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]]);
+          (1, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]]);
+          (2, [[ity_of_string "T -> pr"]]);
+          (3, [[ity_of_string "T -> pr"]])
+        ] in
+        let bix_htys2 = [
+          (0, [[ity_of_string "T -> pr"]]);
+          (1, [[ity_of_string "T -> pr"]]);
+          (2, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]]);
+          (3, [[ity_of_string "T -> pr"]; [ity_of_string "T -> np"]])
+        ] in
+        let forced_hterms_hty1 = Some [
+            (0, [|TySet.of_string "T -> np"|]);
+            (1, [|TySet.of_string "T -> np"|])
+          ] in
+        let forced_hterms_hty2 = Some [
+            (2, [|TySet.of_string "T -> np"|]);
+            (3, [|TySet.of_string "T -> np"|])
+          ] in
+        let ctx1 = lctx var_bix bix_htys1 forced_hterms_hty1 None in
+        let ctx2 = lctx var_bix bix_htys2 forced_hterms_hty2 None in
+        assert_equal None @@ intersect_ctxs ctx1 ctx2
       );
   ]
 
@@ -1280,8 +1379,8 @@ let type_test () : test =
       );
 
     "string_of_ity-1" >:: (fun _ ->
-        assert_equal ~printer:id "(pr -> pr) /\\ (np -> np)" @@
-        string_of_ity (TyList.of_list [mk_fun [ity_pr] true; mk_fun [ity_np] false])
+        let s = string_of_ity (TyList.of_list [mk_fun [ity_pr] true; mk_fun [ity_np] false]) in
+        assert_equal true @@ (s = "(pr -> pr) /\\ (np -> np)" || s = "(np -> np) /\\ (pr -> pr)")
       );
     
     "ty_of_string-1" >:: (fun _ ->
@@ -1551,25 +1650,37 @@ let typing_e_test () =
   let hg, typing = mk_typing @@ grammar_e () in
   [
     (* check if e : np type checks *)
-    "type_check-1" >:: (fun _ ->
+    "type_check-e-1" >:: (fun _ ->
         assert_equal_tes
           (TargetEnvs.singleton_empty_meta ty_np [] empty_ctx) @@
         type_check_nt_wo_ctx typing hg 0 ty_np false false
       );
 
     (* checking basic functionality of forcing pr vars *)
-    "type_check-2" >:: (fun _ ->
+    "type_check-e-2" >:: (fun _ ->
         assert_equal_tes
           TargetEnvs.empty @@
         type_check_nt_wo_ctx typing hg 0 ty_np false true
       );
 
     (* checking that forcing no pr vars does not break anything when there are only terminals *)
-    "type_check-3" >:: (fun _ ->
+    "type_check-e-3" >:: (fun _ ->
         assert_equal_tes
           (TargetEnvs.singleton_empty_meta ty_np [] empty_ctx) @@
         type_check_nt_wo_ctx typing hg 0 ty_np true false
       );
+
+    (* with forcing nt ty *)
+    "type_check-e-4" >:: (fun _ ->
+        (* the location is outside, which is normal for sub-terms *)
+        let ctx = {
+          empty_ctx with
+          forced_nt_ty = Some (HlocSet.singleton 42, TySet.singleton ty_np)
+        } in
+        assert_equal_tes
+          TargetEnvs.empty @@
+        typing#type_check (hg#nt_body 0) None ctx true false
+      );    
   ]
 
 
@@ -1586,7 +1697,7 @@ let typing_ax_test () =
   let ctx = sctx typing ["pr /\\ np"] in
   [
     (* check that a x : pr accepts both productivities of x *)
-    "type_check-4" >:: (fun _ ->
+    "type_check-a-1" >:: (fun _ ->
         assert_equal_tes
           (TargetEnvs.of_list [
               (ty_pr, [
@@ -1598,7 +1709,7 @@ let typing_ax_test () =
       );
 
     (* check that a x : np does not type check *)
-    "type_check-5" >:: (fun _ ->
+    "type_check-a-2" >:: (fun _ ->
         assert_equal_tes
           TargetEnvs.empty @@
         type_check_nt typing hg 1 ty_np ctx false false
@@ -1649,7 +1760,7 @@ let typing_xyyz_test () =
   let var_bix1 = [(0, (0, 0)); (1, (0, 1)); (2, (0, 2))] in
   [
     (* check that intersection of common types from different arguments works *)
-    "type_check-6" >:: (fun _ ->
+    "type_check-x-1" >:: (fun _ ->
         let used_nts =
           NTTyMap.of_list [
             ((2, ty_of_string "(pr -> pr) -> (np -> pr) -> np -> pr"), false);
@@ -1670,7 +1781,7 @@ let typing_xyyz_test () =
       );
 
     (* check that branching works *)
-    "type_check-7" >:: (fun _ ->
+    "type_check-x-2" >:: (fun _ ->
         assert_equal_tes
           (TargetEnvs.of_list [
               (ty_pr, [
@@ -1682,7 +1793,7 @@ let typing_xyyz_test () =
       );
 
     (* check that branching works *)
-    "type_check-8" >:: (fun _ ->
+    "type_check-x-3" >:: (fun _ ->
         assert_equal_tes
           (TargetEnvs.of_list [
               (ty_np, [
@@ -1789,7 +1900,7 @@ let typing_dup_test () =
   [
     (* All valid typings of x type check, because the application is already productive due to
        a e being productive. *)
-    "type_check-9" >:: (fun _ ->
+    "type_check-d-1" >:: (fun _ ->
         let used_nts1 = nt_ty_used_once 1 (
             ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
         in
@@ -1810,7 +1921,7 @@ let typing_dup_test () =
 
     (* No valid environment, because a e is productive and makes the application with it as
        argument productive. *)
-    "type_check-10" >:: (fun _ ->
+    "type_check-d-2" >:: (fun _ ->
         assert_equal_tes
           TargetEnvs.empty @@
         type_check_nt_wo_ctx typing hg 2 ty_np false false
@@ -1821,7 +1932,7 @@ let typing_dup_test () =
        causes a duplication and type checks. Typing x : pr -> np does not type check, because
        it is not productive, so it is not a duplication. y : pr is forced by there being no
        known typing of the head with unproductive last argument. *)
-    "type_check-11" >:: (fun _ ->
+    "type_check-d-3" >:: (fun _ ->
         let used_nts =
           nt_ty_used_once 1 (ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
         in
@@ -1840,7 +1951,7 @@ let typing_dup_test () =
 
     (* Only one valid env when there is no duplication. This is exactly the opposite of the test
        above with x : pr -> np passing and x : pr -> pr failing and y : pr being forced. *)
-    "type_check-12" >:: (fun _ ->
+    "type_check-d-4" >:: (fun _ ->
         let used_nts =
           nt_ty_used_once 1 (ty_of_string "(pr -> np) -> (pr -> np) -> pr -> np")
         in
@@ -1860,14 +1971,14 @@ let typing_dup_test () =
     (* Similar to test 11, but this time there are separate variables used for first
        and second argument, so there is no place for duplication. This means that there is no
        way to achieve productivity. *)
-    "type_check-13" >:: (fun _ ->
+    "type_check-d-5" >:: (fun _ ->
         assert_equal_tes
           TargetEnvs.empty @@
         type_check_nt_wo_ctx typing hg 4 ty_pr false false
       );
 
     (* Similar to test 12, but this time the duplication cannot happen. *)
-    "type_check-14" >:: (fun _ ->
+    "type_check-d-6" >:: (fun _ ->
         let used_nts1 =
           nt_ty_used_once 1 (ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
         in
@@ -1895,7 +2006,7 @@ let typing_dup_test () =
       );
 
     (* Typing without target *)
-    "type_check-15" >:: (fun _ ->
+    "type_check-d-7" >:: (fun _ ->
         let used_nts1 =
           nt_ty_used_once 1 (ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np")
         in
@@ -1920,6 +2031,27 @@ let typing_dup_test () =
                 ])
             ]) @@
         type_check_nt_wo_ctx_wo_target typing hg 3 false false
+      );
+
+    (* Typing without target, but with forced nonterminal type *)
+    "type_check-d-8" >:: (fun _ ->
+        let ty = ty_of_string "(pr -> pr) -> (pr -> pr) -> pr -> np" in
+        let ctx =
+          lctx [(0, (0, 0)); (1, (0, 1))] [
+            (0, [[ity_of_string "pr -> pr"; ity_of_string "pr"]])
+          ] None @@ Some ([0], TySet.singleton ty)
+        in
+        assert_equal_tes
+          (TargetEnvs.of_list @@ [
+              (ty_pr, [
+                  (mk_env (nt_ty_used_once 1 ty) empty_loc_types true @@
+                   IntMap.of_list @@ index_list @@ [
+                     ity_of_string "pr -> pr";
+                     ity_of_string "pr"
+                   ], { ctx with forced_nt_ty = None })
+                ]);
+            ]) @@
+        typing#type_check_hterm (hg#nt_body 3) None ctx 0 false false
       );
   ]
 
@@ -1948,11 +2080,12 @@ let typing_double_test () =
   let id0_abaee = hg#locate_hterms_id 0 [0] in
   ignore @@ typing#add_hterms_hty id0_abaee @@
   [|TySet.of_string "np -> pr /\\ pr -> pr"; TySet.of_string "pr"|];
-    ignore @@ typing#add_hterms_hty id0_abaee @@
+  ignore @@ typing#add_hterms_hty id0_abaee @@
   [|TySet.of_string "np -> pr /\\ pr -> pr"; TySet.of_string "np"|];
   let id1_y = hg#locate_hterms_id 1 [0; 0; 0] in
   ignore @@ typing#add_hterms_hty id1_y @@ [|TySet.of_string "pr"|];
   ignore @@ typing#add_hterms_hty id1_y @@ [|TySet.of_string "np"|];
+  ignore @@ typing#add_nt_ty 2 @@ ty_of_string "np -> T -> np";
   let var_bix1 = [(0, (0, 0)); (1, (0, 1))] in
   let var_bix2 = [(0, (0, 0)); (1, (1, 0))] in
   [
@@ -2054,6 +2187,22 @@ let typing_double_test () =
           empty_ctx @@
         typing#binding2ctx (hg#nt_body 0) None None None []
       );
+
+    (* Bindings with forced nonterminal *)
+    "binding2ctx-11" >:: (fun _ ->
+        let bix_htys = [
+          (0, [
+              [ity_of_string "pr -> pr /\\ np -> pr"; ity_of_string "T"]
+            ])
+        ] in
+        assert_equal_ctxs
+          (lctx var_bix1 bix_htys None @@ Some ([4], TySet.of_string "np -> T -> np")) @@
+        typing#binding2ctx (hg#nt_body 1)
+          (Some (SortedVars.singleton (1, 0)))
+          (Some (id0_abaee, [|TySet.of_string "pr -> pr /\\ np -> pr"; TySet.of_string "np"|]))
+          (Some (2, TySet.of_string "np -> T -> np"))
+          [(0, 1, id0_abaee)]
+      );
   ]
 
 
@@ -2067,13 +2216,23 @@ let grammar_misc () = mk_grammar
       (1, App (TE A, Var (1, 0)));
       (* N2 -> N2 *)
       (0, NT 2);
+      (* N3 -> N4 N5 N5 e *)
+      (0, App (App (App (NT 4, NT 5), NT 5), TE E));
+      (* N4 f g x -> f (g x) *)
+      (3, App (Var (4, 0), App (Var (4, 1), Var (4, 2))));
+      (* N5 x -> x *)
+      (1, Var (5, 0))
     |]
 
 let typing_misc_test () =
   let hg, typing = mk_typing @@ grammar_misc () in
+  ignore @@ typing#add_nt_ty 4 @@ ty_of_string "(np -> np) -> (np -> np) -> np -> np";
+  ignore @@ typing#add_nt_ty 4 @@ ty_of_string "(pr -> pr) -> (np -> pr) -> np -> np";
+  ignore @@ typing#add_nt_ty 5 @@ ty_of_string "np -> np";
+  ignore @@ typing#add_nt_ty 5 @@ ty_of_string "pr -> np";
   [
     (* Typing a x without target should not yield np target. *)
-    "type_check-16" >:: (fun _ ->
+    "type_check-m-1" >:: (fun _ ->
         let ctx = sctx typing ["pr"] in
         assert_equal_tes
           (TargetEnvs.of_list @@ [
@@ -2085,7 +2244,7 @@ let typing_misc_test () =
       );
 
     (* Typing a x without target should not yield np target. *)
-    "type_check-17" >:: (fun _ ->
+    "type_check-m-2" >:: (fun _ ->
         let ctx = sctx typing ["np"] in
         assert_equal_tes
           (TargetEnvs.of_list @@ [
@@ -2098,7 +2257,7 @@ let typing_misc_test () =
       );
 
     (* Typing a x without target should not yield np target. *)
-    "type_check-18" >:: (fun _ ->
+    "type_check-m-3" >:: (fun _ ->
         assert_equal_tes
           (TargetEnvs.of_list @@ [
               (ty_pr, [
@@ -2109,18 +2268,96 @@ let typing_misc_test () =
         typing#type_check (hg#nt_body 1) None empty_ctx false false
       );
 
+    (* Typing a x should work for both types of the variable. *)
+    "type_check-m-4" >:: (fun _ ->
+        assert_equal_tes
+          (TargetEnvs.of_list @@ [
+              (ty_pr, [
+                  (senv true 0 "pr", empty_ctx);
+                  (senv true 0 "np", empty_ctx)
+                ])
+            ]) @@
+        typing#type_check (hg#nt_body 1) (Some ty_pr) empty_ctx false false
+      );
+
     (* Can't type a nonterminal with no data on dependencies without target. *)
-    "type_check-19" >:: (fun _ ->
+    "type_check-m-5" >:: (fun _ ->
         assert_equal_tes
           TargetEnvs.empty @@
         typing#type_check (hg#nt_body 2) None empty_ctx false false
       );
 
     (* Can't type a nonterminal with no data on dependencies with target. *)
-    "type_check-20" >:: (fun _ ->
+    "type_check-m-6" >:: (fun _ ->
         assert_equal_tes
           TargetEnvs.empty @@
         typing#type_check (hg#nt_body 2) (Some ty_np) empty_ctx false false
+      );
+    
+    (* Typing identity should work for both types of the variable. *)
+    "type_check-m-7" >:: (fun _ ->
+        assert_equal_tes
+          (TargetEnvs.of_list @@ [
+              (ty_np, [
+                  (senv false 0 "pr", empty_ctx);
+                  (senv false 0 "np", empty_ctx)
+                ])
+            ]) @@
+        typing#type_check (hg#nt_body 5) (Some ty_np) empty_ctx false false
+      );
+
+    (* Typing identity should work for both types of the variable. *)
+    "type_check-m-8" >:: (fun _ ->
+        let var_bix = [(0, (0, 0))] in
+        let bix_hty = [
+          (0, [
+              [ity_of_string "pr"];
+              [ity_of_string "np"]
+            ])
+        ] in
+        let bix_hty1 = [
+          (0, [
+              [ity_of_string "pr"]
+            ])
+        ] in
+        let bix_hty2 = [
+          (0, [
+              [ity_of_string "np"]
+            ])
+        ] in
+        let ctx = lctx var_bix bix_hty None None in
+        assert_equal_tes
+          (TargetEnvs.of_list @@ [
+              (ty_np, [
+                  (senv false 0 "pr", lctx var_bix bix_hty1 None None);
+                  (senv false 0 "np", lctx var_bix bix_hty2 None None)
+                ])
+            ]) @@
+        typing#type_check (hg#nt_body 5) (Some ty_np) ctx false false
+      );
+
+    (* Forcing usable nonterminal typing. *)
+    "type_check-m-9" >:: (fun _ ->
+        let ctx = lctx [] [] None @@ Some ([1; 2], TySet.of_string "np -> np") in
+        let used_nts = NTTyMap.of_list [
+            ((5, ty_of_string "np -> np"), true);
+            ((4, ty_of_string "(np -> np) -> (np -> np) -> np -> np"), false)
+          ] in
+        assert_equal_tes
+          (TargetEnvs.of_list @@ [
+              (ty_np, [
+                  (mk_env used_nts empty_loc_types false IntMap.empty, lctx [] [] None None);
+                ])
+            ]) @@
+        typing#type_check (hg#nt_body 3) (Some ty_np) ctx false false
+      );
+
+    (* Forcing unusable nonterminal typing. *)
+    "type_check-m-10" >:: (fun _ ->
+        let ctx = lctx [] [] None @@ Some ([1; 2], TySet.of_string "pr -> np") in
+        assert_equal_tes
+          TargetEnvs.empty @@
+        typing#type_check (hg#nt_body 3) (Some ty_np) ctx false false
       );
   ]
 
@@ -2374,7 +2611,7 @@ let examples_test () : test =
 
 let tests () = [
   utilities_test ();
-  penv_test ();
+  ctx_test ();
   dfg_test ();
   conversion_test ();
   cfa_test ();

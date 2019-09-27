@@ -63,6 +63,10 @@ let is_some : 'a option -> bool = function
   | Some _ -> true
   | None -> false
 
+let string_of_option (s : 'a -> string) : 'a option -> string = function
+  | Some x -> "Some " ^ s x
+  | None -> "None"
+
 (* --- printing --- *)
 
 let string_of_bool = function

@@ -166,9 +166,6 @@ class cfa (hg : hgrammar) = object(self)
       hterm_queue <- q;
       Some x
 
-  method enqueue_nodes nodes =
-    List.iter self#enqueue_hterm nodes
-
   method expand_varheadnode term (hterm: hterm) =
     let h, termss = hterm in
     match h with

@@ -26,12 +26,15 @@ let propagate_flags () : unit =
       verbose_proofs := true;
       verbose_typing := true;
       verbose_queues := true;
-      verbose_profiling := true
+      verbose_profiling := true;
+      quiet := false
     end
   else if !verbose_main then
     begin
       verbose_preprocessing := true;
       verbose_typing := true;
       verbose_queues := true;
-      verbose_profiling := true
+      verbose_profiling := true;
+      verbose_final := true;
+      quiet := false
     end

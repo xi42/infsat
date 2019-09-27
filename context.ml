@@ -82,34 +82,34 @@ let ctx_var_combinations (ctx : ctx) : int =
     non_forced_cat_comb * (forced_mul - forced_wrong_mul)
 
 (** Decreases ctx.bix_htys to its subset htys. *)
-let ctx_shrink_htys (ctx : ctx) (bix : bix) (htys : HtySet.t) : ctx list =
+let ctx_shrink_htys (ctx : ctx) (bix : bix) (htys : HtySet.t) : ctx option =
   if HtySet.is_empty htys then
-    []
+    None
   else
     let bix_htys = IntMap.add bix htys ctx.bix_htys in
     match ctx.forced_hterms_hty with
     | None ->
-      [{ ctx with bix_htys = bix_htys }]
+      Some { ctx with bix_htys = bix_htys }
     | Some fbix_htys ->
       match BixMap.find_opt bix fbix_htys with
       | Some hty ->
         if not @@ HtySet.mem hty htys then
           if BixMap.is_singleton fbix_htys then
             (* requirement can't be satisfied for this bix anymore and it was the last bix *)
-            []
+            None
           else
             let fbix_htys = BixMap.remove bix fbix_htys in
             (* requirement can't be satisfied, but there are more bixs *)
             let ctx = { ctx with bix_htys = bix_htys; forced_hterms_hty = Some fbix_htys } in
-            [ctx_normalize ctx]
+            Some (ctx_normalize ctx)
         else if HtySet.cardinal htys = 1 then
           (* requirement was satisfied *)
-          [{ ctx with bix_htys = bix_htys; forced_hterms_hty = None }]
+          Some { ctx with bix_htys = bix_htys; forced_hterms_hty = None }
         else
           (* requirement can still be satisfied, but there are less hty options now *)
-          [{ ctx with bix_htys = bix_htys }]
+          Some { ctx with bix_htys = bix_htys }
       | None ->
-        [{ ctx with bix_htys = bix_htys }]
+        Some { ctx with bix_htys = bix_htys }
 
 (** Create one compressed product like this for each combination of possible within
     the context restrictions type of variable v and each context resulting from this. *)
@@ -131,13 +131,14 @@ let ctx_split_var (ctx : ctx) (_, v : var_id) : (ty * ctx) list =
       ) htys TyMap.empty
   in
   TyMap.fold (fun ty htys acc ->
-      let ty_ctx = List.map (fun ctx -> (ty, ctx)) @@ ctx_shrink_htys ctx bix htys in
-      ty_ctx @ acc
+      match ctx_shrink_htys ctx bix htys with
+      | Some ctx -> (ty, ctx) :: acc
+      | None -> acc
     ) ty_htys []
 
 (** Create a new compressed product like this, but where variable v is of type ty.
     If variable v is not on the list, unchanged context with this variable is returned. *)
-let ctx_enforce_var (ctx : ctx) (_, v : var_id) (ty : ty) : (ty * ctx) list =
+let ctx_enforce_var (ctx : ctx) (_, v : var_id) (ty : ty) : (ty * ctx) option =
   match IntMap.find_opt v ctx.var_bix with
   | Some (bix, i) ->
     let htys = IntMap.find bix ctx.bix_htys in
@@ -146,9 +147,9 @@ let ctx_enforce_var (ctx : ctx) (_, v : var_id) (ty : ty) : (ty * ctx) list =
           TySet.mem ty hty.(i)
         ) htys
     in
-    List.map (fun ctx -> (ty, ctx)) @@ ctx_shrink_htys ctx bix htys
+    option_map (fun ctx -> (ty, ctx)) @@ ctx_shrink_htys ctx bix htys
   | None ->
-    [(ty, ctx)]
+    Some (ty, ctx)
 
 let ctx_split_nt (ctx : ctx) (nt_ity : TySet.t array) (nt : nt_id) (loc : hloc) : (ty * ctx) list =
   match ctx.forced_nt_ty with
