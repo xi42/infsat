@@ -138,7 +138,7 @@ let parse_and_report_finiteness (filename : string option) : Saturation.infsat_r
     "Input:\n\n" ^ string_of_input input
   );
   report_finiteness input
-  
+
 let main () : unit =
   try
     let filenames = ref [] in

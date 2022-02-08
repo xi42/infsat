@@ -25,7 +25,7 @@ function inf {
   WATCHER=$!
   wait $PID 2> /dev/null
   OUT=$?
-  if [[ $OUT != 0 ]] && [[ $OUT != 1 ]] && [[ $OUT != 2 ]]; then
+  if [[ $OUT != 0 ]] && [[ $OUT != 1 ]] && [[ $OUT != 42 ]]; then
     echo "real TIMEOUT" 1>&2
   fi
   echo "code $OUT" 1>&2
