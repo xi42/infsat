@@ -1,0 +1,13 @@
+(* This shows the limitations of 0-CFA - it detects (a, I) flowing into x in N
+and y from A that can be either e or ae flowing into y. This gives four
+combinations of (x,y), even though only two are possible in this scenario.
+This happens when the grammar features partial application of a nonterminal
+and a variable used in its last argument at the same time. *)
+Grammar.
+S -> t (Na e) (Ni (a e)).
+A x y -> x y.
+Na x -> A (N a) x.
+Ni x -> A (N I) x.
+N x y -> x y.
+I x -> x.
+End.

@@ -34,7 +34,7 @@ let rec deref_sort (sort : tsort) : tsort =
         dsort
     end
   | _ -> sort
-  
+
 (** Dereference sort in sort with metadata and up. *)
 let deref_msort (sort, meta : msort) : msort =
   (deref_sort sort, meta)
@@ -137,7 +137,7 @@ let string_of_nt_msorts (gram : grammar) (nt_msorts : msort array) : string =
   String.concat "\n" @@ array_listmap nt_msorts (fun i (sort, _) ->
       "  " ^ gram#nt_name i ^ " : " ^ string_of_sort sort
     )
-    
+
 let lookup_stype_nt f nt_msorts = nt_msorts.(f)
 let lookup_stype_var v vste = vste.(snd v)
 
@@ -207,7 +207,7 @@ let string_of_order gram nt ord : string =
 let rec mk_vste i vste arity sty =
   if i < arity then
     match sty with
-    | SFun (sty1, sty') -> 
+    | SFun (sty1, sty') ->
       vste.(i) <- sty1;
       mk_vste (i + 1) vste arity sty'
     | _ -> assert false (* arity and sty contradict *)

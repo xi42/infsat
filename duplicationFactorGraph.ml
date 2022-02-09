@@ -33,7 +33,7 @@ class dfg = object(self)
   val mutable rev_graph : NTTySet.t NTTyMap.t = NTTyMap.empty
 
   (* ----- adding vertices ----- *)
-  
+
   (** Adds edges from nt : ty to typings of used nonterminals and adds missing vertices. Returns
       whether an edge was added or updated. *)
   method add_vertex (proof : proof) : bool =
@@ -127,7 +127,7 @@ class dfg = object(self)
       false
 
   (* ----- searching for positive cycles ----- *)
-  
+
   (** Computes strongly connected components in the subgraph with vertices reachable from
       start_vertex. Linear time, based on Kosaraju's algorithm. Empty result when start_vertex
       is not in the graph. *)
@@ -294,7 +294,7 @@ class dfg = object(self)
           )
     done;
     self#backtrack (option_get !nearest_cycle_vertex) !visited
-  
+
   (** Recursively finds all necessary proofs of typings on given path to cycle and cycle.
       Tries to minimize the amount of additional proofs using heuristic approach. *)
   method private add_missing_proofs
@@ -404,7 +404,7 @@ class dfg = object(self)
     (* it's more readable when following the order it was added in *)
     let proofs = List.rev !proofs in
     new cycle_proof path_to_cycle cycle escape proofs
-  
+
   (** DFS with checking for existence of positive edge in a cycle reachable from
       (start_nt, start_ty).
       Returns cycle and its proofs with information on path from start to the cycle,

@@ -18,6 +18,12 @@ make install-dependencies
 Run "make infsat" to make the final executable. Run "make run-test" to compile and run all
 tests.
 
+Run "make benchmark" to run benchmarks with all optimizations and 60s timeout and
+"make infsat && bash benchmark-all.sh" to run benchmarks for all combinations of
+optimization flags and 600s timeout. In the second case, new files with results will be
+created in the benchmarks directory. Note that ERROR result of a benchmark usually means
+stack overflow, i.e., insufficient memory.
+
 Usage
 ------
 To use the program:

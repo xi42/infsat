@@ -115,7 +115,7 @@ let rec string_of_ty (ty : ty) : string =
   match ty with
   | Fun (_, [], p) ->
     if !Flags.type_format = "full" then
-      "(" ^ string_of_atom p ^", o)"
+      "(" ^ string_of_atom p ^", r)"
     else
       string_of_atom p
   | Fun (_, args, p) ->
@@ -123,7 +123,7 @@ let rec string_of_ty (ty : ty) : string =
       String.concat " -> " (List.map string_of_ity args) ^ " -> " ^ string_of_atom p
     else
       "(" ^ string_of_atom p ^ ", " ^
-      String.concat " -> " (List.map string_of_ity args) ^ " -> o)"
+      String.concat " -> " (List.map string_of_ity args) ^ " -> r)"
 
 and string_of_ity (ity : ity) : string =
   let string_of_ty_w_parens ty =
